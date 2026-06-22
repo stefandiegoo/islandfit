@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ÍslandFit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--surface2:#1c1c26;
+  --accent:#4ade80;--accent2:#22d3ee;
+  --text:#f0f0f5;--muted:#6b7280;--border:#2a2a38;
+  --warn:#f59e0b;--danger:#ef4444;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden}
+h1,h2,h3,.logo{font-family:'Syne',sans-serif}
+input,button,select,textarea{font-family:'DM Sans',sans-serif}
+
+/* APP SHELL */
+#app{max-width:430px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative}
+
+/* SCREENS */
+.screen{display:none;flex:1;overflow-y:auto;padding-bottom:70px;animation:fadeIn 0.25s ease}
+.screen.active{display:block}
+#s-auth{padding-bottom:0}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* AUTH */
+.auth-wrap{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:2rem 1.5rem}
+.auth-logo{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;margin-bottom:0.5rem}
+.auth-logo span{color:var(--accent)}
+.auth-sub{color:var(--muted);font-size:14px;margin-bottom:2rem}
+.auth-tabs{display:flex;gap:0;margin-bottom:1.5rem;background:var(--surface);border-radius:12px;padding:4px}
+.auth-tab{flex:1;padding:10px;border:none;background:none;color:var(--muted);font-size:14px;font-weight:500;border-radius:10px;cursor:pointer;transition:all 0.2s;font-family:'DM Sans',sans-serif}
+.auth-tab.active{background:var(--surface2);color:var(--text)}
+.field{margin-bottom:1rem}
+.field label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px}
+.field input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:12px;font-size:14px;transition:border 0.2s}
+.field input:focus{outline:none;border-color:var(--accent)}
+.auth-error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:1rem;display:none}
+.auth-info{background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#86efac;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:1rem;display:none}
+
+/* BUTTONS */
+.btn{width:100%;padding:13px;border-radius:24px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all 0.2s;font-family:'DM Sans',sans-serif}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#86efac}
+.btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+.btn-outline{background:none;color:var(--text);border:1px solid var(--border)}
+.btn-outline:hover{border-color:var(--muted)}
+.btn-sm{padding:8px 16px;font-size:12px;border-radius:20px;width:auto}
+
+/* TOP BAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
+.topbar-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700}
+.back-btn{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:0}
+.back-btn:hover{color:var(--text)}
+.icon-btn{background:none;border:1px solid var(--border);color:var(--muted);width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:var(--bg);border-top:1px solid var(--border);display:none;padding:10px 0 6px;z-index:20}
+.bottom-nav.show{display:flex}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;background:none;border:none;color:var(--muted);transition:color 0.2s}
+.bnav-item.active{color:var(--accent)}
+.bnav-icon{font-size:20px}
+.bnav-label{font-size:10px;letter-spacing:0.04em}
+
+/* HOME */
+.home-hero{padding:1.5rem 1.25rem 1rem}
+.greeting{font-size:13px;color:var(--muted);margin-bottom:4px}
+.home-hero h1{font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;letter-spacing:-0.04em;line-height:1.2}
+.home-hero h1 span{color:var(--accent)}
+.streak-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--warn);font-size:12px;padding:5px 12px;border-radius:20px;margin-top:10px}
+
+.today-card{background:linear-gradient(135deg,#0d1f1a,#0d2020);border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:1.25rem;margin:0 1.25rem 1rem;cursor:pointer}
+.today-label{font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);margin-bottom:6px}
+.today-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:3px}
+.today-meta{font-size:12px;color:var(--muted);margin-bottom:12px}
+.progress-row{display:flex;align-items:center;gap:10px}
+.progress-bar{flex:1;height:4px;background:var(--border);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);border-radius:4px;transition:width 0.8s ease}
+.progress-pct{font-size:12px;color:var(--accent);font-weight:600;min-width:30px;text-align:right}
+
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 1.25rem;margin-bottom:1rem}
+.quick-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem;cursor:pointer;transition:all 0.2s}
+.quick-card:hover{border-color:var(--accent);background:var(--surface2)}
+.quick-icon{font-size:1.4rem;margin-bottom:8px}
+.quick-label{font-size:13px;font-weight:500}
+.quick-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* WORKOUT ACTIVE */
+.exercise-header{padding:1.25rem;text-align:center}
+.ex-counter{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.ex-name{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:4px}
+.ex-target{font-size:13px;color:var(--muted)}
+.ex-visual{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin:0 1.25rem 1rem;padding:1.5rem;text-align:center}
+.ex-emoji{font-size:3.5rem;display:block;margin-bottom:8px}
+.ex-tip{font-size:12px;color:var(--muted);line-height:1.5}
+
+.sets-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin:0 1.25rem 1rem;overflow:hidden}
+.sets-head{display:grid;grid-template-columns:50px 1fr 1fr 40px;gap:8px;padding:10px 14px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--border)}
+.set-row{display:grid;grid-template-columns:50px 1fr 1fr 40px;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-label{font-size:13px;color:var(--muted)}
+.set-input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:500;padding:7px 8px;width:100%;text-align:center;transition:border 0.2s}
+.set-input:focus{outline:none;border-color:var(--accent)}
+.set-done-btn{background:none;border:1.5px solid var(--border);color:var(--muted);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:13px;transition:all 0.2s;display:flex;align-items:center;justify-content:center;margin:0 auto}
+.set-done-btn.done{background:rgba(74,222,128,0.15);border-color:var(--accent);color:var(--accent)}
+
+/* TIMER */
+.timer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.timer-overlay.show{display:flex}
+.timer-circle{width:160px;height:160px;border-radius:50%;border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;flex-direction:column}
+.timer-num{font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;color:var(--accent)}
+.timer-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em}
+.timer-skip{background:none;border:1px solid var(--border);color:var(--muted);padding:10px 24px;border-radius:20px;cursor:pointer;font-size:13px}
+
+/* PROGRESS */
+.section-pad{padding:1.25rem}
+.section-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:10px}
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:0 1.25rem;margin-bottom:1.25rem}
+.day-dot{display:flex;flex-direction:column;align-items:center;gap:4px}
+.day-circle{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+.day-circle.done{background:rgba(74,222,128,0.15);border-color:var(--accent);color:var(--accent)}
+.day-circle.today{border-color:var(--accent2);color:var(--accent2)}
+.day-name{font-size:9px;color:var(--muted);text-transform:uppercase}
+
+.pr-list{padding:0 1.25rem}
+.pr-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.pr-row:last-child{border-bottom:none}
+.pr-name{font-size:14px;font-weight:500}
+.pr-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.pr-val{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:var(--accent)}
+.pr-trend{font-size:11px;color:var(--accent);background:rgba(74,222,128,0.1);padding:2px 8px;border-radius:10px;margin-top:2px;text-align:right}
+
+/* LOG */
+.log-list{padding:0 1.25rem}
+.log-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.log-item:last-child{border-bottom:none}
+.log-icon{width:38px;height:38px;border-radius:10px;background:rgba(74,222,128,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.log-info{flex:1}
+.log-name{font-size:14px;font-weight:500}
+.log-date{font-size:11px;color:var(--muted);margin-top:2px}
+.log-dur{font-size:13px;color:var(--accent);font-weight:600;text-align:right}
+.log-kcal{font-size:11px;color:var(--muted);text-align:right;margin-top:2px}
+
+/* PROFILE */
+.profile-hero{padding:2rem 1.25rem 1rem;text-align:center}
+.avatar{width:72px;height:72px;border-radius:50%;background:rgba(74,222,128,0.12);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;color:var(--accent);margin:0 auto 1rem}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 1.25rem;margin:1rem 0}
+.stat-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center}
+.stat-box-num{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:700;color:var(--accent)}
+.stat-box-label{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:0.05em}
+.menu-list{padding:0 1.25rem}
+.menu-item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.menu-item:last-child{border-bottom:none}
+.menu-icon{width:36px;height:36px;border-radius:10px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:16px}
+.menu-label{font-size:14px;font-weight:500;flex:1}
+.menu-arrow{color:var(--muted);font-size:14px}
+
+/* TOAST */
+.toast{position:fixed;bottom:85px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;opacity:0;transition:all 0.3s;z-index:200;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* LOADING */
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;margin:2rem auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- AUTH SCREEN -->
+<div id="s-auth" class="screen active">
+  <div class="auth-wrap">
+    <div class="auth-logo">ÍSLAND<span>FIT</span></div>
+    <div class="auth-sub">Þjálfaðu eins og atvinnumaður 🇮🇸</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Innskráning</button>
+      <button class="auth-tab" onclick="switchTab('signup')">Nýr aðgangur</button>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+    <div id="auth-info" class="auth-info"></div>
+
+    <div id="form-login">
+      <div class="field"><label>Netfang</label><input type="email" id="login-email" placeholder="nafn@mail.com"></div>
+      <div class="field"><label>Lykilorð</label><input type="password" id="login-pw" placeholder="••••••••"></div>
+      <button class="btn btn-primary" onclick="login()" id="btn-login">Skrá inn</button>
+    </div>
+
+    <div id="form-signup" style="display:none">
+      <div class="field"><label>Nafn</label><input type="text" id="signup-name" placeholder="Stefán"></div>
+      <div class="field"><label>Netfang</label><input type="email" id="signup-email" placeholder="nafn@mail.com"></div>
+      <div class="field"><label>Lykilorð</label><input type="password" id="signup-pw" placeholder="Minnst 6 stafir"></div>
+      <button class="btn btn-primary" onclick="signup()" id="btn-signup">Búa til aðgang</button>
+    </div>
+  </div>
+</div>
+
+<!-- HOME SCREEN -->
+<div id="s-home" class="screen">
+  <div class="topbar">
+    <div class="logo" style="font-size:1rem;font-weight:800">ÍSLAND<span style="color:var(--accent)">FIT</span></div>
+    <button class="icon-btn" onclick="showS('s-log')"><i class="ti ti-history"></i></button>
+  </div>
+  <div class="home-hero">
+    <div class="greeting">Góðan dag 👋</div>
+    <h1>Tilbúinn í <span id="home-name">þjálfun</span>?</h1>
+    <div class="streak-badge" id="streak-badge">🔥 0 vikur í röð</div>
+  </div>
+  <div class="today-card" onclick="showS('s-active')">
+    <div class="today-label">Þjálfun dagsins</div>
+    <div class="today-title">Styrkur + Sprengikraftur</div>
+    <div class="today-meta" id="today-meta">Körfubolti · 6 æfingar · ~55 mín</div>
+    <div class="progress-row">
+      <div class="progress-bar"><div class="progress-fill" id="home-progress" style="width:0%"></div></div>
+      <div class="progress-pct" id="home-pct">0%</div>
+    </div>
+  </div>
+  <div class="quick-grid">
+    <div class="quick-card" onclick="showS('s-progress')">
+      <div class="quick-icon">📈</div>
+      <div class="quick-label">Framfarir</div>
+      <div class="quick-sub">Sjá PR</div>
+    </div>
+    <div class="quick-card" onclick="showS('s-log')">
+      <div class="quick-icon">📋</div>
+      <div class="quick-label">Þjálfunarsaga</div>
+      <div class="quick-sub" id="log-count">0 lokin</div>
+    </div>
+    <div class="quick-card" onclick="showS('s-active')">
+      <div class="quick-icon">⚡</div>
+      <div class="quick-label">Byrja núna</div>
+      <div class="quick-sub">Dagleg þjálfun</div>
+    </div>
+    <div class="quick-card" onclick="showS('s-profile')">
+      <div class="quick-icon">👤</div>
+      <div class="quick-label">Minn aðgangur</div>
+      <div class="quick-sub">Stillingar</div>
+    </div>
+  </div>
+</div>
+
+<!-- ACTIVE WORKOUT -->
+<div id="s-active" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="finishWorkout()">← Ljúka</button>
+    <div class="topbar-title" id="active-counter">1 / 6</div>
+    <button class="icon-btn" onclick="startTimer(90)"><i class="ti ti-clock"></i></button>
+  </div>
+  <div class="exercise-header">
+    <div class="ex-counter" id="ex-counter">Æfing 1 af 6</div>
+    <div class="ex-name" id="ex-name">Olympic Squat</div>
+    <div class="ex-target" id="ex-target">4 sett × 5 reps · 80 kg</div>
+  </div>
+  <div class="ex-visual">
+    <span class="ex-emoji" id="ex-emoji">🏋️</span>
+    <div class="ex-tip" id="ex-tip">Fætur á öxlarvídd. Hnén yfir tánum. Haltu brjóstinu uppi.</div>
+  </div>
+  <div class="sets-card">
+    <div class="sets-head"><span>Sett</span><span>Reps</span><span>Þyngd kg</span><span></span></div>
+    <div id="sets-body"></div>
+  </div>
+  <div style="padding:0 1.25rem 1rem;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <button class="btn btn-outline" onclick="prevEx()">← Fyrri</button>
+    <button class="btn btn-primary" onclick="nextEx()">Næsta →</button>
+  </div>
+</div>
+
+<!-- TIMER OVERLAY -->
+<div class="timer-overlay" id="timer-ov">
+  <div class="timer-circle">
+    <div class="timer-num" id="timer-num">90</div>
+    <div class="timer-lbl">Hvíld</div>
+  </div>
+  <div style="font-size:14px;color:var(--muted)">Taktu andardrátt 💨</div>
+  <button class="timer-skip" onclick="stopTimer()">Sleppa hvíld</button>
+</div>
+
+<!-- PROGRESS -->
+<div id="s-progress" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-home')">← Til baka</button>
+    <div class="topbar-title">Framfarir</div>
+    <div style="width:34px"></div>
+  </div>
+  <div class="section-pad"><div class="section-title">Þessi vika</div></div>
+  <div class="week-grid" id="week-grid"></div>
+  <div class="section-pad" style="padding-bottom:0"><div class="section-title">Persónulegar metið</div></div>
+  <div class="pr-list" id="pr-list">
+    <div class="loading-wrap"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- LOG -->
+<div id="s-log" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-home')">← Til baka</button>
+    <div class="topbar-title">Þjálfunarsaga</div>
+    <div style="width:34px"></div>
+  </div>
+  <div style="padding:1rem 1.25rem 0.5rem;font-size:13px;color:var(--muted)" id="log-header">Sæki gögn...</div>
+  <div class="log-list" id="log-list">
+    <div class="loading-wrap"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- PROFILE -->
+<div id="s-profile" class="screen">
+  <div class="topbar">
+    <div class="topbar-title">Minn aðgangur</div>
+    <button class="icon-btn" onclick="logout()"><i class="ti ti-logout"></i></button>
+  </div>
+  <div class="profile-hero">
+    <div class="avatar" id="profile-avatar">S</div>
+    <div style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700" id="profile-name">Stefán</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px" id="profile-sport">Körfubolti</div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-box-num" id="p-workouts">0</div><div class="stat-box-label">Þjálfanir</div></div>
+    <div class="stat-box"><div class="stat-box-num" id="p-hours">0</div><div class="stat-box-label">Klukkustundir</div></div>
+    <div class="stat-box"><div class="stat-box-num" id="p-streak">0</div><div class="stat-box-label">Vikur í röð</div></div>
+  </div>
+  <div class="menu-list">
+    <div class="menu-item" onclick="showS('s-progress')">
+      <div class="menu-icon"><i class="ti ti-trophy"></i></div>
+      <div class="menu-label">Framfarir & PR</div>
+      <div class="menu-arrow">›</div>
+    </div>
+    <div class="menu-item" onclick="showS('s-log')">
+      <div class="menu-icon"><i class="ti ti-calendar"></i></div>
+      <div class="menu-label">Þjálfunaryfirlit</div>
+      <div class="menu-arrow">›</div>
+    </div>
+    <div class="menu-item" onclick="logout()">
+      <div class="menu-icon"><i class="ti ti-logout"></i></div>
+      <div class="menu-label">Útskráning</div>
+      <div class="menu-arrow">›</div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav" id="bottom-nav">
+  <button class="bnav-item active" id="bn-home" onclick="showS('s-home');setNav('home')"><i class="ti ti-home bnav-icon"></i><span class="bnav-label">Heim</span></button>
+  <button class="bnav-item" id="bn-active" onclick="showS('s-active');setNav('active')"><i class="ti ti-barbell bnav-icon"></i><span class="bnav-label">Þjálfun</span></button>
+  <button class="bnav-item" id="bn-progress" onclick="showS('s-progress');setNav('progress');loadPRs()"><i class="ti ti-chart-line bnav-icon"></i><span class="bnav-label">Framfarir</span></button>
+  <button class="bnav-item" id="bn-profile" onclick="showS('s-profile');setNav('profile')"><i class="ti ti-user bnav-icon"></i><span class="bnav-label">Minn</span></button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+// ── SUPABASE ──────────────────────────────────────────────
+const SUPA_URL = 'https://dlizuycilevrekjvltlq.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsaXp1eWNpbGV2cmVranZsdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjY4NDgsImV4cCI6MjA5NDk0Mjg0OH0.FoZzZt12hVCkFr_j0kTVfmgwAbRiONoSh0hSXKf35m4';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ── STATE ─────────────────────────────────────────────────
+let currentUser = null;
+let currentProfile = null;
+let curEx = 0;
+let workoutProgress = {};
+let timerInterval = null;
+let workoutStartTime = null;
+
+// ── EXERCISES ─────────────────────────────────────────────
+const exercises = [
+  {name:'Olympic Squat',target:'4 sett × 5 reps · 80 kg',emoji:'🏋️',tip:'Fætur á öxlarvídd. Hnén yfir tánum. Haltu brjóstinu uppi alla leiðina.',sets:4,reps:5,kg:80},
+  {name:'Power Clean',target:'5 sett × 3 reps · 60 kg',emoji:'⚡',tip:'Togaðu stangarnar upp með sprengjandi kraft frá mjaðmirnar. Grip fast.',sets:5,reps:3,kg:60},
+  {name:'Box Jump',target:'4 sett × 6 reps · 60 cm',emoji:'🦘',tip:'Lendum mjúklega á báðum fótum. Náðu fullri hæð á hvert sett.',sets:4,reps:6,kg:'60cm'},
+  {name:'Single Leg RDL',target:'3 sett × 10 reps · 20 kg',emoji:'🦵',tip:'Haltu bolnum stöðugum. Lengdu hamstrings í hverri endastöðu.',sets:3,reps:10,kg:20},
+  {name:'Core plönkur',target:'3 sett × 60 sek',emoji:'🧱',tip:'Haltu mjaðmirnar í línu við herðar. Spenntu kviðinn allan tímann.',sets:3,reps:'60s',kg:'—'},
+  {name:'Stretch & Móbilitet',target:'10 mín · Lægur styrkleiki',emoji:'🧘',tip:'Haltu hverri stöðu í 30-45 sek. Andaðu djúpt og slaktu á.',sets:1,reps:'10 mín',kg:'—'},
+];
+
+// ── AUTH ──────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (tab==='login'&&i===0)||(tab==='signup'&&i===1)));
+  document.getElementById('form-login').style.display = tab==='login'?'block':'none';
+  document.getElementById('form-signup').style.display = tab==='signup'?'block':'none';
+  document.getElementById('auth-error').style.display = 'none';
+  document.getElementById('auth-info').style.display = 'none';
+}
+
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-pw').value;
+  const btn = document.getElementById('btn-login');
+  if(!email||!pw) return showError('Fylltu inn netfang og lykilorð');
+  btn.disabled = true; btn.textContent = 'Skrái inn...';
+  const {data, error} = await sb.auth.signInWithPassword({email, password: pw});
+  btn.disabled = false; btn.textContent = 'Skrá inn';
+  if(error) {
+    if(/confirm/i.test(error.message)) return showError('Staðfestu netfangið þitt fyrst — athugaðu pósthólfið 📩');
+    if(/invalid login/i.test(error.message)) return showError('Rangt netfang eða lykilorð.');
+    return showError('Villa: ' + error.message);
+  }
+  await onLogin(data.user);
+}
+
+async function signup() {
+  const name = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const pw = document.getElementById('signup-pw').value;
+  const btn = document.getElementById('btn-signup');
+  if(!name||!email||!pw) return showError('Fylltu inn öll svæði');
+  if(pw.length < 6) return showError('Lykilorð þarf að vera minnst 6 stafir');
+  btn.disabled = true; btn.textContent = 'Bý til aðgang...';
+  const {data, error} = await sb.auth.signUp({email, password: pw, options:{data:{name}}});
+  btn.disabled = false; btn.textContent = 'Búa til aðgang';
+  if(error) return showError('Villa: ' + error.message);
+  // Supabase skilar notanda án 'identities' ef netfangið er þegar skráð
+  if(data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    return showError('Þetta netfang er þegar skráð. Reyndu að skrá þig inn.');
+  }
+  if(data.session) {
+    // Engin netfangsstaðfesting virk — við erum strax innskráð
+    await sb.from('profiles').upsert({id: data.user.id, name});
+    await onLogin(data.user);
+  } else {
+    // Netfangsstaðfesting virk — engin lota ennþá, biðjum notanda að staðfesta
+    switchTab('login');
+    document.getElementById('login-email').value = email;
+    showInfo('📩 Staðfestingarpóstur sendur á ' + email + '. Staðfestu og skráðu þig svo inn.');
+  }
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  currentUser = null; currentProfile = null;
+  document.getElementById('bottom-nav').classList.remove('show');
+  showS('s-auth');
+}
+
+function showError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('auth-info').style.display = 'none';
+}
+
+function showInfo(msg) {
+  const el = document.getElementById('auth-info');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+// ── ON LOGIN ──────────────────────────────────────────────
+async function onLogin(user) {
+  currentUser = user;
+  let {data: profile} = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if(!profile) {
+    // Triggerinn býr profile til sjálfkrafa — en til öryggis búum við það til hér ef það vantar
+    const fallbackName = user.user_metadata?.name || (user.email||'').split('@')[0];
+    await sb.from('profiles').upsert({id: user.id, name: fallbackName});
+    ({data: profile} = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle());
+  }
+  currentProfile = profile;
+  document.getElementById('bottom-nav').classList.add('show');
+  updateHomeUI();
+  showS('s-home');
+  setNav('home');
+  loadWorkoutHistory();
+}
+
+function updateHomeUI() {
+  if(!currentProfile) return;
+  const name = currentProfile.name || 'þjálfun';
+  document.getElementById('home-name').textContent = name + '?';
+  document.getElementById('home-name').closest('h1').innerHTML = `Tilbúinn, <span>${name}</span>?`;
+  document.getElementById('streak-badge').textContent = `🔥 ${currentProfile.streak||0} vikur í röð`;
+  document.getElementById('profile-name').textContent = name;
+  document.getElementById('profile-avatar').textContent = name.charAt(0).toUpperCase();
+  document.getElementById('profile-sport').textContent = currentProfile.sport || 'Körfubolti';
+  document.getElementById('today-meta').textContent = (currentProfile.sport||'Körfubolti') + ' · 6 æfingar · ~55 mín';
+}
+
+// ── WORKOUT ───────────────────────────────────────────────
+function renderExercise() {
+  const ex = exercises[curEx];
+  document.getElementById('active-counter').textContent = `${curEx+1} / ${exercises.length}`;
+  document.getElementById('ex-counter').textContent = `Æfing ${curEx+1} af ${exercises.length}`;
+  document.getElementById('ex-name').textContent = ex.name;
+  document.getElementById('ex-target').textContent = ex.target;
+  document.getElementById('ex-emoji').textContent = ex.emoji;
+  document.getElementById('ex-tip').textContent = ex.tip;
+  const body = document.getElementById('sets-body');
+  const saved = workoutProgress[curEx] || {};
+  body.innerHTML = Array.from({length: typeof ex.sets==='number'?ex.sets:1}, (_,i) => `
+    <div class="set-row">
+      <span class="set-label">Sett ${i+1}</span>
+      <input class="set-input" type="text" value="${saved[i]?.reps||ex.reps}" id="reps-${i}" oninput="saveSet(${i})">
+      <input class="set-input" type="text" value="${saved[i]?.kg||ex.kg}" id="kg-${i}" oninput="saveSet(${i})">
+      <button class="set-done-btn ${saved[i]?.done?'done':''}" onclick="toggleSet(this,${i})" aria-label="Merkja sett">✓</button>
+    </div>`).join('');
+  updateActiveProgress();
+}
+
+function saveSet(i) {
+  if(!workoutProgress[curEx]) workoutProgress[curEx] = {};
+  workoutProgress[curEx][i] = {
+    reps: document.getElementById(`reps-${i}`)?.value,
+    kg: document.getElementById(`kg-${i}`)?.value,
+    done: workoutProgress[curEx][i]?.done||false
+  };
+}
+
+function toggleSet(btn, i) {
+  if(!workoutProgress[curEx]) workoutProgress[curEx] = {};
+  const prev = workoutProgress[curEx][i]?.done||false;
+  workoutProgress[curEx][i] = {
+    reps: document.getElementById(`reps-${i}`)?.value || exercises[curEx].reps,
+    kg: document.getElementById(`kg-${i}`)?.value || exercises[curEx].kg,
+    done: !prev
+  };
+  btn.classList.toggle('done', !prev);
+  if(!prev) startTimer(90);
+  updateActiveProgress();
+  checkAutoAdvance();
+}
+
+function updateActiveProgress() {
+  const total = exercises.reduce((s,e) => s+(typeof e.sets==='number'?e.sets:1), 0);
+  let done = 0;
+  Object.values(workoutProgress).forEach(ex => Object.values(ex).forEach(s => { if(s.done) done++; }));
+  const pct = Math.round(done/total*100);
+  document.getElementById('home-progress').style.width = pct+'%';
+  document.getElementById('home-pct').textContent = pct+'%';
+}
+
+function checkAutoAdvance() {
+  const ex = exercises[curEx];
+  const setCount = typeof ex.sets==='number'?ex.sets:1;
+  const prog = workoutProgress[curEx]||{};
+  const allDone = Array.from({length:setCount},(_,i)=>i).every(i=>prog[i]?.done);
+  if(allDone && curEx < exercises.length-1) setTimeout(()=>nextEx(), 800);
+}
+
+function nextEx() { if(curEx<exercises.length-1){curEx++;renderExercise();} }
+function prevEx() { if(curEx>0){curEx--;renderExercise();} }
+
+async function finishWorkout() {
+  if(!currentUser) return showS('s-home');
+  const duration = workoutStartTime ? Math.round((Date.now()-workoutStartTime)/60000) : 55;
+  const {data: workout} = await sb.from('workouts').insert({
+    user_id: currentUser.id,
+    title: 'Styrkur + Sprengikraftur',
+    sport: currentProfile?.sport||'Körfubolti',
+    duration_min: duration,
+    calories: Math.round(duration*7.5)
+  }).select().single();
+
+  if(workout) {
+    for(let ei=0; ei<exercises.length; ei++) {
+      const prog = workoutProgress[ei]||{};
+      for(let si=0; si<(typeof exercises[ei].sets==='number'?exercises[ei].sets:1); si++) {
+        const s = prog[si];
+        if(s?.done && s.kg!=='—') {
+          await sb.from('workout_sets').insert({
+            user_id: currentUser.id,
+            workout_id: workout.id,
+            exercise_name: exercises[ei].name,
+            set_number: si+1,
+            reps: parseInt(s.reps)||0,
+            weight_kg: parseFloat(s.kg)||0
+          });
+          await sb.from('personal_records').upsert({
+            user_id: currentUser.id,
+            exercise_name: exercises[ei].name,
+            weight_kg: parseFloat(s.kg)||0,
+            reps: parseInt(s.reps)||0,
+            achieved_at: new Date().toISOString()
+          }, {onConflict:'user_id,exercise_name'});
+        }
+      }
+    }
+  }
+
+  workoutProgress = {}; curEx = 0;
+  showToast('Þjálfun lokið! 🎉');
+  await loadWorkoutHistory();
+  showS('s-home');
+}
+
+// ── TIMER ─────────────────────────────────────────────────
+function startTimer(secs) {
+  let val = secs;
+  document.getElementById('timer-num').textContent = val;
+  document.getElementById('timer-ov').classList.add('show');
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    val--;
+    document.getElementById('timer-num').textContent = val;
+    if(val<=0) stopTimer();
+  }, 1000);
+}
+function stopTimer() {
+  clearInterval(timerInterval);
+  document.getElementById('timer-ov').classList.remove('show');
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────
+async function loadWorkoutHistory() {
+  if(!currentUser) return;
+  const {data} = await sb.from('workouts').select('*').eq('user_id',currentUser.id).order('completed_at',{ascending:false});
+  const workouts = data||[];
+  document.getElementById('log-count').textContent = workouts.length + ' lokin';
+  document.getElementById('log-header').textContent = workouts.length + ' þjálfanir lokin';
+  document.getElementById('p-workouts').textContent = workouts.length;
+  const totalMins = workouts.reduce((s,w)=>s+(w.duration_min||0),0);
+  document.getElementById('p-hours').textContent = Math.round(totalMins/60);
+  const icons = ['🏀','⚡','💪','🏋️','🤸','🏃'];
+  document.getElementById('log-list').innerHTML = workouts.length ? workouts.map((w,i)=>`
+    <div class="log-item">
+      <div class="log-icon">${icons[i%icons.length]}</div>
+      <div class="log-info">
+        <div class="log-name">${w.title||'Þjálfun'}</div>
+        <div class="log-date">${formatDate(w.completed_at)} · ${w.sport||'Körfubolti'}</div>
+      </div>
+      <div><div class="log-dur">${w.duration_min||55} mín</div><div class="log-kcal">${w.calories||420} kkal</div></div>
+    </div>`).join('') : '<div style="padding:2rem 0;text-align:center;color:var(--muted);font-size:14px">Engar þjálfanir enn 💪</div>';
+}
+
+async function loadPRs() {
+  if(!currentUser) return;
+  const {data} = await sb.from('personal_records').select('*').eq('user_id',currentUser.id).order('achieved_at',{ascending:false});
+  const prs = data||[];
+  document.getElementById('pr-list').innerHTML = prs.length ? prs.map(p=>`
+    <div class="pr-row">
+      <div><div class="pr-name">${p.exercise_name}</div><div class="pr-sub">${p.reps} reps</div></div>
+      <div style="text-align:right"><div class="pr-val">${p.weight_kg} kg</div></div>
+    </div>`).join('') : '<div style="padding:2rem 0;text-align:center;color:var(--muted);font-size:14px">Engin met enn — ljúktu fyrstu þjálfun! 💪</div>';
+}
+
+// ── WEEK GRID ─────────────────────────────────────────────
+function renderWeek() {
+  const days = ['Mán','Þri','Mið','Fim','Fös','Lau','Sun'];
+  const today = new Date().getDay();
+  const todayIdx = today===0?6:today-1;
+  document.getElementById('week-grid').innerHTML = days.map((d,i)=>`
+    <div class="day-dot">
+      <div class="day-circle ${i<todayIdx?'done':i===todayIdx?'today':''}">${i<todayIdx?'✓':i===todayIdx?'·':''}</div>
+      <div class="day-name">${d}</div>
+    </div>`).join('');
+}
+
+// ── HELPERS ───────────────────────────────────────────────
+function formatDate(iso) {
+  if(!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now-d)/86400000);
+  if(diff===0) return 'Í dag';
+  if(diff===1) return 'Í gær';
+  return diff + ' dögum síðan';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function showS(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id==='s-active' && !workoutStartTime) workoutStartTime = Date.now();
+  const map={'s-home':'home','s-active':'active','s-progress':'progress','s-log':'log','s-profile':'profile'};
+  setNav(map[id]);
+}
+
+function setNav(id) {
+  document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
+  const el = document.getElementById('bn-'+id);
+  if(el) el.classList.add('active');
+}
+
+// ── INIT ──────────────────────────────────────────────────
+(async () => {
+  const {data:{session}} = await sb.auth.getSession();
+  if(session?.user) await onLogin(session.user);
+  renderExercise();
+  renderWeek();
+})();
+</script>
+</body>
+</html>
