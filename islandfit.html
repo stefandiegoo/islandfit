@@ -1640,7 +1640,7 @@ async function signup(){
   btn.disabled=true; btn.textContent='Creating...';
   const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name}}});
   btn.disabled=false; btn.textContent='Create Account';
-  if(error) return showError('Error: '+error.message);
+  if(error) return showError('Error: '+(error.message||error.error_description||JSON.stringify(error)));
   // Supabase returns a user with no identities if the email is already registered
   if(data.user && Array.isArray(data.user.identities) && data.user.identities.length===0){
     return showError('That email is already registered. Try signing in.');
