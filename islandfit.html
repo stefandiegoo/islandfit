@@ -479,6 +479,37 @@ body::before{
 .set-row{min-height:54px}  /* Bigger tap targets */
 .set-input,.rpe-input{font-size:15px;padding:10px 6px}  /* Easier to read */
 .log-btn{width:38px;height:38px}  /* Bigger tap target */
+
+/* ═══ COACH PORTAL ═══ */
+.coach-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,rgba(0,255,163,0.15),rgba(34,211,238,0.1));border:1px solid rgba(0,255,163,0.3);color:var(--aurora-1);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.coach-badge.pending{background:rgba(255,140,66,0.1);border-color:rgba(255,140,66,0.3);color:var(--lava-2)}
+.coach-badge.rejected{background:rgba(255,77,109,0.1);border-color:rgba(255,77,109,0.3);color:var(--lava-1)}
+.client-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:14px}
+.client-card:active{border-color:var(--accent);transform:scale(0.99)}
+.client-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#000;flex-shrink:0}
+.client-info{flex:1;min-width:0}
+.client-name{font-size:15px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-meta{font-size:12px;color:var(--muted)}
+.client-pending{background:rgba(255,140,66,0.08);border-color:rgba(255,140,66,0.25)}
+.invite-code-box{background:var(--surface2);border:1px dashed var(--border-bright);border-radius:14px;padding:20px;text-align:center;margin-bottom:16px}
+.invite-code{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:var(--accent);margin:8px 0}
+.invite-expire{font-size:11px;color:var(--muted)}
+.prog-builder-day{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.prog-builder-day-hdr{padding:14px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;justify-content:space-between}
+.prog-builder-day-title{font-size:14px;font-weight:700}
+.prog-builder-exercises{padding:0 16px 14px;display:flex;flex-direction:column;gap:8px}
+.prog-ex-row{display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:10px 12px}
+.prog-ex-name{flex:1;font-size:13px;font-weight:600}
+.prog-ex-meta{font-size:11px;color:var(--muted)}
+.admin-app-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+.admin-app-card h4{font-size:15px;font-weight:700;margin-bottom:4px}
+.admin-app-card .cert-line{font-size:12px;color:var(--muted);margin-bottom:10px}
+.admin-app-card .bio{font-size:13px;color:var(--text-soft);line-height:1.5;margin-bottom:12px;background:var(--surface2);border-radius:8px;padding:10px}
+.admin-actions{display:flex;gap:8px}
+.btn-approve{flex:1;background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#000;font-weight:700;padding:12px;border-radius:10px;font-size:13px}
+.btn-reject{flex:1;background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);color:var(--lava-1);font-weight:700;padding:12px;border-radius:10px;font-size:13px}
+.coach-request-card{background:rgba(255,140,66,0.06);border:1px solid rgba(255,140,66,0.25);border-radius:12px;padding:14px;margin-bottom:10px}
+.section-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:20px 0 10px}
 </style>
 </head>
 <body>
@@ -504,6 +535,13 @@ body::before{
       <div class="field"><label>Name</label><input type="text" id="signup-name" placeholder="Your name"></div>
       <div class="field"><label>Email</label><input type="email" id="signup-email" placeholder="you@email.com"></div>
       <div class="field"><label>Password</label><input type="password" id="signup-pw" placeholder="Min 6 characters"></div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:600;margin-bottom:8px">I am signing up as</div>
+        <div style="display:flex;gap:8px">
+          <button id="role-athlete" onclick="selectSignupRole('athlete')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--accent);background:rgba(0,255,163,0.12);color:var(--accent);font-weight:700;font-size:13px">Athlete</button>
+          <button id="role-coach" onclick="selectSignupRole('coach')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-weight:700;font-size:13px">Coach</button>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="signup()" id="btn-signup" style="margin-top:8px">Create Account</button>
     </div>
   </div>
@@ -1048,6 +1086,15 @@ body::before{
     <div class="menu-item" onclick="showS('s-settings');setNav('profile')">
       <div class="menu-icon"><i class="ti ti-settings"></i></div><div class="menu-label">Settings</div><div class="menu-arrow"><i class="ti ti-chevron-right"></i></div>
     </div>
+    <div class="menu-item" id="menu-coach-portal" style="display:none" onclick="openCoachPortal()">
+      <div class="menu-icon" style="color:var(--aurora-2)"><i class="ti ti-users"></i></div><div class="menu-label">Coach Portal</div><div class="menu-arrow"><i class="ti ti-chevron-right"></i></div>
+    </div>
+    <div class="menu-item" id="menu-apply-coach" style="display:none" onclick="showS('s-coach-apply');setNav('profile')">
+      <div class="menu-icon" style="color:var(--aurora-2)"><i class="ti ti-certificate"></i></div><div class="menu-label" id="menu-apply-coach-label">Apply as Coach</div><div class="menu-arrow"><i class="ti ti-chevron-right"></i></div>
+    </div>
+    <div class="menu-item" id="menu-admin" style="display:none" onclick="showS('s-admin');loadAdminScreen()">
+      <div class="menu-icon" style="color:var(--lava-2)"><i class="ti ti-shield-check"></i></div><div class="menu-label">Admin Panel</div><div class="menu-arrow"><i class="ti ti-chevron-right"></i></div>
+    </div>
     <div class="menu-item" onclick="logout()">
       <div class="menu-icon" style="color:var(--danger)"><i class="ti ti-logout"></i></div><div class="menu-label">Sign Out</div><div class="menu-arrow"><i class="ti ti-chevron-right"></i></div>
     </div>
@@ -1090,9 +1137,153 @@ body::before{
     <div class="field"><label>New Password</label><input type="password" id="set-pw" placeholder="Min 6 characters"></div>
     <button class="btn btn-ghost" onclick="changePassword()">Update Password</button>
   </div>
+  <div class="settings-section" id="set-mycoach-section">
+    <h3>My Coach</h3>
+    <div id="set-coach-requests"></div>
+    <div id="set-active-coaches"></div>
+    <div class="field" style="margin-top:10px"><label>Enter coach invite code</label><input type="text" id="set-invite-code" placeholder="ISLAND-XXXXX" style="text-transform:uppercase;letter-spacing:2px"></div>
+    <button class="btn btn-primary" onclick="redeemInviteCode()" style="margin-top:6px">Connect to Coach</button>
+  </div>
   <div class="settings-section">
     <h3>About</h3>
     <div style="font-size:13px;color:var(--text-soft);line-height:1.6">ÍslandFit v3.0<br>Auto-regulation enabled ⚡<br>Made in Iceland 🇮🇸</div>
+  </div>
+</div>
+
+<!-- COACH APPLY -->
+<div id="s-coach-apply" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-profile');setNav('profile')"><i class="ti ti-chevron-left"></i> Back</button>
+    <div class="topbar-title">Coach Application</div>
+    <div style="width:40px"></div>
+  </div>
+  <div class="settings-section">
+    <p style="font-size:13px;color:var(--text-soft);line-height:1.6;margin-bottom:16px">Submit your certification details for review. You'll be notified once approved — usually within 24 hours.</p>
+    <div class="field"><label>Full Name</label><input type="text" id="ca-name" placeholder="Your full name"></div>
+    <div class="field"><label>Certification Title</label><input type="text" id="ca-cert" placeholder="e.g. NSCA-CSCS, IUSY Level 2, PT Diploma"></div>
+    <div class="field"><label>Issuing Body / School</label><input type="text" id="ca-org" placeholder="e.g. NSCA, ÍTR, University of Iceland"></div>
+    <div class="field"><label>Year Obtained</label><input type="number" id="ca-year" placeholder="e.g. 2021" min="1990" max="2030"></div>
+    <div class="field"><label>Link to Certificate / Registry</label><input type="url" id="ca-url" placeholder="https://..."></div>
+    <div class="field"><label>Background & Experience</label><textarea id="ca-bio" class="ai-onboard-text" rows="4" placeholder="Briefly describe your coaching background, specialties, and experience..."></textarea></div>
+    <div id="ca-error" class="auth-error" style="margin-top:8px"></div>
+    <button class="btn btn-primary" id="btn-ca-submit" onclick="submitCoachApplication()" style="margin-top:8px">Submit Application</button>
+  </div>
+</div>
+
+<!-- COACH PORTAL (dashboard for approved coaches) -->
+<div id="s-coach" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-profile');setNav('profile')"><i class="ti ti-chevron-left"></i> Back</button>
+    <div class="topbar-title">Coach Portal</div>
+    <div style="width:40px"></div>
+  </div>
+  <div style="padding:0 16px">
+
+    <!-- Invite code -->
+    <div class="section-label">Your Invite Code</div>
+    <div class="invite-code-box">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Share this with your clients</div>
+      <div class="invite-code" id="coach-invite-display">—</div>
+      <div class="invite-expire" id="coach-invite-expire"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+        <button class="btn btn-ghost" style="padding:10px 18px;font-size:13px" onclick="copyInviteCode()"><i class="ti ti-copy"></i> Copy</button>
+        <button class="btn btn-ghost" style="padding:10px 18px;font-size:13px" onclick="generateInviteCode()"><i class="ti ti-refresh"></i> New</button>
+      </div>
+    </div>
+
+    <!-- Add by email -->
+    <div class="section-label">Add Client by Email</div>
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      <input type="email" id="coach-add-email" placeholder="client@email.com" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:14px">
+      <button class="btn btn-primary" style="padding:13px 18px;font-size:13px;white-space:nowrap" onclick="addClientByEmail()">Send Request</button>
+    </div>
+
+    <!-- Client list -->
+    <div class="section-label">My Clients <span id="coach-client-count" style="color:var(--muted)"></span></div>
+    <div id="coach-clients-list"><div style="color:var(--muted);font-size:14px;text-align:center;padding:24px">Loading...</div></div>
+
+    <!-- Custom programs -->
+    <div class="section-label">My Custom Programs</div>
+    <div id="coach-programs-list" style="margin-bottom:12px"></div>
+    <button class="btn btn-ghost" style="width:100%;padding:14px;border:1px dashed var(--border-bright)" onclick="showS('s-coach-program');initProgramBuilder()"><i class="ti ti-plus"></i> Create New Program</button>
+  </div>
+</div>
+
+<!-- COACH: CLIENT DETAIL -->
+<div id="s-coach-client" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-coach');loadCoachScreen()"><i class="ti ti-chevron-left"></i> Clients</button>
+    <div class="topbar-title" id="coach-client-title">Client</div>
+    <div style="width:40px"></div>
+  </div>
+  <div style="padding:0 16px">
+    <div id="coach-client-stats" style="margin-bottom:8px"></div>
+
+    <!-- Assign program -->
+    <div class="section-label">Assigned Program</div>
+    <div id="coach-client-program" style="margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      <select id="coach-assign-select" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:13px">
+        <option value="">— Select a program —</option>
+      </select>
+      <button class="btn btn-primary" style="padding:13px 18px;font-size:13px;white-space:nowrap" onclick="assignProgramToClient()">Assign</button>
+    </div>
+
+    <!-- Coach notes -->
+    <div class="section-label">Coach Notes (visible to AI coach)</div>
+    <textarea id="coach-client-notes" class="ai-onboard-text" rows="3" placeholder="Injuries, goals, things to keep in mind..." style="margin-bottom:8px"></textarea>
+    <button class="btn btn-primary" onclick="saveClientNotes()" style="margin-bottom:20px">Save Notes</button>
+
+    <!-- Recent workouts -->
+    <div class="section-label">Recent Workouts</div>
+    <div id="coach-client-workouts"></div>
+
+    <!-- PRs -->
+    <div class="section-label">Personal Records</div>
+    <div id="coach-client-prs"></div>
+
+    <div style="margin-top:20px;margin-bottom:16px">
+      <button class="btn btn-ghost" style="width:100%;color:var(--lava-1);border:1px solid rgba(255,77,109,0.3)" onclick="removeClient()">Remove Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- COACH: CUSTOM PROGRAM BUILDER -->
+<div id="s-coach-program" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-coach');loadCoachScreen()"><i class="ti ti-chevron-left"></i> Portal</button>
+    <div class="topbar-title" id="prog-builder-title">New Program</div>
+    <div style="width:40px"></div>
+  </div>
+  <div style="padding:0 16px">
+    <div class="field"><label>Program Name</label><input type="text" id="pb-name" placeholder="e.g. Jon's Off-Season Block"></div>
+    <div class="field"><label>Sport / Focus</label><input type="text" id="pb-sport" placeholder="e.g. Football, General Strength"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div class="field" style="flex:1;margin-bottom:0"><label>Days/week</label><input type="number" id="pb-days" min="1" max="7" value="4"></div>
+      <div class="field" style="flex:1;margin-bottom:0"><label>Weeks</label><input type="number" id="pb-weeks" min="1" max="52" value="8"></div>
+    </div>
+    <div class="field"><label>Level</label><select id="pb-level"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div>
+
+    <div class="section-label">Training Days <button onclick="addBuilderDay()" style="color:var(--accent);font-size:12px;font-weight:700;float:right">+ Add Day</button></div>
+    <div id="pb-days-list" style="margin-bottom:16px"></div>
+
+    <div id="pb-error" class="auth-error"></div>
+    <button class="btn btn-primary" id="btn-pb-save" onclick="saveProgramBuilder()" style="margin-bottom:20px"><i class="ti ti-device-floppy"></i> Save Program</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="s-admin" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showS('s-profile');setNav('profile')"><i class="ti ti-chevron-left"></i> Back</button>
+    <div class="topbar-title">Admin Panel</div>
+    <div style="width:40px"></div>
+  </div>
+  <div style="padding:0 16px">
+    <div class="section-label">Pending Coach Applications</div>
+    <div id="admin-apps-list"><div style="color:var(--muted);text-align:center;padding:24px;font-size:14px">Loading...</div></div>
+    <div class="section-label" style="margin-top:8px">Approved Coaches</div>
+    <div id="admin-coaches-list"></div>
   </div>
 </div>
 
@@ -1456,7 +1647,15 @@ async function signup(){
   }
   if(data.session){
     // Email confirmation is off → we're signed in immediately, go to onboarding
-    await sb.from('profiles').upsert({id:data.user.id,name});
+    await sb.from('profiles').upsert({id:data.user.id,name,role:signupRole});
+    // Coach who signs up goes straight to application form
+    if(signupRole==='coach'){
+      currentUser=data.user;
+      let {data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).maybeSingle();
+      currentProfile=profile||{name,role:'coach',coach_status:'none'};
+      updateCoachMenuItems();
+      showS('s-coach-apply'); setNav('profile'); return;
+    }
     await onLogin(data.user);
   } else {
     // Email confirmation is on → no session yet; ask the user to confirm first
@@ -2048,6 +2247,7 @@ async function onLogin(user){
   updateHomeUI();
   renderAIPreview();
   maybeOfferEaseBack();
+  updateCoachMenuItems();
   showS('s-home');
   setNav('home');
   loadWorkoutHistory();
@@ -3102,12 +3302,408 @@ function showS(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
+  if(id==='s-settings' && currentUser) loadMyCoachSection();
 }
 
 function setNav(id){
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
   const el=document.getElementById('bn-'+id);
   if(el) el.classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+// COACH PORTAL
+// ══════════════════════════════════════════════
+
+// ── SIGNUP ROLE SELECTION ──
+let signupRole = 'athlete';
+function selectSignupRole(role){
+  signupRole = role;
+  const a = document.getElementById('role-athlete');
+  const c = document.getElementById('role-coach');
+  if(role === 'athlete'){
+    a.style.background='rgba(0,255,163,0.12)'; a.style.borderColor='var(--accent)'; a.style.color='var(--accent)';
+    c.style.background='var(--surface)'; c.style.borderColor='var(--border)'; c.style.color='var(--muted)';
+  } else {
+    c.style.background='rgba(0,255,163,0.12)'; c.style.borderColor='var(--accent)'; c.style.color='var(--accent)';
+    a.style.background='var(--surface)'; a.style.borderColor='var(--border)'; a.style.color='var(--muted)';
+  }
+}
+
+// ── PROFILE MENU: show/hide coach entries based on role/status ──
+function updateCoachMenuItems(){
+  if(!currentProfile) return;
+  const isApproved = currentProfile.coach_status === 'approved';
+  const isPending  = currentProfile.coach_status === 'pending';
+  const isAdmin    = currentProfile.is_admin === true;
+  const menuPortal = document.getElementById('menu-coach-portal');
+  const menuApply  = document.getElementById('menu-apply-coach');
+  const menuAdmin  = document.getElementById('menu-admin');
+  const applyLabel = document.getElementById('menu-apply-coach-label');
+  menuPortal.style.display = isApproved ? '' : 'none';
+  menuAdmin.style.display  = isAdmin ? '' : 'none';
+  if(isApproved){
+    menuApply.style.display = 'none';
+  } else {
+    menuApply.style.display = '';
+    applyLabel.textContent = isPending ? 'Coach Application (Pending)' : 'Apply as Coach';
+  }
+}
+
+function openCoachPortal(){ showS('s-coach'); loadCoachScreen(); }
+
+// ── COACH APPLICATION ──
+async function submitCoachApplication(){
+  const name  = document.getElementById('ca-name').value.trim();
+  const cert  = document.getElementById('ca-cert').value.trim();
+  const org   = document.getElementById('ca-org').value.trim();
+  const year  = parseInt(document.getElementById('ca-year').value) || null;
+  const url   = document.getElementById('ca-url').value.trim();
+  const bio   = document.getElementById('ca-bio').value.trim();
+  const errEl = document.getElementById('ca-error');
+  errEl.style.display='none';
+  if(!name || !cert || !org || !bio){ errEl.textContent='Please fill in all required fields.'; errEl.style.display='block'; return; }
+  const btn = document.getElementById('btn-ca-submit');
+  btn.disabled=true; btn.textContent='Submitting...';
+  try{
+    await sb.rpc('apply_for_coach',{p_full_name:name, p_certification:cert, p_cert_org:org, p_cert_year:year, p_proof_url:url||null, p_bio:bio});
+    currentProfile.coach_status = 'pending';
+    updateCoachMenuItems();
+    showToast('Application submitted — you\'ll be notified once reviewed');
+    showS('s-profile'); setNav('profile');
+  } catch(e){
+    errEl.textContent = e.message || 'Could not submit application';
+    errEl.style.display='block';
+  } finally { btn.disabled=false; btn.textContent='Submit Application'; }
+}
+
+// ── COACH SCREEN ──
+let coachClients = [];   // [{id, name, sport, program_id, coach_clients:{status,source}}, ...]
+let viewingClient = null;
+
+async function loadCoachScreen(){
+  document.getElementById('coach-clients-list').innerHTML = '<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px">Loading...</div>';
+  // Load invite codes
+  const {data:invites} = await sb.from('coach_invites').select('*').eq('coach_id', currentUser.id).eq('active', true).order('created_at',{ascending:false}).limit(1);
+  if(invites && invites.length){
+    const inv = invites[0];
+    document.getElementById('coach-invite-display').textContent = inv.code;
+    const exp = inv.expires_at ? new Date(inv.expires_at) : null;
+    document.getElementById('coach-invite-expire').textContent = exp ? 'Expires ' + exp.toLocaleDateString() + ' · Used ' + inv.used_count + '/' + inv.max_uses : '';
+  } else {
+    document.getElementById('coach-invite-display').textContent = '—';
+    document.getElementById('coach-invite-expire').textContent = 'Generate a code to share with clients';
+  }
+  // Load clients (joined with profiles)
+  const {data:links} = await sb.from('coach_clients').select('client_id, status, source, created_at').eq('coach_id', currentUser.id).order('created_at',{ascending:false});
+  if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
+  const ids = links.map(l=>l.client_id);
+  const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id').in('id', ids);
+  coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'} }));
+  document.getElementById('coach-client-count').textContent = '(' + coachClients.filter(c=>c.status==='active').length + ')';
+  renderCoachClientList();
+  // Load custom programs
+  const {data:progs} = await sb.from('programs').select('id, name, sport, level, days_per_week').eq('created_by', currentUser.id).eq('is_custom', true).order('created_at',{ascending:false});
+  const progList = document.getElementById('coach-programs-list');
+  if(!progs || !progs.length){ progList.innerHTML='<div style="color:var(--muted);font-size:13px;margin-bottom:4px">No custom programs yet.</div>'; return; }
+  progList.innerHTML = progs.map(p=>`<div class="client-card" onclick="editCustomProgram('${p.id}')"><div class="client-avatar" style="font-size:20px;background:var(--surface3)"><i class="ti ti-barbell"></i></div><div class="client-info"><div class="client-name">${escapeHtml(p.name)}</div><div class="client-meta">${escapeHtml(p.sport)} · ${p.level} · ${p.days_per_week}d/wk</div></div><i class="ti ti-chevron-right" style="color:var(--muted)"></i></div>`).join('');
+}
+
+function renderCoachClientList(){
+  const list = document.getElementById('coach-clients-list');
+  if(!coachClients.length){ list.innerHTML=''; return; }
+  list.innerHTML = coachClients.map(c=>{
+    const p = c.profile;
+    const isPending = c.status === 'pending';
+    const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return `<div class="client-card${isPending?' client-pending':''}" onclick="openClientDetail('${c.client_id}')">
+      <div class="client-avatar">${escapeHtml(initials)}</div>
+      <div class="client-info">
+        <div class="client-name">${escapeHtml(p.name||'—')}</div>
+        <div class="client-meta">${isPending ? '⏳ Waiting for client to accept' : escapeHtml(p.sport||'—')}</div>
+      </div>
+      <i class="ti ti-chevron-right" style="color:var(--muted)"></i>
+    </div>`;
+  }).join('');
+}
+
+async function generateInviteCode(){
+  const el = document.getElementById('coach-invite-display');
+  el.textContent = '...';
+  try {
+    const {data,error} = await sb.rpc('create_coach_invite');
+    if(error) throw error;
+    el.textContent = data;
+    document.getElementById('coach-invite-expire').textContent = 'Expires in 30 days';
+    showToast('New invite code ready — share it with your clients');
+  } catch(e){ el.textContent='—'; showToast('Error: ' + e.message); }
+}
+
+function copyInviteCode(){
+  const code = document.getElementById('coach-invite-display').textContent;
+  if(code === '—' || code === '...') return;
+  navigator.clipboard.writeText(code).then(()=>showToast('Code copied!')).catch(()=>showToast(code));
+}
+
+async function addClientByEmail(){
+  const email = document.getElementById('coach-add-email').value.trim();
+  if(!email) return;
+  try {
+    const {data,error} = await sb.rpc('coach_add_client_by_email',{p_email:email});
+    if(error) throw error;
+    document.getElementById('coach-add-email').value='';
+    showToast('Request sent to ' + (data||email) + ' — awaiting their confirmation');
+    await loadCoachScreen();
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+async function openClientDetail(clientId){
+  viewingClient = coachClients.find(c=>c.client_id === clientId);
+  if(!viewingClient) return;
+  const p = viewingClient.profile;
+  document.getElementById('coach-client-title').textContent = p.name || 'Client';
+  showS('s-coach-client');
+  // Stats strip
+  document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
+  // Current program
+  const {data:prog} = p.program_id ? await sb.from('programs').select('name').eq('id', p.program_id).single() : {data:null};
+  document.getElementById('coach-client-program').innerHTML = prog ? `<div class="coach-badge" style="margin-bottom:8px"><i class="ti ti-barbell"></i> ${escapeHtml(prog.name)}</div>` : '<div style="color:var(--muted);font-size:13px">No program assigned</div>';
+  // Populate program dropdown (library + coach's custom)
+  const {data:progs} = await sb.from('programs').select('id, name, sport, is_custom').order('name');
+  const sel = document.getElementById('coach-assign-select');
+  sel.innerHTML = '<option value="">— Select a program —</option>' + (progs||[]).map(pr=>`<option value="${pr.id}"${pr.id===p.program_id?' selected':''}>${escapeHtml(pr.name)}${pr.is_custom?' (custom)':''}</option>`).join('');
+  // Notes
+  document.getElementById('coach-client-notes').value = p.coach_notes || '';
+  // Workouts
+  const {data:wkts} = await sb.from('workouts').select('id,title,sport,duration_min,completed_at').eq('user_id', clientId).order('completed_at',{ascending:false}).limit(10);
+  document.getElementById('cc-workouts').textContent = wkts ? wkts.length : '—';
+  document.getElementById('coach-client-workouts').innerHTML = (wkts && wkts.length) ?
+    wkts.map(w=>`<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${new Date(w.completed_at).toLocaleDateString()}</div></div><div style="font-size:12px;color:var(--muted)">${w.duration_min||'—'}m</div></div>`).join('') :
+    '<div style="color:var(--muted);font-size:13px;padding:12px 0">No workouts yet</div>';
+  // PRs
+  const {data:prs} = await sb.from('personal_records').select('exercise_name, weight_kg, reps').eq('user_id', clientId).order('weight_kg',{ascending:false}).limit(8);
+  document.getElementById('cc-prs').textContent = prs ? prs.length : '—';
+  document.getElementById('coach-client-prs').innerHTML = (prs && prs.length) ?
+    `<div style="background:var(--surface);border-radius:10px;overflow:hidden">${prs.map((pr,i)=>`<div style="padding:11px 14px;display:flex;justify-content:space-between;align-items:center${i?';border-top:1px solid var(--border)':''}"><div style="font-size:13px;font-weight:600">${escapeHtml(pr.exercise_name)}</div><div style="font-size:13px;font-weight:700;color:var(--accent)">${displayWeight(pr.weight_kg)} ${weightUnit()} × ${pr.reps}</div></div>`).join('')}</div>` :
+    '<div style="color:var(--muted);font-size:13px;padding:12px 0">No PRs yet</div>';
+}
+
+async function assignProgramToClient(){
+  if(!viewingClient) return;
+  const progId = document.getElementById('coach-assign-select').value;
+  if(!progId){ showToast('Select a program first'); return; }
+  try {
+    const {error} = await sb.rpc('coach_assign_program',{p_client:viewingClient.client_id, p_program:progId});
+    if(error) throw error;
+    showToast('Program assigned!');
+    const sel = document.getElementById('coach-assign-select');
+    const name = sel.options[sel.selectedIndex].text;
+    document.getElementById('coach-client-program').innerHTML = `<div class="coach-badge"><i class="ti ti-barbell"></i> ${escapeHtml(name)}</div>`;
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+async function saveClientNotes(){
+  if(!viewingClient) return;
+  const notes = document.getElementById('coach-client-notes').value;
+  try {
+    const {error} = await sb.rpc('coach_set_client_notes',{p_client:viewingClient.client_id, p_notes:notes});
+    if(error) throw error;
+    showToast('Notes saved');
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+async function removeClient(){
+  if(!viewingClient) return;
+  if(!confirm('Remove this client? They will no longer be connected to your account.')) return;
+  await sb.from('coach_clients').delete().eq('coach_id', currentUser.id).eq('client_id', viewingClient.client_id);
+  showToast('Client removed');
+  viewingClient = null;
+  showS('s-coach'); loadCoachScreen();
+}
+
+// ── CLIENT SIDE: see/respond to pending coach requests & active coaches ──
+async function loadMyCoachSection(){
+  // Pending requests
+  const {data:pending} = await sb.from('coach_clients').select('coach_id, source, created_at').eq('client_id', currentUser.id).eq('status','pending');
+  const reqEl = document.getElementById('set-coach-requests');
+  if(pending && pending.length){
+    const ids = pending.map(p=>p.coach_id);
+    const {data:coaches} = await sb.from('profiles').select('id, name').in('id', ids);
+    reqEl.innerHTML = pending.map(p=>{ const c=(coaches||[]).find(x=>x.id===p.coach_id)||{}; return `<div class="coach-request-card"><div style="font-size:13px;font-weight:700;margin-bottom:6px">${escapeHtml(c.name||'A coach')} wants to coach you</div><div style="font-size:11px;color:var(--muted);margin-bottom:10px">Added via email on ${new Date(p.created_at).toLocaleDateString()}</div><div style="display:flex;gap:8px"><button class="btn btn-approve" style="font-size:12px;padding:10px" onclick="respondCoachReq('${p.coach_id}',true)">Accept</button><button class="btn btn-reject" style="font-size:12px;padding:10px" onclick="respondCoachReq('${p.coach_id}',false)">Decline</button></div></div>`; }).join('');
+  } else { reqEl.innerHTML=''; }
+  // Active coaches
+  const {data:active} = await sb.from('coach_clients').select('coach_id, created_at').eq('client_id', currentUser.id).eq('status','active');
+  const actEl = document.getElementById('set-active-coaches');
+  if(active && active.length){
+    const ids2 = active.map(a=>a.coach_id);
+    const {data:coaches2} = await sb.from('profiles').select('id, name').in('id', ids2);
+    actEl.innerHTML = '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:8px">Connected Coaches</div>' + active.map(a=>{ const c=(coaches2||[]).find(x=>x.id===a.coach_id)||{}; return `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div><div style="font-size:14px;font-weight:700">${escapeHtml(c.name||'Coach')}</div><div style="font-size:11px;color:var(--muted)">Since ${new Date(a.created_at).toLocaleDateString()}</div></div><button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button></div>`; }).join('');
+  } else { actEl.innerHTML=''; }
+}
+
+async function redeemInviteCode(){
+  const code = document.getElementById('set-invite-code').value.trim().toUpperCase();
+  if(!code){ showToast('Enter a code first'); return; }
+  try {
+    const {data, error} = await sb.rpc('redeem_coach_invite',{p_code:code});
+    if(error) throw error;
+    document.getElementById('set-invite-code').value='';
+    showToast('Connected to ' + (data||'your coach') + '!');
+    await loadMyCoachSection();
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+async function respondCoachReq(coachId, accept){
+  try {
+    const {error} = await sb.rpc('respond_to_coach_request',{p_coach:coachId, p_accept:accept});
+    if(error) throw error;
+    showToast(accept ? 'Connected to coach!' : 'Request declined');
+    await loadMyCoachSection();
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+async function disconnectCoach(coachId){
+  if(!confirm('Disconnect from this coach?')) return;
+  await sb.from('coach_clients').delete().eq('coach_id', coachId).eq('client_id', currentUser.id);
+  showToast('Disconnected'); await loadMyCoachSection();
+}
+
+// ── ADMIN PANEL ──
+async function loadAdminScreen(){
+  document.getElementById('admin-apps-list').innerHTML='<div style="color:var(--muted);text-align:center;padding:24px;font-size:14px">Loading...</div>';
+  const {data:apps} = await sb.from('coach_applications').select('*, profiles(name)').eq('status','pending').order('submitted_at');
+  const appEl = document.getElementById('admin-apps-list');
+  if(!apps || !apps.length){ appEl.innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:16px">No pending applications.</div>'; }
+  else { appEl.innerHTML = apps.map(a=>`<div class="admin-app-card"><h4>${escapeHtml(a.full_name||a.profiles?.name||'—')}</h4><div class="cert-line">${escapeHtml(a.certification||'—')} · ${escapeHtml(a.cert_org||'—')}${a.cert_year?' · '+a.cert_year:''}</div>${a.proof_url?`<div style="margin-bottom:8px"><a href="${escapeHtml(a.proof_url)}" target="_blank" style="color:var(--accent);font-size:12px"><i class="ti ti-external-link"></i> View Certificate</a></div>`:''}${a.bio?`<div class="bio">${escapeHtml(a.bio)}</div>`:''}<div id="admin-review-note-${a.user_id}" style="margin-bottom:8px"><input type="text" placeholder="Optional review note" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px"></div><div class="admin-actions"><button class="btn-approve" onclick="adminReview('${a.user_id}',true,'admin-review-note-${a.user_id}')"><i class="ti ti-check"></i> Approve</button><button class="btn-reject" onclick="adminReview('${a.user_id}',false,'admin-review-note-${a.user_id}')"><i class="ti ti-x"></i> Reject</button></div></div>`).join(''); }
+  // Approved coaches
+  const {data:coaches} = await sb.from('profiles').select('id, name, coach_status').eq('coach_status','approved').order('name');
+  const coEl = document.getElementById('admin-coaches-list');
+  coEl.innerHTML = (coaches && coaches.length) ? coaches.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div style="font-size:14px;font-weight:700">${escapeHtml(c.name||'—')}</div><span class="coach-badge"><i class="ti ti-certificate"></i> Approved</span></div>`).join('') : '<div style="color:var(--muted);font-size:13px">No approved coaches yet.</div>';
+}
+
+async function adminReview(userId, approve, noteElId){
+  const noteEl = document.getElementById(noteElId);
+  const note = noteEl ? noteEl.querySelector('input').value.trim() : '';
+  try {
+    const {error} = await sb.rpc('admin_review_coach_application',{p_user:userId, p_approve:approve, p_note:note||null});
+    if(error) throw error;
+    showToast(approve ? 'Coach approved!' : 'Application rejected');
+    await loadAdminScreen();
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+// ── CUSTOM PROGRAM BUILDER ──
+let pbDays = []; // [{title, focus, minutes, exercises:[{name,sets,reps,weight,rest,cues}]}]
+let editingProgramId = null;
+
+function initProgramBuilder(){
+  editingProgramId = null;
+  document.getElementById('prog-builder-title').textContent = 'New Program';
+  document.getElementById('pb-name').value='';
+  document.getElementById('pb-sport').value='';
+  document.getElementById('pb-days').value='4';
+  document.getElementById('pb-weeks').value='8';
+  document.getElementById('pb-level').value='intermediate';
+  document.getElementById('pb-error').style.display='none';
+  pbDays = [{title:'Day 1', focus:'', minutes:60, exercises:[]}];
+  renderPbDays();
+}
+
+function addBuilderDay(){
+  pbDays.push({title:'Day '+(pbDays.length+1), focus:'', minutes:60, exercises:[]});
+  renderPbDays();
+}
+
+function renderPbDays(){
+  const el = document.getElementById('pb-days-list');
+  el.innerHTML = pbDays.map((day, di)=>`
+    <div class="prog-builder-day">
+      <div class="prog-builder-day-hdr">
+        <div style="flex:1;display:flex;gap:8px;align-items:center">
+          <input value="${escapeHtml(day.title)}" oninput="pbDays[${di}].title=this.value" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;font-weight:700">
+          <input value="${escapeHtml(day.focus)}" placeholder="Focus" oninput="pbDays[${di}].focus=this.value" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:12px;color:var(--muted)">
+        </div>
+        ${pbDays.length>1?`<button onclick="pbDays.splice(${di},1);renderPbDays()" style="color:var(--lava-1);margin-left:8px;font-size:18px"><i class="ti ti-x"></i></button>`:''}
+      </div>
+      <div class="prog-builder-exercises">
+        ${day.exercises.map((ex, ei)=>`
+          <div class="prog-ex-row">
+            <div class="client-avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${ei+1}</div>
+            <div style="flex:1;min-width:0">
+              <input value="${escapeHtml(ex.name)}" placeholder="Exercise name" oninput="pbDays[${di}].exercises[${ei}].name=this.value" style="width:100%;background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;padding:0;margin-bottom:4px">
+              <div style="display:flex;gap:6px">
+                <input type="number" value="${ex.sets}" placeholder="Sets" oninput="pbDays[${di}].exercises[${ei}].sets=+this.value" style="width:46px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:11px;text-align:center">
+                <input value="${escapeHtml(ex.reps)}" placeholder="Reps" oninput="pbDays[${di}].exercises[${ei}].reps=this.value" style="width:46px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:11px;text-align:center">
+                <input value="${escapeHtml(ex.weight||'—')}" placeholder="kg" oninput="pbDays[${di}].exercises[${ei}].weight=this.value" style="width:46px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:11px;text-align:center">
+                <input value="${escapeHtml(ex.cues||'')}" placeholder="Cues" oninput="pbDays[${di}].exercises[${ei}].cues=this.value" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--muted);padding:4px 6px;border-radius:6px;font-size:11px">
+              </div>
+            </div>
+            <button onclick="pbDays[${di}].exercises.splice(${ei},1);renderPbDays()" style="color:var(--muted);font-size:16px;flex-shrink:0"><i class="ti ti-trash"></i></button>
+          </div>`).join('')}
+        <button onclick="pbDays[${di}].exercises.push({name:'',sets:3,reps:'8',weight:'—',rest:90,cues:''});renderPbDays()" style="color:var(--accent);font-size:12px;font-weight:700;padding:8px 0;text-align:left"><i class="ti ti-plus"></i> Add Exercise</button>
+      </div>
+    </div>`).join('');
+}
+
+async function saveProgramBuilder(){
+  const name  = document.getElementById('pb-name').value.trim();
+  const sport = document.getElementById('pb-sport').value.trim();
+  const days  = parseInt(document.getElementById('pb-days').value)||4;
+  const weeks = parseInt(document.getElementById('pb-weeks').value)||8;
+  const level = document.getElementById('pb-level').value;
+  const errEl = document.getElementById('pb-error');
+  errEl.style.display='none';
+  if(!name||!sport){ errEl.textContent='Please fill in name and sport/focus.'; errEl.style.display='block'; return; }
+  if(pbDays.some(d=>d.exercises.some(e=>!e.name.trim()))){ errEl.textContent='All exercises need a name.'; errEl.style.display='block'; return; }
+  const btn=document.getElementById('btn-pb-save'); btn.disabled=true; btn.textContent='Saving...';
+  try {
+    let progId = editingProgramId;
+    if(!progId){
+      const {data:prog, error:pe} = await sb.from('programs').insert({name, sport, level, days_per_week:days, duration_weeks:weeks, is_custom:true, created_by:currentUser.id, icon:'ti-barbell'}).select('id').single();
+      if(pe) throw pe;
+      progId = prog.id;
+    } else {
+      const {error:ue} = await sb.from('programs').update({name, sport, level, days_per_week:days, duration_weeks:weeks}).eq('id', progId);
+      if(ue) throw ue;
+      // remove old workouts/exercises (cascade)
+      await sb.from('program_workouts').delete().eq('program_id', progId);
+    }
+    for(let di=0; di<pbDays.length; di++){
+      const d = pbDays[di];
+      const {data:wkt, error:we} = await sb.from('program_workouts').insert({program_id:progId, day_number:di+1, title:d.title||('Day '+(di+1)), focus:d.focus||null, estimated_min:d.minutes||60}).select('id').single();
+      if(we) throw we;
+      if(d.exercises.length){
+        const exRows = d.exercises.map((ex,ei)=>({workout_id:wkt.id, order_idx:ei+1, exercise_name:ex.name.trim(), sets:ex.sets||3, reps:ex.reps||'8', target_weight:ex.weight||'—', rest_seconds:ex.rest||90, cues:ex.cues||null, icon:'ti-barbell'}));
+        const {error:ee} = await sb.from('program_exercises').insert(exRows);
+        if(ee) throw ee;
+      }
+    }
+    showToast(editingProgramId ? 'Program updated!' : 'Program created!');
+    editingProgramId = null;
+    showS('s-coach'); loadCoachScreen();
+  } catch(e){ errEl.textContent=e.message||'Could not save program'; errEl.style.display='block'; }
+  finally { btn.disabled=false; btn.textContent='Save Program'; }
+}
+
+async function editCustomProgram(progId){
+  const {data:prog} = await sb.from('programs').select('*').eq('id', progId).single();
+  if(!prog) return;
+  editingProgramId = progId;
+  document.getElementById('prog-builder-title').textContent = 'Edit Program';
+  document.getElementById('pb-name').value = prog.name||'';
+  document.getElementById('pb-sport').value = prog.sport||'';
+  document.getElementById('pb-days').value = prog.days_per_week||4;
+  document.getElementById('pb-weeks').value = prog.duration_weeks||8;
+  document.getElementById('pb-level').value = prog.level||'intermediate';
+  document.getElementById('pb-error').style.display='none';
+  const {data:wkts} = await sb.from('program_workouts').select('*').eq('program_id', progId).order('day_number');
+  pbDays = [];
+  for(const w of (wkts||[])){
+    const {data:exs} = await sb.from('program_exercises').select('*').eq('workout_id', w.id).order('order_idx');
+    pbDays.push({title:w.title||'Day '+w.day_number, focus:w.focus||'', minutes:w.estimated_min||60, exercises:(exs||[]).map(e=>({name:e.exercise_name,sets:e.sets||3,reps:e.reps||'8',weight:e.target_weight||'—',rest:e.rest_seconds||90,cues:e.cues||''}))});
+  }
+  renderPbDays();
+  showS('s-coach-program');
 }
 
 // ── INIT ──
