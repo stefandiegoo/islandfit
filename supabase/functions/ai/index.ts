@@ -150,6 +150,91 @@ async function doOnboard(p: Record<string, unknown>) {
   }
 }
 
+// ── ACTION: coach adjustments (structured) ──
+const ACTIONS_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    actions: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false,
+        properties: {
+          type: { type: "string", enum: ["deload", "swap", "load_adjust", "note"] },
+          exercise: { type: "string", description: "exact current exercise name (or empty)" },
+          to: { type: "string", description: "replacement exercise for a swap (or empty)" },
+          pct: { type: "integer", description: "load change for load_adjust, -10..+5 (else 0)" },
+          label: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["type", "exercise", "to", "pct", "label", "reason"],
+      },
+    },
+  },
+  required: ["actions"],
+};
+async function doActions(p: Record<string, unknown>) {
+  const system =
+    "You are the athlete's strength coach. From their training snapshot, propose 0 to 4 concrete, SAFE adjustments for the coming week. " +
+    "Types: 'deload' (whole week ~15% lighter — ONLY with clear fatigue: rising RPE at the same load, repeated 'low' readiness, or missed sessions); " +
+    "'swap' (set 'exercise' to the exact current name and 'to' to a replacement — ONLY to respect an injury or missing equipment); " +
+    "'load_adjust' (one lift, 'pct' -10..+5, for a lift clearly too hard/easy); 'note' (advice only). " +
+    "Be conservative — return an empty list if things look fine. ALWAYS respect listed injuries. " +
+    "For unused fields use an empty string or 0. Each action: a short 'label' (<=6 words) + a one-line 'reason' grounded in their data. " +
+    langLine(String(p.lang || "en"));
+  const user = "Training snapshot (JSON):\n" + JSON.stringify(p.context ?? {}, null, 2) + "\n\nPropose this week's adjustments.";
+  const res = await callClaude(system, user, { maxTokens: 800, schema: ACTIONS_SCHEMA });
+  if (res.error) return res;
+  try { return { data: JSON.parse(res.text || "{}") }; } catch { return { error: "Could not parse the AI response." }; }
+}
+
+// ── ACTION: compose a full program (structured) ──
+const PROGRAM_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    name: { type: "string" },
+    days_per_week: { type: "integer" },
+    weeks: { type: "integer" },
+    days: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false,
+        properties: {
+          title: { type: "string" }, focus: { type: "string" },
+          exercises: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false,
+              properties: {
+                name: { type: "string" }, sets: { type: "integer" }, reps: { type: "string" },
+                target_weight: { type: "string", description: "kg as string, or '-' for bodyweight" },
+                rest_seconds: { type: "integer" },
+              },
+              required: ["name", "sets", "reps", "target_weight", "rest_seconds"],
+            },
+          },
+        },
+        required: ["title", "focus", "exercises"],
+      },
+    },
+  },
+  required: ["name", "days_per_week", "weeks", "days"],
+};
+async function doProgram(p: Record<string, unknown>) {
+  const lib = Array.isArray(p.exercises) ? (p.exercises as string[]) : [];
+  const system =
+    "You are an expert strength & conditioning coach. Compose a practical, evidence-based training program for this athlete. " +
+    "Honor their sport, experience level, days/week, equipment, goal, and ANY injuries (never include movements that aggravate them). " +
+    "Prefer exercise names from the provided library so the app can show demos; a standard name is fine if needed. " +
+    "Build EXACTLY days_per_week training days. Each day: title, focus, and 4-7 exercises with sets (int), reps (string like '5', '8-12', or '30 s'), " +
+    "a starting target_weight (kg as a string, or '-' for bodyweight), and rest_seconds. A warm-up may be the first item. " +
+    langLine(String(p.lang || "en"));
+  const user = "Athlete:\n" + JSON.stringify(p.profile ?? {}, null, 2) +
+    "\n\nExercise library (prefer these names):\n" + lib.slice(0, 180).join(", ") + "\n\nCompose the program.";
+  const res = await callClaude(system, user, { maxTokens: 3500, schema: PROGRAM_SCHEMA });
+  if (res.error) return res;
+  try { return { data: JSON.parse(res.text || "{}") }; } catch { return { error: "Could not parse the AI response." }; }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -164,6 +249,8 @@ Deno.serve(async (req: Request) => {
     if (action === "summary") return json(await doSummary(p));
     if (action === "explain") return json(await doExplain(p));
     if (action === "onboard") return json(await doOnboard(p));
+    if (action === "actions") return json(await doActions(p));
+    if (action === "program") return json(await doProgram(p));
     return json({ error: "Unknown action: " + action }, 400);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);

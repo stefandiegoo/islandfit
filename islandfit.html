@@ -324,6 +324,18 @@ body::before{
 .ai-onboard-status:empty{margin:0}
 .ai-onboard-or{text-align:center;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-top:14px;font-weight:600}
 .ai-onboard-summary{font-size:13.5px;line-height:1.5;color:var(--text);background:var(--surface2);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 10px 10px 0;margin-bottom:12px}
+.nudge-banner{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(0,255,163,0.10),rgba(34,211,238,0.06));border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin-bottom:14px}
+.nudge-text{flex:1;font-size:13px;color:var(--text);line-height:1.45}
+.nudge-x{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0}
+.aiprog-card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;margin-top:10px}
+.aiprog-head{font-size:14px;font-weight:800;margin-bottom:4px}
+.aiprog-sub{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4}
+.aiprog-ex{font-size:12px;color:var(--text-soft);line-height:1.5;margin-bottom:12px}
+.aiprog-actions{display:flex;gap:8px;flex-wrap:wrap}
+.act-card{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:11px 13px;margin-bottom:10px}
+.act-label{font-size:13px;font-weight:800;color:var(--text);margin-bottom:2px}
+.act-meta{font-size:12px;color:var(--accent);font-weight:700;margin-bottom:4px}
+.act-reason{font-size:12.5px;color:var(--text-soft);line-height:1.45;margin-bottom:8px}
 .hist-day{padding:10px 0;border-bottom:1px solid var(--border)}
 .hist-date{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px}
 .hist-sets{font-size:13px;color:var(--text-soft);line-height:1.6}
@@ -697,6 +709,7 @@ body::before{
   </div>
 
   <div class="today-section">
+    <div id="nudge-banner" class="nudge-banner" style="display:none"></div>
     <div class="section-header">
       <div class="section-label">Today's Workout</div>
       <span style="font-size:11px;color:var(--muted);font-weight:600" id="today-date"></span>
@@ -713,6 +726,7 @@ body::before{
       </div>
     </div>
     <button class="add-ex-btn" onclick="openAddWorkout()"><i class="ti ti-plus"></i> Add workout</button>
+    <div id="ai-program-card" class="aiprog-card"></div>
   </div>
 
   <!-- AI ADAPTIVE PREVIEW -->
@@ -902,6 +916,15 @@ body::before{
   </div>
 </div>
 
+<!-- AI COACH ACTIONS -->
+<div class="mt-overlay" id="act-ov">
+  <div class="mt-card">
+    <div class="mt-title">Coach adjustments</div>
+    <div id="act-body" style="text-align:left;margin:8px 0 12px;max-height:50vh;overflow-y:auto"></div>
+    <div class="mt-actions"><button class="btn btn-ghost" onclick="closeCoachActions()" style="grid-column:1/-1">Close</button></div>
+  </div>
+</div>
+
 <!-- EXERCISE HISTORY -->
 <div class="mt-overlay" id="hist-ov">
   <div class="mt-card">
@@ -961,7 +984,7 @@ body::before{
   </div>
 
   <div class="chart-card" id="ai-coach-card">
-    <div class="chart-card-title"><span>✨ AI Coach</span><button class="ai-ask-link" onclick="openAiChat()">Ask →</button></div>
+    <div class="chart-card-title"><span>✨ AI Coach</span><span style="display:flex;gap:14px"><button class="ai-ask-link" onclick="openCoachActions()">Adjust →</button><button class="ai-ask-link" onclick="openAiChat()">Ask →</button></span></div>
     <div id="ai-coach-body" class="ai-coach-body"><button class="btn btn-primary" onclick="getAiSummary()">Get this week's coaching</button></div>
   </div>
 
@@ -1202,7 +1225,7 @@ function getPrescription(ex){
     // NSCA load chart sets the base %1RM for the rep target; periodization modulates it; RPE fine-tunes (±5%)
     const pm=Math.min(0.95, nscaPct(ex.reps)*ph.mod);   // base %1RM × week modulation, capped at 95%
     const eff=pm*lf;
-    let kg=e1*eff*readinessFactor();
+    let kg=e1*eff*readinessFactor()*coachFactor(ex);   // × AI coach deload / per-lift load adjustment
     const adj=adjustments[ex.exercise_name];
     const fine=(adj&&typeof adj.pct==='number')?Math.max(-5,Math.min(5,adj.pct)):0;
     kg=Math.round(kg*(1+fine/100)/2.5)*2.5;
@@ -1210,7 +1233,7 @@ function getPrescription(ex){
   }
   // No estimated max yet → scale the program's prescribed weight to the athlete's level
   const base=getAdjustedWeight(ex);
-  const kg=isNaN(parseFloat(base))?base:Math.round(parseFloat(base)*lf/2.5)*2.5;
+  const kg=isNaN(parseFloat(base))?base:Math.round(parseFloat(base)*lf*coachFactor(ex)/2.5)*2.5;
   return {kg,pct:null,phase:ph.label,deload:ph.deload,source:'rpe',fine:0};
 }
 // Triphasic-style tempo: emphasis shifts by phase (eccentric–pause–concentric seconds; X = explosive)
@@ -1877,6 +1900,104 @@ async function saveCoachNotes(){
   catch(e){ showToast('Add the coach fields first — run migration 16'); }
 }
 
+// ════════ TIER-2 AI: coach actions · AI program · proactive nudges ════════
+// Load/swap overrides (applied by getPrescription + loadProgramAndToday), all client-side & reversible.
+function coachDeloadActive(){ try{ return localStorage.getItem('if_coach_deload_'+aiWeekKey())==='1'; }catch(e){ return false; } }
+function coachLoadAdj(name){ try{ const m=JSON.parse(localStorage.getItem('if_coach_loadadj')||'{}'); const v=m[name]; return typeof v==='number'?Math.max(-25,Math.min(10,v)):0; }catch(e){ return 0; } }
+function coachFactor(ex){ let f=1; if(coachDeloadActive()) f*=0.85; f*=(1+coachLoadAdj(ex&&ex.exercise_name)/100); return f; }
+function coachSwaps(){ try{ return JSON.parse(localStorage.getItem('if_coach_swaps')||'{}'); }catch(e){ return {}; } }
+function applyCoachSwaps(list){ const sw=coachSwaps(); return (list||[]).map(ex=>{ const to=sw[ex.exercise_name]; return to?Object.assign({},ex,{exercise_name:to, cues:'Coach swap — '+(ex.cues||'good form')}):ex; }); }
+function clearCoachOverrides(){
+  try{ Object.keys(localStorage).filter(k=>k.indexOf('if_coach_')===0).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  showToast('Coach adjustments cleared'); const b=document.getElementById('act-body'); if(b) b.innerHTML='<div class="day-empty">All coach adjustments reset to your program defaults.</div>';
+}
+
+// 1) COACH ACTIONS — propose + apply
+let coachActionList=[];
+async function openCoachActions(){
+  const ov=document.getElementById('act-ov'), body=document.getElementById('act-body'); if(!ov) return;
+  ov.classList.add('show'); body.innerHTML='<div class="ai-coach-loading"><div class="spinner"></div><span>Reading your training…</span></div>';
+  try{
+    const {data}=await aiCall('actions',{context:aiSummaryPayload()});
+    coachActionList=(data&&data.actions)||[];
+    if(!coachActionList.length){ body.innerHTML='<div class="day-empty">Nothing to change — your training looks on track. 👍</div>'; return; }
+    body.innerHTML=coachActionList.map((a,i)=>{
+      const meta=a.type==='swap'?`${escapeHtml(a.exercise)} → ${escapeHtml(a.to)}`:(a.type==='load_adjust'?`${escapeHtml(a.exercise)} ${a.pct>0?'+':''}${a.pct}%`:(a.type==='deload'?'Whole week ~15% lighter':''));
+      const can=a.type!=='note';
+      return `<div class="act-card"><div class="act-label">${escapeHtml(a.label||a.type)}</div>${meta?`<div class="act-meta">${meta}</div>`:''}<div class="act-reason">${escapeHtml(a.reason||'')}</div>${can?`<button class="btn btn-primary btn-sm" onclick="applyCoachAction(${i},this)">Apply</button>`:''}</div>`;
+    }).join('')+'<div style="text-align:center;margin-top:10px"><button class="ai-ask-link" onclick="clearCoachOverrides()">Reset all coach adjustments</button></div>';
+  }catch(e){ body.innerHTML=`<div class="ai-coach-err">${escapeHtml(e.message)}</div>`; }
+}
+function closeCoachActions(){ document.getElementById('act-ov').classList.remove('show'); }
+function applyCoachAction(i,btn){
+  const a=coachActionList[i]; if(!a) return;
+  try{
+    if(a.type==='deload') localStorage.setItem('if_coach_deload_'+aiWeekKey(),'1');
+    else if(a.type==='load_adjust'){ const m=JSON.parse(localStorage.getItem('if_coach_loadadj')||'{}'); m[a.exercise]=(m[a.exercise]||0)+(a.pct||0); localStorage.setItem('if_coach_loadadj',JSON.stringify(m)); }
+    else if(a.type==='swap'){ const m=JSON.parse(localStorage.getItem('if_coach_swaps')||'{}'); m[a.exercise]=a.to; localStorage.setItem('if_coach_swaps',JSON.stringify(m)); }
+    if(btn){ btn.textContent='Applied ✓'; btn.disabled=true; btn.classList.remove('btn-primary'); btn.classList.add('btn-ghost'); }
+    showToast('Applied — takes effect on your next session');
+  }catch(e){ showToast('Could not apply'); }
+}
+
+// 2) AI-COMPOSED PROGRAM — generate from the library, run day-by-day
+function getAiProgram(){ try{ return JSON.parse(localStorage.getItem('if_ai_program')||'null'); }catch(e){ return null; } }
+function setAiProgram(p){ try{ localStorage.setItem('if_ai_program',JSON.stringify(p)); }catch(e){} }
+async function genAiProgram(){
+  const card=document.getElementById('ai-program-card'); if(!card) return;
+  card.innerHTML='<div class="ai-coach-loading"><div class="spinner"></div><span>Composing your program…</span></div>';
+  try{
+    await loadExerciseList();
+    const cp=currentProfile||{};
+    const profile={ sport:cp.sport||'General', experience:cp.experience_level||'intermediate', goal:cp.primary_goal||'strength', days_per_week:cp.days_available||3, equipment:cp.equipment||'full gym', injuries:cp.injuries||'', bodyweight_kg:cp.bodyweight_kg||null, notes:cp.coach_notes||'' };
+    const {data}=await aiCall('program',{profile, exercises:(allExerciseNames||[]).slice(0,180)});
+    if(!data||!Array.isArray(data.days)||!data.days.length) throw new Error('Empty program from AI');
+    data._day=0; setAiProgram(data); renderAiProgramCard(); showToast('Your AI program is ready 🎉');
+  }catch(e){ card.innerHTML=`<div class="ai-coach-err">${escapeHtml(e.message)}</div><button class="btn btn-ghost btn-sm" onclick="genAiProgram()">Try again</button>`; }
+}
+function renderAiProgramCard(){
+  const card=document.getElementById('ai-program-card'); if(!card) return;
+  const p=getAiProgram();
+  if(!p||!p.days||!p.days.length){ card.innerHTML='<div class="aiprog-head">✨ AI Program</div><div class="aiprog-sub">Let the coach build a program from 870+ exercises around your sport, level, gear &amp; injuries.</div><button class="btn btn-primary btn-sm" onclick="genAiProgram()">Build me a program</button>'; return; }
+  const idx=(p._day||0)%p.days.length; const day=p.days[idx]||{};
+  card.innerHTML=`<div class="aiprog-head">✨ ${escapeHtml(p.name||'AI Program')}</div>
+    <div class="aiprog-sub">${escapeHtml(p.days.length+'-day · '+(p.weeks||8)+' wk · next: '+(day.title||('Day '+(idx+1))))}</div>
+    <div class="aiprog-ex">${(day.exercises||[]).slice(0,6).map(e=>escapeHtml(e.name)).join(' · ')}</div>
+    <div class="aiprog-actions"><button class="btn btn-primary btn-sm" onclick="startAiProgramDay()">Start: ${escapeHtml(day.title||('Day '+(idx+1)))}</button><button class="btn btn-ghost btn-sm" onclick="genAiProgram()">Regenerate</button></div>`;
+}
+function startAiProgramDay(){
+  const p=getAiProgram(); if(!p||!p.days||!p.days.length) return;
+  const idx=(p._day||0)%p.days.length; const day=p.days[idx]||{};
+  todayExercises=(day.exercises||[]).map((e,i)=>({exercise_name:e.name, sets:e.sets||3, reps:String(e.reps||'8'), target_weight:(e.target_weight==null||e.target_weight===''||e.target_weight==='-')?'—':String(e.target_weight), rest_seconds:e.rest_seconds||90, cues:'AI program · focus on good form', icon:'ti-barbell', order_idx:i+1, superset_group:null}));
+  todayWorkout={title:(p.name||'AI')+' · '+(day.title||('Day '+(idx+1))), estimated_min:Math.max(20,(day.exercises||[]).length*8)};
+  customWorkout=true; p._day=((p._day||0)+1)%p.days.length; setAiProgram(p);
+  beginWorkout();
+}
+
+// 3) PROACTIVE NUDGE — one-line coach message on app open (≤1 AI call/day)
+let nudgeShown=false;
+async function maybeNudge(){
+  if(nudgeShown) return; const banner=document.getElementById('nudge-banner'); if(!banner||!currentUser) return;
+  const today=new Date().toISOString().slice(0,10);
+  try{ if(localStorage.getItem('if_nudge_seen')===today) return; }catch(e){}
+  let signal=null, ctx={};
+  try{
+    const dates=(typeof trainedDates!=='undefined'&&trainedDates)?[...trainedDates].sort():[];
+    const last=dates.length?dates[dates.length-1]:null;
+    const daysSince=last?Math.floor((new Date(today)-new Date(last))/86400000):999;
+    ctx={days_since_last_session:(last?daysSince:null), program_week:(currentProfile&&currentProfile.current_week)||1, sport:(currentProfile&&currentProfile.sport)||'General', on_deload:coachDeloadActive()};
+    if(last&&daysSince>=3) signal='back';
+    else if(coachDeloadActive()) signal='deload';
+    else if(last&&daysSince===0) signal=null; // trained today, no nag
+  }catch(e){}
+  if(!signal) return;
+  nudgeShown=true; try{ localStorage.setItem('if_nudge_seen',today); }catch(e){}
+  try{
+    const {text}=await aiCall('explain',{question:'Give ONE short (max 18 words) motivating nudge for this situation. No preamble, no quotes.', context:ctx});
+    if(text){ banner.innerHTML=`<span class="nudge-text">💬 ${escapeHtml(text)}</span><button class="nudge-x" onclick="this.parentElement.style.display='none'">✕</button>`; banner.style.display='flex'; }
+  }catch(e){ nudgeShown=false; }
+}
+
 // ── AI ONBOARDING — describe yourself in free text → prefilled plan ──
 const AI_GOAL_MAP=[[/strength|strong/,'strength'],[/muscle|hypertroph|size|tone|aesthet|bigger/,'muscle'],[/power|explos|speed|jump|sprint/,'power'],[/endur|condition|cardio|stamina|fat|lose|weight\s*loss/,'endurance'],[/athlet|sport|perform|agil/,'athletic']];
 const AI_EQUIP_MAP=[[/bodyweight|no equipment|calisthen/,'bodyweight'],[/dumbbell|kettlebell|band|minimal/,'minimal'],[/home/,'home_gym'],[/gym|barbell|machine|full|commercial/,'full_gym']];
@@ -1941,7 +2062,7 @@ async function loadProgramAndToday(){
   todayWorkout=workout;
   if(workout){
     const {data:exercises}=await sb.from('program_exercises').select('*').eq('workout_id',workout.id).order('order_idx');
-    todayExercises=exercises||[];
+    todayExercises=applyCoachSwaps(exercises||[]);
   } else {todayExercises=[]}
 }
 
@@ -2000,6 +2121,8 @@ function renderTodayCard(){
     const lbl=todayWorkout?('Day '+todayWorkout.day_number+' · '+(todayWorkout.focus||'')):'Today';
     card.innerHTML=`<div class="today-content"><div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button><button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
   }
+  renderAiProgramCard();
+  maybeNudge();
 }
 
 function updateHomeUI(){
