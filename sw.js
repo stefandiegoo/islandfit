@@ -1,9 +1,10 @@
 // ÍslandFit service worker — offline app shell + installability.
 // Strategy: never touch Supabase (always network); navigations are network-first
 // (so the app always updates after a deploy); static CDN assets are cache-first.
-const CACHE = 'islandfit-v1';
+const CACHE = 'islandfit-v2';
 const SHELL = [
   './',
+  './index.html',
   './islandfit.html',
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css',
@@ -30,12 +31,15 @@ self.addEventListener('fetch', e => {
   // Bypass Supabase API/auth and any non-GET request — these must always hit the network.
   if (e.request.method !== 'GET' || url.hostname.endsWith('supabase.co')) return;
 
-  // Navigations: network-first, fall back to the cached app shell when offline.
+  // Navigations: network-first, caching each page under its OWN url (so the landing page
+  // and the app never overwrite each other). Offline: serve this page from cache, else fall
+  // back to the app shell, else the landing page.
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)
-        .then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put('./islandfit.html', copy)); return r; })
-        .catch(() => caches.match('./islandfit.html').then(r => r || caches.match('./')))
+        .then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
+        .catch(() => caches.match(e.request).then(r =>
+          r || caches.match('./islandfit.html').then(a => a || caches.match('./'))))
     );
     return;
   }
