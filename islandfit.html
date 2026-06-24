@@ -1218,6 +1218,7 @@ body::before{
   </div>
   <div style="padding:0 16px">
     <div id="coach-client-stats" style="margin-bottom:8px"></div>
+    <div id="coach-client-profile-info" style="margin-bottom:16px"></div>
 
     <!-- Assign program -->
     <div class="section-label">Assigned Program</div>
@@ -3398,7 +3399,7 @@ async function loadCoachScreen(){
   const {data:links} = await sb.from('coach_clients').select('client_id, status, source, created_at').eq('coach_id', currentUser.id).order('created_at',{ascending:false});
   if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
   const ids = links.map(l=>l.client_id);
-  const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id').in('id', ids);
+  const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id, age, primary_goal, equipment, days_available, bodyweight_kg, current_day, coach_notes, injuries').in('id', ids);
   coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'} }));
   document.getElementById('coach-client-count').textContent = '(' + coachClients.filter(c=>c.status==='active').length + ')';
   renderCoachClientList();
@@ -3465,6 +3466,22 @@ async function openClientDetail(clientId){
   showS('s-coach-client');
   // Stats strip
   document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
+  // Profile info cards
+  const goalMap={lose_weight:'Lose Weight',build_muscle:'Build Muscle',improve_performance:'Improve Performance',general_fitness:'General Fitness',sport_specific:'Sport Specific'};
+  const equipMap={full_gym:'Full Gym',home_gym:'Home Gym',dumbbells_only:'Dumbbells Only',bodyweight_only:'Bodyweight',resistance_bands:'Bands'};
+  const infoItems = [
+    p.primary_goal ? `<div class="stat-card"><div class="stat-num" style="font-size:12px">${goalMap[p.primary_goal]||p.primary_goal}</div><div class="stat-label">Goal</div></div>` : '',
+    p.age ? `<div class="stat-card"><div class="stat-num">${p.age}</div><div class="stat-label">Age</div></div>` : '',
+    p.bodyweight_kg ? `<div class="stat-card"><div class="stat-num">${displayWeight(p.bodyweight_kg)}<span style="font-size:11px">${weightUnit()}</span></div><div class="stat-label">Weight</div></div>` : '',
+    p.equipment ? `<div class="stat-card"><div class="stat-num" style="font-size:12px">${equipMap[p.equipment]||p.equipment}</div><div class="stat-label">Equipment</div></div>` : '',
+    p.days_available ? `<div class="stat-card"><div class="stat-num">${p.days_available}</div><div class="stat-label">Days/wk</div></div>` : '',
+    p.current_day ? `<div class="stat-card"><div class="stat-num">${p.current_day}</div><div class="stat-label">Prog Day</div></div>` : '',
+  ].filter(Boolean);
+  document.getElementById('coach-client-profile-info').innerHTML = infoItems.length ? `<div class="stats-row">${infoItems.join('')}</div>` : '';
+  // Injuries/flags from AI onboarding
+  if(p.injuries) {
+    document.getElementById('coach-client-profile-info').innerHTML += `<div style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);border-radius:10px;padding:10px 14px;margin-top:8px;font-size:13px"><span style="color:var(--lava-1);font-weight:700">⚠ Injuries/notes: </span>${escapeHtml(p.injuries)}</div>`;
+  }
   // Current program
   const {data:prog} = p.program_id ? await sb.from('programs').select('name').eq('id', p.program_id).single() : {data:null};
   document.getElementById('coach-client-program').innerHTML = prog ? `<div class="coach-badge" style="margin-bottom:8px"><i class="ti ti-barbell"></i> ${escapeHtml(prog.name)}</div>` : '<div style="color:var(--muted);font-size:13px">No program assigned</div>';
@@ -3477,8 +3494,18 @@ async function openClientDetail(clientId){
   // Workouts
   const {data:wkts} = await sb.from('workouts').select('id,title,sport,duration_min,completed_at').eq('user_id', clientId).order('completed_at',{ascending:false}).limit(10);
   document.getElementById('cc-workouts').textContent = wkts ? wkts.length : '—';
+  if(wkts && wkts.length) {
+    const lastDate = new Date(wkts[0].completed_at);
+    const daysAgo = Math.floor((Date.now()-lastDate)/(1000*60*60*24));
+    const lastLabel = daysAgo===0?'today':daysAgo===1?'yesterday':`${daysAgo}d ago`;
+    document.getElementById('cc-workouts').title = `Last: ${lastLabel}`;
+  }
   document.getElementById('coach-client-workouts').innerHTML = (wkts && wkts.length) ?
-    wkts.map(w=>`<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${new Date(w.completed_at).toLocaleDateString()}</div></div><div style="font-size:12px;color:var(--muted)">${w.duration_min||'—'}m</div></div>`).join('') :
+    wkts.map(w=>{
+      const dAgo = Math.floor((Date.now()-new Date(w.completed_at))/(1000*60*60*24));
+      const rel = dAgo===0?'Today':dAgo===1?'Yesterday':`${dAgo}d ago`;
+      return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${rel} · ${new Date(w.completed_at).toLocaleDateString()}</div></div><div style="font-size:12px;color:var(--accent);font-weight:700">${w.duration_min?w.duration_min+'m':'—'}</div></div>`;
+    }).join('') :
     '<div style="color:var(--muted);font-size:13px;padding:12px 0">No workouts yet</div>';
   // PRs
   const {data:prs} = await sb.from('personal_records').select('exercise_name, weight_kg, reps').eq('user_id', clientId).order('weight_kg',{ascending:false}).limit(8);
