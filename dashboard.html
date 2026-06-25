@@ -124,6 +124,35 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .ai-ex{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;color:var(--text-soft)}
 .ai-ex+.ai-ex{border-top:1px solid var(--border)}
 
+/* ── PROGRAM BUILDER ── */
+.pb-modal-bg{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,0.8);display:flex;align-items:stretch;justify-content:flex-end;padding:0}
+.pb-modal{background:var(--bg);border-left:1px solid var(--border-bright);width:100%;max-width:760px;display:flex;flex-direction:column;overflow:hidden}
+.pb-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.pb-title{font-size:18px;font-weight:800;flex:1}
+.pb-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 22px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pb-meta-4{grid-column:1/-1}
+.pb-body{flex:1;overflow-y:auto;padding:16px 22px}
+.pb-day{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px}
+.pb-day-head{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--border)}
+.pb-day-title-input{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;font-weight:700;outline:none}
+.pb-day-title-input::placeholder{color:var(--muted2)}
+.pb-day-focus-input{width:100%;background:transparent;border:none;color:var(--muted);font-size:12px;outline:none;padding:4px 15px 0}
+.pb-day-focus-input::placeholder{color:var(--muted2)}
+.pb-exs{padding:8px 12px}
+.pb-ex{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;background:var(--surface2);margin-bottom:6px;cursor:grab;user-select:none;border:1px solid transparent}
+.pb-ex:active{cursor:grabbing}
+.pb-ex.drag-over{border-color:var(--accent);background:rgba(0,255,163,0.07)}
+.pb-ex-grip{color:var(--muted2);flex-shrink:0;font-size:16px}
+.pb-ex-name{flex:1;min-width:0}
+.pb-ex-name input{width:100%;background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;outline:none}
+.pb-ex-name input::placeholder{color:var(--muted2)}
+.pb-ex-inp{background:var(--surface3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:4px 7px;width:46px;text-align:center}
+.pb-ex-inp:focus{outline:none;border-color:var(--accent)}
+.pb-ex-lbl{font-size:10px;color:var(--muted);text-align:center;margin-top:2px}
+.pb-ex-cell{display:flex;flex-direction:column;align-items:center}
+.pb-foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0}
+.pb-tmpl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:var(--surface2);border-radius:10px;margin-bottom:8px}
+
 /* ── TOAST ── */
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface3);border:1px solid var(--border-bright);color:var(--text);padding:13px 22px;border-radius:12px;font-size:14px;font-weight:600;z-index:200;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -196,7 +225,7 @@ main{max-width:1400px;margin:0 auto;padding:28px}
         <div class="panel">
           <div class="panel-title">Custom Programs</div>
           <div id="programs-list"></div>
-          <a href="islandfit.html?coach" class="btn btn-ghost btn-block" style="margin-top:10px;border-style:dashed"><i class="ti ti-plus"></i> Build in app (drag &amp; drop)</a>
+          <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="openProgramBuilder(null)"><i class="ti ti-plus"></i> Create Program</button>
         </div>
       </div>
       <!-- Right: client detail -->
@@ -205,6 +234,39 @@ main{max-width:1400px;margin:0 auto;padding:28px}
       </div>
     </div>
   </main>
+</div>
+
+<!-- Program Builder Modal -->
+<div id="pb-modal-bg" class="pb-modal-bg hidden" onclick="if(event.target===this)closePb()">
+  <div class="pb-modal">
+    <div class="pb-head">
+      <button class="mini-btn" onclick="closePb()"><i class="ti ti-x"></i></button>
+      <div class="pb-title" id="pb-heading">Program Builder</div>
+      <button class="btn btn-ghost" style="padding:9px 14px;font-size:12px" onclick="openTmplPicker()"><i class="ti ti-layout-list"></i> Templates</button>
+      <button class="btn btn-primary" style="padding:9px 16px;font-size:13px" id="pb-save-btn" onclick="savePbProgram(false)"><i class="ti ti-device-floppy"></i> Save</button>
+    </div>
+    <div class="pb-meta">
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:5px">Program Name</div><input id="pb-name" class="field" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;font-weight:700" placeholder="My Program"></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:5px">Sport</div><input id="pb-sport" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px" placeholder="e.g. Football"></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:5px">Level</div><select id="pb-level" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div>
+      <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:5px">Days / week</div><input id="pb-days-wk" type="number" min="1" max="7" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px" placeholder="4" value="4"></div>
+    </div>
+    <div class="pb-body" id="pb-body"></div>
+    <div class="pb-foot">
+      <button class="btn btn-ghost" onclick="pbAddDay()" style="font-size:13px"><i class="ti ti-plus"></i> Add Day</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="savePbProgram(false)" style="font-size:13px"><i class="ti ti-device-floppy"></i> Save</button>
+      <button class="btn btn-primary" onclick="savePbAndAssign()" style="font-size:13px"><i class="ti ti-checkbox"></i> Save &amp; Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template Picker (inside builder) -->
+<div id="tmpl-modal-bg" class="modal-bg hidden" onclick="if(event.target===this)$('tmpl-modal-bg').classList.add('hidden')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-head"><div class="modal-title"><i class="ti ti-layout-list" style="color:var(--accent)"></i> Template Library</div><button class="mini-btn" onclick="$('tmpl-modal-bg').classList.add('hidden')"><i class="ti ti-x"></i></button></div>
+    <div id="tmpl-list"></div>
+  </div>
 </div>
 
 <!-- AI modal -->
@@ -386,12 +448,6 @@ function relDate(d){
   return days===0?'today':days===1?'yesterday':days+'d ago';
 }
 
-// ── RENDER: PROGRAMS ──
-async function renderPrograms(){
-  const {data:progs} = await sb.from('programs').select('id,name,sport,level,days_per_week').eq('created_by',me_.id).eq('is_custom',true).order('created_at',{ascending:false});
-  if(!progs || !progs.length){ $('programs-list').innerHTML='<div style="color:var(--muted);font-size:13px">No custom programs yet.</div>'; return; }
-  $('programs-list').innerHTML = progs.map(p=>`<div class="client-row" style="cursor:default"><div class="avatar"><i class="ti ti-barbell"></i></div><div class="client-info"><div class="client-name">${esc(p.name)}</div><div class="client-meta">${esc(p.sport||'')} · ${p.level} · ${p.days_per_week}d/wk</div></div></div>`).join('');
-}
 
 // ── SELECT CLIENT ──
 async function selectClient(id){
@@ -557,6 +613,162 @@ async function saveAiProgram(assign){
   }catch(e){ toast('Error: '+e.message); if(btn) btn.disabled=false; }
 }
 function closeAiModal(){ $('ai-modal').classList.add('hidden'); aiResult=null; }
+
+// ── PROGRAM BUILDER ──
+let pbDays = [], pbEditId = null, pbDragSrc = null;
+
+async function openProgramBuilder(progId){
+  pbEditId = progId;
+  pbDays = [];
+  $('pb-name').value=''; $('pb-sport').value=''; $('pb-level').value='intermediate'; $('pb-days-wk').value='4';
+  $('pb-heading').textContent = progId ? 'Edit Program' : 'Program Builder';
+  if(progId){
+    // Load existing program
+    const {data:prog} = await sb.from('programs').select('*').eq('id',progId).single();
+    if(prog){ $('pb-name').value=prog.name||''; $('pb-sport').value=prog.sport||''; $('pb-level').value=prog.level||'intermediate'; $('pb-days-wk').value=prog.days_per_week||4; }
+    const {data:wks} = await sb.from('program_workouts').select('*').eq('program_id',progId).order('day_number');
+    if(wks){
+      for(const w of wks){
+        const {data:exs} = await sb.from('program_exercises').select('*').eq('workout_id',w.id).order('order_idx');
+        pbDays.push({ wid:w.id, title:w.title||'', focus:w.focus||'', exercises:(exs||[]).map(e=>({ eid:e.id, name:e.exercise_name, sets:e.sets||3, reps:e.reps||'8', weight:e.target_weight||'—', rest:e.rest_seconds||90 })) });
+      }
+    }
+  }
+  if(!pbDays.length) pbAddDay();
+  renderPb();
+  $('pb-modal-bg').classList.remove('hidden');
+}
+function closePb(){ $('pb-modal-bg').classList.add('hidden'); pbDays=[]; pbEditId=null; }
+
+function pbAddDay(){
+  pbDays.push({ title:'Day '+(pbDays.length+1), focus:'', exercises:[] });
+  renderPb();
+}
+function pbRemoveDay(di){ pbDays.splice(di,1); renderPb(); }
+function pbAddExercise(di){
+  pbDays[di].exercises.push({ name:'', sets:3, reps:'8', weight:'—', rest:90 });
+  renderPb(di);
+}
+function pbRemoveExercise(di,ei){ pbDays[di].exercises.splice(ei,1); renderPb(di); }
+
+function pbUpdate(di, field, val){ pbDays[di][field]=val; }
+function pbUpdateEx(di,ei,field,val){ pbDays[di].exercises[ei][field]=val; }
+
+function renderPb(focusDi){
+  $('pb-body').innerHTML = pbDays.length ? pbDays.map((d,di)=>`
+    <div class="pb-day" id="pbday-${di}">
+      <div class="pb-day-head">
+        <i class="ti ti-grip-vertical" style="color:var(--muted2);font-size:16px"></i>
+        <input class="pb-day-title-input" placeholder="Day ${di+1} title" value="${esc(d.title)}" oninput="pbUpdate(${di},'title',this.value)">
+        <button class="mini-btn" onclick="pbAddExercise(${di})" title="Add exercise"><i class="ti ti-plus"></i></button>
+        <button class="mini-btn" onclick="pbRemoveDay(${di})" title="Remove day" style="color:var(--lava-1)"><i class="ti ti-trash"></i></button>
+      </div>
+      <input class="pb-day-focus-input" placeholder="Focus / notes (optional)" value="${esc(d.focus)}" oninput="pbUpdate(${di},'focus',this.value)">
+      <div class="pb-exs" id="pb-exs-${di}">
+        ${d.exercises.length ? d.exercises.map((e,ei)=>pbExHtml(di,ei,e)).join('') : '<div style="color:var(--muted);font-size:12px;padding:8px 6px">No exercises yet — click <b>+</b> to add</div>'}
+      </div>
+    </div>`).join('')
+  : '<div style="color:var(--muted);text-align:center;padding:40px;font-size:14px">No days yet — click <b>Add Day</b> below to start building.</div>';
+  // Re-attach drag events
+  $('pb-body').querySelectorAll('.pb-ex[draggable]').forEach(el => {
+    el.addEventListener('dragstart', e=>{ pbDragSrc={di:+el.dataset.di,ei:+el.dataset.ei}; e.dataTransfer.effectAllowed='move'; el.style.opacity='0.4'; });
+    el.addEventListener('dragend', ()=>{ el.style.opacity=''; $('pb-body').querySelectorAll('.pb-ex').forEach(x=>x.classList.remove('drag-over')); });
+    el.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; el.classList.add('drag-over'); });
+    el.addEventListener('dragleave', ()=>el.classList.remove('drag-over'));
+    el.addEventListener('drop', e=>{ e.preventDefault(); el.classList.remove('drag-over'); const {di:sdi,ei:sei}=pbDragSrc||{}; const tdi=+el.dataset.di,tei=+el.dataset.ei; if(sdi===undefined||sdi!==tdi||sei===tei) return; const exs=pbDays[sdi].exercises; const [moved]=exs.splice(sei,1); exs.splice(tei,0,moved); renderPb(tdi); });
+  });
+}
+
+function pbExHtml(di,ei,e){
+  return `<div class="pb-ex" draggable="true" data-di="${di}" data-ei="${ei}" id="pbex-${di}-${ei}">
+    <i class="ti ti-grip-vertical pb-ex-grip"></i>
+    <div class="pb-ex-name"><input placeholder="Exercise name" value="${esc(e.name)}" oninput="pbUpdateEx(${di},${ei},'name',this.value)"></div>
+    <div class="pb-ex-cell"><input class="pb-ex-inp" type="number" min="1" value="${e.sets}" oninput="pbUpdateEx(${di},${ei},'sets',+this.value)"><div class="pb-ex-lbl">sets</div></div>
+    <div class="pb-ex-cell"><input class="pb-ex-inp" value="${esc(e.reps)}" placeholder="8" oninput="pbUpdateEx(${di},${ei},'reps',this.value)"><div class="pb-ex-lbl">reps</div></div>
+    <div class="pb-ex-cell"><input class="pb-ex-inp" value="${esc(e.weight)}" placeholder="kg" oninput="pbUpdateEx(${di},${ei},'weight',this.value)" style="width:52px"><div class="pb-ex-lbl">kg</div></div>
+    <div class="pb-ex-cell"><input class="pb-ex-inp" type="number" min="0" value="${e.rest}" oninput="pbUpdateEx(${di},${ei},'rest',+this.value)" style="width:50px"><div class="pb-ex-lbl">rest s</div></div>
+    <button class="mini-btn" onclick="pbRemoveExercise(${di},${ei})" style="padding:4px 7px;flex-shrink:0"><i class="ti ti-x"></i></button>
+  </div>`;
+}
+
+async function savePbProgram(assign){
+  const name = $('pb-name').value.trim();
+  if(!name){ toast('Enter a program name'); return; }
+  const sport = $('pb-sport').value.trim()||'General';
+  const level = $('pb-level').value;
+  const dpw = +$('pb-days-wk').value || pbDays.length;
+  const btn=$('pb-save-btn'); btn.disabled=true; btn.innerHTML='<span class="spin"><i class="ti ti-loader-2"></i></span> Saving...';
+  try{
+    let pid = pbEditId;
+    if(pid){
+      // Update metadata
+      const {error:pe} = await sb.from('programs').update({name,sport,level,days_per_week:dpw}).eq('id',pid);
+      if(pe) throw pe;
+      // Delete old workouts (cascades to exercises if FK set, else manual)
+      const {data:oldWks} = await sb.from('program_workouts').select('id').eq('program_id',pid);
+      if(oldWks?.length){
+        const wids = oldWks.map(x=>x.id);
+        await sb.from('program_exercises').delete().in('workout_id',wids);
+        await sb.from('program_workouts').delete().eq('program_id',pid);
+      }
+    } else {
+      const {data:created,error:pe} = await sb.from('programs').insert({name,sport,level,days_per_week:dpw,duration_weeks:8,is_custom:true,created_by:me_.id,icon:'ti-barbell'}).select('id').single();
+      if(pe) throw pe;
+      pid = created.id;
+    }
+    // Insert days + exercises
+    for(let i=0;i<pbDays.length;i++){
+      const d = pbDays[i];
+      const {data:wk,error:we} = await sb.from('program_workouts').insert({program_id:pid,day_number:i+1,title:d.title||('Day '+(i+1)),focus:d.focus||null,estimated_min:60}).select('id').single();
+      if(we) throw we;
+      const exs = d.exercises.filter(e=>e.name.trim()).map((e,idx)=>({workout_id:wk.id,order_idx:idx+1,exercise_name:e.name.trim(),sets:e.sets||3,reps:String(e.reps||'8'),target_weight:e.weight||'—',rest_seconds:e.rest||90,icon:'ti-barbell'}));
+      if(exs.length){ const {error:ee}=await sb.from('program_exercises').insert(exs); if(ee) throw ee; }
+    }
+    if(assign && selected){
+      await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid});
+      selected.profile.program_id = pid;
+    }
+    toast(assign?'Program saved & assigned!':'Program saved!');
+    closePb();
+    renderPrograms();
+    if(assign && selected) renderDetail();
+  }catch(e){ toast('Error: '+e.message); }
+  finally{ btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i> Save'; }
+}
+
+async function savePbAndAssign(){
+  if(!selected){ toast('Select a client first to assign'); return; }
+  await savePbProgram(true);
+}
+
+// ── TEMPLATE PICKER (for program builder) ──
+async function openTmplPicker(){
+  $('tmpl-list').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">Loading...</div>';
+  $('tmpl-modal-bg').classList.remove('hidden');
+  const {data:tmpls} = await sb.from('coach_workout_templates').select('id,name,exercises').eq('coach_id',me_.id).order('created_at',{ascending:false});
+  if(!tmpls?.length){ $('tmpl-list').innerHTML='<div style="color:var(--muted);text-align:center;padding:20px;font-size:14px">No templates saved yet.<br><br>In the builder, after adding exercises to a day you can save them as a reusable template.</div>'; return; }
+  $('tmpl-list').innerHTML = tmpls.map(t=>`<div class="pb-tmpl-row"><div><div style="font-size:14px;font-weight:700">${esc(t.name)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${(t.exercises||[]).length} exercises</div></div><div style="display:flex;gap:7px"><button class="btn btn-primary" style="padding:7px 14px;font-size:12px" onclick="loadTemplate(${JSON.stringify(t).replace(/"/g,'&quot;')})">Load</button></div></div>`).join('');
+}
+
+function loadTemplate(t){
+  const di = pbDays.length;
+  pbDays.push({ title:t.name, focus:'', exercises:(t.exercises||[]).map(e=>({ name:e.name||'', sets:e.sets||3, reps:e.reps||'8', weight:e.target_weight||'—', rest:e.rest_seconds||90 })) });
+  $('tmpl-modal-bg').classList.add('hidden');
+  renderPb(di);
+  toast('Template loaded as new day');
+}
+
+// ── RENDER: PROGRAMS (updated to support edit click) ──
+async function renderPrograms(){
+  const {data:progs} = await sb.from('programs').select('id,name,sport,level,days_per_week').eq('created_by',me_.id).eq('is_custom',true).order('created_at',{ascending:false});
+  if(!progs || !progs.length){ $('programs-list').innerHTML='<div style="color:var(--muted);font-size:13px">No custom programs yet.</div>'; return; }
+  $('programs-list').innerHTML = progs.map(p=>`
+    <div class="client-row" style="cursor:pointer" onclick="openProgramBuilder('${p.id}')" title="Click to edit">
+      <div class="avatar"><i class="ti ti-barbell"></i></div>
+      <div class="client-info"><div class="client-name">${esc(p.name)}</div><div class="client-meta">${esc(p.sport||'')} · ${p.level} · ${p.days_per_week}d/wk</div></div>
+      <span style="font-size:11px;color:var(--muted)"><i class="ti ti-edit"></i></span>
+    </div>`).join('');
+}
 
 // ── BOOT ──
 $('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
