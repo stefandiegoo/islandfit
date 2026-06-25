@@ -29,15 +29,8 @@ a{color:inherit;text-decoration:none}
 button{cursor:pointer;font-family:'Inter',sans-serif;border:none;background:none;color:inherit}
 .gradient{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2),var(--aurora-3));-webkit-background-clip:text;background-clip:text;color:transparent}
 .gradient-lava{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));-webkit-background-clip:text;background-clip:text;color:transparent}
-
-body::before{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse at 15% 0%,rgba(0,255,163,0.10),transparent 45%),
-             radial-gradient(ellipse at 85% 5%,rgba(167,139,250,0.08),transparent 45%),
-             radial-gradient(ellipse at 50% 25%,rgba(34,211,238,0.05),transparent 55%);
-}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at 15% 0%,rgba(0,255,163,0.10),transparent 45%),radial-gradient(ellipse at 85% 5%,rgba(167,139,250,0.08),transparent 45%),radial-gradient(ellipse at 50% 25%,rgba(34,211,238,0.05),transparent 55%)}
 .wrap{position:relative;z-index:1}
-
 nav{position:fixed;top:0;left:0;right:0;z-index:50;backdrop-filter:blur(16px);background:rgba(10,14,26,0.72);border-bottom:1px solid var(--border)}
 .nav-inner{max-width:1100px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
 .logo{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:0.01em;text-transform:uppercase}
@@ -47,7 +40,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:50;backdrop-filter:blur(16px);ba
 .nav-cta{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#000;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:800;transition:transform .2s,box-shadow .2s}
 .nav-cta:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,255,163,0.25)}
 @media(max-width:680px){.nav-links a:not(.nav-cta){display:none}}
-
 header{padding:160px 24px 90px;max-width:1100px;margin:0 auto;text-align:center}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:var(--accent);background:rgba(0,255,163,0.08);border:1px solid rgba(0,255,163,0.25);padding:7px 16px;border-radius:100px;margin-bottom:28px}
 h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,11vw,124px);line-height:0.92;letter-spacing:-0.01em;text-transform:uppercase;margin-bottom:22px}
@@ -57,7 +49,6 @@ h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,11vw,124px);line-hei
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(0,255,163,0.3)}
 .btn-ghost{background:var(--surface);border:1px solid var(--border-bright);color:var(--text);padding:16px 32px;border-radius:13px;font-size:16px;font-weight:700;display:inline-flex;align-items:center;gap:10px;transition:all .2s}
 .btn-ghost:hover{border-color:var(--accent);background:var(--surface2)}
-
 .hero-visual{margin-top:70px;display:flex;justify-content:center;perspective:1400px}
 .phone{width:300px;border-radius:42px;border:1px solid var(--border-bright);background:linear-gradient(180deg,var(--surface),var(--bg-deep));padding:14px;box-shadow:0 40px 100px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.03);transform:rotateX(6deg)}
 .phone-screen{border-radius:30px;overflow:hidden;background:var(--bg);aspect-ratio:9/19.5;display:flex;flex-direction:column;position:relative}
@@ -76,18 +67,15 @@ h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,11vw,124px);line-hei
 .ps-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:9px;font-weight:700;color:var(--muted)}
 .ps-nav-item.on{color:var(--accent)}
 .ps-nav-item i{font-size:20px}
-
 .strip{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(16,22,42,0.4)}
 .strip-inner{max-width:1100px;margin:0 auto;padding:36px 24px;display:flex;justify-content:space-around;flex-wrap:wrap;gap:24px;text-align:center}
 .strip-stat .num{font-family:'Bebas Neue',sans-serif;font-size:46px;line-height:1}
 .strip-stat .lbl{font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:700;margin-top:4px}
-
 section{max-width:1100px;margin:0 auto;padding:90px 24px}
 .sec-head{text-align:center;margin-bottom:56px}
 .sec-eyebrow{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.16em;color:var(--accent);margin-bottom:14px}
 .sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(38px,6vw,64px);line-height:1;text-transform:uppercase}
 .sec-sub{color:var(--text-soft);font-size:17px;max-width:560px;margin:16px auto 0;line-height:1.55;font-weight:500}
-
 .feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
 .feat{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:30px;transition:transform .25s,border-color .25s}
 .feat:hover{transform:translateY(-4px);border-color:var(--border-bright)}
@@ -95,12 +83,10 @@ section{max-width:1100px;margin:0 auto;padding:90px 24px}
 .feat.lava .feat-ico{background:linear-gradient(135deg,rgba(255,140,66,0.15),rgba(255,77,109,0.12));color:var(--lava-2)}
 .feat h3{font-size:20px;font-weight:800;margin-bottom:10px}
 .feat p{color:var(--text-soft);font-size:15px;line-height:1.6;font-weight:500}
-
 .sports-wrap{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:840px;margin:0 auto}
 .sport-chip{background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:11px 20px;font-size:14px;font-weight:700;color:var(--text-soft);display:inline-flex;align-items:center;gap:8px;transition:all .2s}
 .sport-chip:hover{border-color:var(--accent);color:var(--text)}
 .sport-chip i{color:var(--accent);font-size:16px}
-
 .coach-band{background:linear-gradient(135deg,var(--surface2),var(--surface));border:1px solid var(--border-bright);border-radius:28px;padding:56px 40px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
 @media(max-width:780px){.coach-band{grid-template-columns:1fr;padding:40px 28px}}
 .coach-band h2{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,5vw,56px);line-height:1;text-transform:uppercase;margin-bottom:18px}
@@ -108,31 +94,26 @@ section{max-width:1100px;margin:0 auto;padding:90px 24px}
 .coach-list{list-style:none;display:flex;flex-direction:column;gap:14px}
 .coach-list li{display:flex;align-items:flex-start;gap:13px;font-size:15px;font-weight:600;color:var(--text-soft)}
 .coach-list li i{color:var(--accent);font-size:20px;margin-top:1px;flex-shrink:0}
-
 .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px}
 .step{position:relative;padding-top:8px}
 .step-num{font-family:'Bebas Neue',sans-serif;font-size:64px;line-height:0.8;background:linear-gradient(135deg,var(--aurora-1),var(--aurora-3));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:14px}
 .step h4{font-size:18px;font-weight:800;margin-bottom:8px}
 .step p{color:var(--text-soft);font-size:14px;line-height:1.55;font-weight:500}
-
 .final{text-align:center;padding:100px 24px}
 .final h2{font-family:'Bebas Neue',sans-serif;font-size:clamp(44px,8vw,90px);line-height:0.95;text-transform:uppercase;margin-bottom:22px}
 .final p{color:var(--text-soft);font-size:18px;margin-bottom:38px;font-weight:500}
-
 footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
 .footer-inner{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:16px}
 .footer-links{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
 .footer-links a{color:var(--muted);font-size:14px;font-weight:600;transition:color .2s}
 .footer-links a:hover{color:var(--accent)}
 .footer-copy{color:var(--muted2);font-size:13px;font-weight:500}
-
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
 .reveal.in{opacity:1;transform:none}
 </style>
 </head>
 <body>
 <div class="wrap">
-
 <nav>
   <div class="nav-inner">
     <div class="logo"><span class="gradient">ÍSLAND</span>FIT</div>
@@ -144,7 +125,6 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     </div>
   </div>
 </nav>
-
 <header>
   <div class="eyebrow reveal"><i class="ti ti-mountain"></i> Made in Iceland · built for athletes</div>
   <h1 class="reveal">Train like a<br><span class="gradient">pro</span></h1>
@@ -153,7 +133,6 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     <a href="islandfit.html" class="btn-primary"><i class="ti ti-barbell"></i> Start free</a>
     <a href="#features" class="btn-ghost"><i class="ti ti-arrow-down"></i> See features</a>
   </div>
-
   <div class="hero-visual reveal">
     <div class="phone">
       <div class="phone-screen">
@@ -184,7 +163,6 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     </div>
   </div>
 </header>
-
 <div class="strip">
   <div class="strip-inner">
     <div class="strip-stat reveal"><div class="num gradient">18</div><div class="lbl">Sports</div></div>
@@ -193,7 +171,6 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     <div class="strip-stat reveal"><div class="num gradient">PWA</div><div class="lbl">Works offline</div></div>
   </div>
 </div>
-
 <section id="features">
   <div class="sec-head">
     <div class="sec-eyebrow reveal">Features</div>
@@ -203,13 +180,12 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
   <div class="feat-grid">
     <div class="feat reveal"><div class="feat-ico"><i class="ti ti-sparkles"></i></div><h3>AI Coach</h3><p>A personal AI coach that remembers you: weekly check-ins, answers to your questions, and program adjustments based on your progress.</p></div>
     <div class="feat reveal"><div class="feat-ico"><i class="ti ti-target-arrow"></i></div><h3>Sport-specific programs</h3><p>Science-based programs for every sport — strength, power, speed and endurance, tailored to your goal and equipment.</p></div>
-    <div class="feat reveal"><div class="feat-ico"><i class="ti ti-chart-line"></i></div><h3>Progress & PRs</h3><p>Track every lift, see personal records and charts of your progress. Watch the numbers prove you're getting stronger.</p></div>
+    <div class="feat reveal"><div class="feat-ico"><i class="ti ti-chart-line"></i></div><h3>Progress &amp; PRs</h3><p>Track every lift, see personal records and charts of your progress. Watch the numbers prove you're getting stronger.</p></div>
     <div class="feat lava reveal"><div class="feat-ico"><i class="ti ti-users"></i></div><h3>Human coaches</h3><p>Connect with a certified coach who sees your progress, assigns programs and builds custom plans — right inside the app.</p></div>
     <div class="feat lava reveal"><div class="feat-ico"><i class="ti ti-device-mobile"></i></div><h3>Works everywhere</h3><p>A PWA you install on your phone that works offline in the gym. No app store, no setup — just open and train.</p></div>
     <div class="feat lava reveal"><div class="feat-ico"><i class="ti ti-flame"></i></div><h3>Built for Iceland</h3><p>Icelandic sports included (glíma!), bilingual interface, and designed for a northern athletic culture.</p></div>
   </div>
 </section>
-
 <section id="sports">
   <div class="sec-head">
     <div class="sec-eyebrow reveal">Sports</div>
@@ -237,7 +213,6 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     <span class="sport-chip reveal"><i class="ti ti-snowflake"></i> Winter Sports</span>
   </div>
 </section>
-
 <section id="coaches">
   <div class="coach-band">
     <div class="reveal">
@@ -251,12 +226,11 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
       </ul>
     </div>
     <div class="reveal" style="text-align:center">
-      <div style="font-size:90px;margin-bottom:20px"><i class="ti ti-whistle gradient" style="-webkit-background-clip:text;background-clip:text"></i></div>
+      <div style="font-size:90px;margin-bottom:20px"><i class="ti ti-whistle"></i></div>
       <a href="islandfit.html" class="btn-primary"><i class="ti ti-user-plus"></i> Apply as a coach</a>
     </div>
   </div>
 </section>
-
 <section>
   <div class="sec-head">
     <div class="sec-eyebrow reveal">How it works</div>
@@ -269,13 +243,11 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     <div class="step reveal"><div class="step-num">4</div><h4>Get stronger</h4><p>Track your progress and set new personal records week after week.</p></div>
   </div>
 </section>
-
 <div class="final">
   <h2 class="reveal">Ready to<br><span class="gradient">start?</span></h2>
   <p class="reveal">Free to start. No credit card. Just you and the next session.</p>
   <div class="cta-row reveal"><a href="islandfit.html" class="btn-primary" style="font-size:18px;padding:18px 40px"><i class="ti ti-barbell"></i> Open ÍslandFit</a></div>
 </div>
-
 <footer>
   <div class="footer-inner">
     <div class="logo"><span class="gradient">ÍSLAND</span>FIT</div>
@@ -288,7 +260,6 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
     <div class="footer-copy">© 2026 ÍslandFit · Train like a pro</div>
   </div>
 </footer>
-
 </div>
 <script>
 const io = new IntersectionObserver((entries)=>{

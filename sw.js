@@ -28,23 +28,19 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Bypass Supabase API/auth and any non-GET request — these must always hit the network.
   if (e.request.method !== 'GET' || url.hostname.endsWith('supabase.co')) return;
 
-  // Navigations: network-first, caching each page under its OWN url (so the landing page
-  // and the app never overwrite each other). Offline: serve this page from cache, else fall
-  // back to the app shell, else the landing page.
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)
         .then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
         .catch(() => caches.match(e.request).then(r =>
-          r || caches.match('./islandfit.html').then(a => a || caches.match('./'))))
+          r || caches.match('./islandfit.html').then(a => a || caches.match('./')))
+        )
     );
     return;
   }
 
-  // Static assets (fonts, CDN libs): cache-first, then network (and cache the result).
   e.respondWith(
     caches.match(e.request).then(cached =>
       cached || fetch(e.request).then(r => {
