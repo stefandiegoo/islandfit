@@ -510,6 +510,9 @@ body::before{
 .btn-reject{flex:1;background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);color:var(--lava-1);font-weight:700;padding:12px;border-radius:10px;font-size:13px}
 .coach-request-card{background:rgba(255,140,66,0.06);border:1px solid rgba(255,140,66,0.25);border-radius:12px;padding:14px;margin-bottom:10px}
 .section-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:20px 0 10px}
+.client-flag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;padding:4px 9px;border-radius:100px;white-space:nowrap;margin-right:6px}
+.flag-red{background:rgba(255,77,109,0.16);color:var(--lava-1)}
+.flag-amber{background:rgba(245,166,35,0.16);color:var(--amber)}
 .coach-chat-thread{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:7px}
 .cc-msg{max-width:80%;padding:8px 12px;border-radius:13px;font-size:13px;line-height:1.4;word-break:break-word}
 .cc-them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
@@ -1253,6 +1256,10 @@ body::before{
     <div class="section-label">Coach Notes (visible to AI coach)</div>
     <textarea id="coach-client-notes" class="ai-onboard-text" rows="3" placeholder="Injuries, goals, things to keep in mind..." style="margin-bottom:8px"></textarea>
     <button class="btn btn-primary" onclick="saveClientNotes()" style="margin-bottom:20px">Save Notes</button>
+
+    <!-- Strength progress -->
+    <div class="section-label">Strength Progress · est. 1RM over time</div>
+    <div id="coach-client-progress"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
     <!-- Recent workouts -->
     <div class="section-label">Recent Workouts</div>
@@ -3475,7 +3482,10 @@ async function loadCoachScreen(){
   if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
   const ids = links.map(l=>l.client_id);
   const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id, age, primary_goal, equipment, days_available, bodyweight_kg, current_day, coach_notes, injuries, peak_date').in('id', ids);
-  coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'} }));
+  // Last workout per client (for inactivity flags)
+  const {data:recentWk} = await sb.from('workouts').select('user_id, completed_at').in('user_id', ids).order('completed_at',{ascending:false});
+  const lastWk = {}; (recentWk||[]).forEach(w=>{ if(!lastWk[w.user_id]) lastWk[w.user_id]=w.completed_at; });
+  coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'}, lastWorkout: lastWk[l.client_id]||null }));
   document.getElementById('coach-client-count').textContent = '(' + coachClients.filter(c=>c.status==='active').length + ')';
   renderCoachClientList();
   // Load custom programs
@@ -3492,12 +3502,20 @@ function renderCoachClientList(){
     const p = c.profile;
     const isPending = c.status === 'pending';
     const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    // Inactivity flag for active clients
+    let flag = '';
+    if(!isPending){
+      const since = c.lastWorkout ? Math.floor((Date.now()-new Date(c.lastWorkout))/864e5) : Infinity;
+      if(since>=10) flag = `<span class="client-flag flag-red"><i class="ti ti-zzz"></i> ${c.lastWorkout?since+'d':'never'}</span>`;
+      else if(since>=6) flag = `<span class="client-flag flag-amber"><i class="ti ti-clock-exclamation"></i> ${since}d</span>`;
+    }
     return `<div class="client-card${isPending?' client-pending':''}" onclick="openClientDetail('${c.client_id}')">
       <div class="client-avatar">${escapeHtml(initials)}</div>
       <div class="client-info">
         <div class="client-name">${escapeHtml(p.name||'—')}</div>
         <div class="client-meta">${isPending ? '⏳ Waiting for client to accept' : escapeHtml(p.sport||'—')}</div>
       </div>
+      ${flag}
       <i class="ti ti-chevron-right" style="color:var(--muted)"></i>
     </div>`;
   }).join('');
@@ -3627,6 +3645,35 @@ async function openClientDetail(clientId){
   document.getElementById('coach-client-prs').innerHTML = (prs && prs.length) ?
     `<div style="background:var(--surface);border-radius:10px;overflow:hidden">${prs.map((pr,i)=>`<div style="padding:11px 14px;display:flex;justify-content:space-between;align-items:center${i?';border-top:1px solid var(--border)':''}"><div style="font-size:13px;font-weight:600">${escapeHtml(pr.exercise_name)}</div><div style="font-size:13px;font-weight:700;color:var(--accent)">${displayWeight(pr.weight_kg)} ${weightUnit()} × ${pr.reps}</div></div>`).join('')}</div>` :
     '<div style="color:var(--muted);font-size:13px;padding:12px 0">No PRs yet</div>';
+  renderCoachClientProgress(clientId);
+}
+
+// Strength progress chart for the client a coach is viewing (top 3 lifts, est. 1RM over time)
+async function renderCoachClientProgress(clientId){
+  const wrap = document.getElementById('coach-client-progress'); if(!wrap) return;
+  const {data:sets} = await sb.from('workout_sets')
+    .select('exercise_name,weight_kg,reps,logged_at')
+    .eq('user_id', clientId).not('weight_kg','is',null).gt('weight_kg',0)
+    .order('logged_at',{ascending:true});
+  if(!sets || sets.length<2){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px 0">Not enough logged sets yet to chart progress.</div>'; return; }
+  const freq={}; sets.forEach(s=>{freq[s.exercise_name]=(freq[s.exercise_name]||0)+1;});
+  const topEx=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,3);
+  const perEx={}, daySet=new Set();
+  topEx.forEach(ex=>{ const byDay={}; sets.filter(s=>s.exercise_name===ex).forEach(s=>{ const day=s.logged_at.slice(0,10); const e=epley1RM(s.weight_kg,s.reps); if(e>0&&(!byDay[day]||e>byDay[day])) byDay[day]=e; daySet.add(day); }); perEx[ex]=byDay; });
+  const days=Array.from(daySet).sort();
+  const labels=days.map(d=>{const dt=new Date(d+'T00:00:00');return (dt.getMonth()+1)+'/'+dt.getDate();});
+  const conv=v=>units==='imperial'?Math.round(kgToLbs(v)):Math.round(v);
+  const colors=['#00ffa3','#22d3ee','#a78bfa'];
+  const datasets=topEx.map((ex,i)=>({label:ex, data:days.map(d=>perEx[ex][d]!=null?conv(perEx[ex][d]):null), borderColor:colors[i], backgroundColor:colors[i]+'22', tension:0.3, pointRadius:3, borderWidth:2, fill:false, spanGaps:true}));
+  wrap.innerHTML='<div style="background:var(--surface);border-radius:12px;padding:12px;position:relative;height:230px"><canvas id="coach-prog-canvas"></canvas></div>';
+  if(charts.coachProg){ try{charts.coachProg.destroy();}catch(e){} charts.coachProg=null; }
+  charts.coachProg=new Chart(document.getElementById('coach-prog-canvas'),{
+    type:'line', data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#c7d2e8',font:{size:11},usePointStyle:true,boxWidth:8}},
+        tooltip:{backgroundColor:'#10162a',borderColor:'#1f2847',borderWidth:1,callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+' '+weightUnit()+' est 1RM'}}},
+      scales:{x:{grid:{display:false},ticks:{color:'#6b7896',font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8}},y:{grid:{color:'#1f2847'},ticks:{color:'#6b7896',font:{size:10}}}}}
+  });
 }
 
 async function assignProgramToClient(){
