@@ -510,6 +510,11 @@ body::before{
 .btn-reject{flex:1;background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);color:var(--lava-1);font-weight:700;padding:12px;border-radius:10px;font-size:13px}
 .coach-request-card{background:rgba(255,140,66,0.06);border:1px solid rgba(255,140,66,0.25);border-radius:12px;padding:14px;margin-bottom:10px}
 .section-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:20px 0 10px}
+.coach-chat-thread{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:7px}
+.cc-msg{max-width:80%;padding:8px 12px;border-radius:13px;font-size:13px;line-height:1.4;word-break:break-word}
+.cc-them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
+.cc-me{align-self:flex-end;background:linear-gradient(135deg,rgba(0,255,163,0.18),rgba(34,211,238,0.12));border:1px solid rgba(0,255,163,0.25);border-bottom-right-radius:4px}
+.cc-time{font-size:10px;color:var(--muted);margin-top:3px;opacity:0.8}
 </style>
 </head>
 <body>
@@ -3674,8 +3679,63 @@ async function loadMyCoachSection(){
   if(active && active.length){
     const ids2 = active.map(a=>a.coach_id);
     const {data:coaches2} = await sb.from('profiles').select('id, name').in('id', ids2);
-    actEl.innerHTML = '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:8px">Connected Coaches</div>' + active.map(a=>{ const c=(coaches2||[]).find(x=>x.id===a.coach_id)||{}; return `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div><div style="font-size:14px;font-weight:700">${escapeHtml(c.name||'Coach')}</div><div style="font-size:11px;color:var(--muted)">Since ${new Date(a.created_at).toLocaleDateString()}</div></div><button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button></div>`; }).join('');
+    actEl.innerHTML = '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:8px">Connected Coaches</div>' + active.map(a=>{ const c=(coaches2||[]).find(x=>x.id===a.coach_id)||{}; return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:14px;font-weight:700">${escapeHtml(c.name||'Coach')}</div><div style="font-size:11px;color:var(--muted)">Since ${new Date(a.created_at).toLocaleDateString()}</div></div>
+        <div style="display:flex;gap:6px">
+          <button onclick="toggleCoachChat('${a.coach_id}')" id="chat-toggle-${a.coach_id}" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-message"></i> Message</button>
+          <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
+        </div>
+      </div>
+      <div id="chat-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div id="chat-thread-${a.coach_id}" class="coach-chat-thread"><div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Loading...</div></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="chat-input-${a.coach_id}" placeholder="Message your coach..." style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px" onkeydown="if(event.key==='Enter')sendCoachMessage('${a.coach_id}')">
+          <button class="btn btn-primary" style="padding:11px 16px" onclick="sendCoachMessage('${a.coach_id}')"><i class="ti ti-send"></i></button>
+        </div>
+      </div>
+    </div>`; }).join('');
   } else { actEl.innerHTML=''; }
+}
+
+// ── CLIENT ⇄ COACH MESSAGES ──
+function toggleCoachChat(coachId){
+  const box = document.getElementById('chat-box-'+coachId);
+  if(!box) return;
+  const open = box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadCoachMessages(coachId);
+}
+
+async function loadCoachMessages(coachId){
+  const {data:msgs, error} = await sb.from('coach_messages').select('*').eq('coach_id',coachId).eq('client_id',currentUser.id).order('created_at',{ascending:true});
+  const box = document.getElementById('chat-thread-'+coachId); if(!box) return;
+  if(error){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Could not load messages.</div>'; return; }
+  if(!msgs || !msgs.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No messages yet — say hi to your coach.</div>'; return; }
+  box.innerHTML = msgs.map(m=>{
+    const mine = m.sender_id===currentUser.id;
+    return `<div class="cc-msg ${mine?'cc-me':'cc-them'}">${escapeHtml(m.body)}<div class="cc-time">${ccMsgTime(m.created_at)}</div></div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+  const unread = msgs.filter(m=>m.sender_id!==currentUser.id && !m.read_at).map(m=>m.id);
+  if(unread.length){ await sb.from('coach_messages').update({read_at:new Date().toISOString()}).in('id',unread); }
+}
+
+function ccMsgTime(d){
+  const dt=new Date(d), now=new Date();
+  const sameDay = dt.toDateString()===now.toDateString();
+  return sameDay ? dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : dt.toLocaleDateString()+' '+dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+async function sendCoachMessage(coachId){
+  const inp = document.getElementById('chat-input-'+coachId);
+  const body = inp.value.trim(); if(!body) return;
+  inp.value=''; inp.disabled=true;
+  const {error} = await sb.from('coach_messages').insert({coach_id:coachId, client_id:currentUser.id, sender_id:currentUser.id, body});
+  inp.disabled=false; inp.focus();
+  if(error){ showToast('Error: '+error.message); inp.value=body; return; }
+  loadCoachMessages(coachId);
 }
 
 async function redeemInviteCode(){
