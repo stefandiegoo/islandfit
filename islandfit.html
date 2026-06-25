@@ -519,7 +519,8 @@ body::before{
 <div id="s-auth" class="screen active">
   <div class="auth-wrap">
     <div class="auth-logo">ÍSLAND<br><span class="gradient">FIT</span></div>
-    <div class="auth-tagline">Train like a pro · Made in Iceland</div>
+    <div id="auth-coach-badge" style="display:none;text-align:center;margin-bottom:10px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);background:rgba(0,255,163,0.1);border:1px solid rgba(0,255,163,0.3);padding:6px 14px;border-radius:100px"><i class="ti ti-whistle"></i> Coach Portal</span></div>
+    <div class="auth-tagline" id="auth-tagline">Train like a pro · Made in Iceland</div>
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchTab('login')">Sign In</button>
       <button class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
@@ -1355,6 +1356,7 @@ let onbState={sport:null,level:null,programId:null};
 let lastWorkoutSummary=null,deferredInstallPrompt=null;
 let charts={};
 let units='metric'; // or 'imperial'
+let coachEntry=false; // true when opened via the coach login link (islandfit.html?coach)
 
 // ── UNIT CONVERSION ──
 function kgToLbs(kg){return Math.round(kg*2.20462*10)/10}
@@ -2265,6 +2267,19 @@ async function onLogin(user){
   currentProfile=profile||{name:(user.email||'').split('@')[0]};
   units=currentProfile.units||'metric';
   applyUnitsToUI();
+  // Coach login entry → go straight to the coach workspace (skips athlete onboarding/home)
+  if(coachEntry && currentProfile.coach_status==='approved'){
+    if(currentProfile.program_id) document.getElementById('bottom-nav').classList.add('show');
+    updateCoachMenuItems();
+    openCoachPortal();
+    return;
+  }
+  // A coach who logs in via the coach link but isn't approved yet → application/status screen
+  if(coachEntry && currentProfile.role==='coach'){
+    updateCoachMenuItems();
+    showS('s-coach-apply'); setNav('profile');
+    return;
+  }
   if(!currentProfile.program_id){await startOnboarding();return}
   document.getElementById('bottom-nav').classList.add('show');
   await loadProgramAndToday();
@@ -3342,6 +3357,15 @@ function setNav(id){
 // ══════════════════════════════════════════════
 
 // ── SIGNUP ROLE SELECTION ──
+// Coach login entry: brand the auth screen and default new signups to the coach role.
+function applyCoachAuthBranding(){
+  const badge = document.getElementById('auth-coach-badge');
+  if(badge) badge.style.display = 'block';
+  const tag = document.getElementById('auth-tagline');
+  if(tag) tag.textContent = 'Sign in to your coaching workspace';
+  selectSignupRole('coach');
+}
+
 let signupRole = 'athlete';
 function selectSignupRole(role){
   signupRole = role;
@@ -3992,6 +4016,8 @@ document.addEventListener('visibilitychange',async()=>{
 (async()=>{
   renderWeekCal();
   applyUnitsToUI();
+  coachEntry = /[?&#]coach\b/i.test(location.search + location.hash);
+  if(coachEntry) applyCoachAuthBranding();
   const {data:{session}}=await sb.auth.getSession();
   if(session?.user) await onLogin(session.user);
 })();
