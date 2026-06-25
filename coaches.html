@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0e1a">
+<title>ÍslandFit for Coaches · Your complete coaching workspace</title>
+<meta name="description" content="ÍslandFit for coaches — log in to monitor every client, track adherence and RPE, leave notes on sessions, build programs with drag & drop, save reusable templates, and get AI program suggestions you can fine-tune yourself.">
+<meta property="og:title" content="ÍslandFit for Coaches">
+<meta property="og:description" content="Monitor clients, build programs, save templates and get AI suggestions — all in one workspace.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0e1a; --bg-deep:#06080f; --surface:#10162a; --surface2:#1a2240; --surface3:#252e54;
+  --border:#1f2847; --border-bright:#2d3a6b;
+  --aurora-1:#00ffa3; --aurora-2:#22d3ee; --aurora-3:#a78bfa;
+  --lava-1:#ff4d6d; --lava-2:#ff8c42;
+  --text:#ffffff; --text-soft:#c7d2e8; --muted:#6b7896; --muted2:#3d4a6b;
+  --accent:var(--aurora-1);
+}
+html{scroll-behavior:smooth}
+html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:'Inter',sans-serif;border:none;background:none;color:inherit}
+.gradient{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2),var(--aurora-3));-webkit-background-clip:text;background-clip:text;color:transparent}
+.gradient-lava{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));-webkit-background-clip:text;background-clip:text;color:transparent}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at 15% 0%,rgba(0,255,163,0.10),transparent 45%),radial-gradient(ellipse at 85% 5%,rgba(167,139,250,0.08),transparent 45%),radial-gradient(ellipse at 50% 25%,rgba(34,211,238,0.05),transparent 55%)}
+.wrap{position:relative;z-index:1}
+nav{position:fixed;top:0;left:0;right:0;z-index:50;backdrop-filter:blur(16px);background:rgba(10,14,26,0.72);border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1100px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:0.01em;text-transform:uppercase}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{color:var(--text-soft);font-size:14px;font-weight:600;transition:color .2s}
+.nav-links a:hover{color:var(--accent)}
+.nav-cta{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#000;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:800;transition:transform .2s,box-shadow .2s}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,255,163,0.25)}
+@media(max-width:680px){.nav-links a:not(.nav-cta){display:none}}
+header{padding:150px 24px 70px;max-width:1100px;margin:0 auto;text-align:center}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:var(--accent);background:rgba(0,255,163,0.08);border:1px solid rgba(0,255,163,0.25);padding:7px 16px;border-radius:100px;margin-bottom:28px}
+h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(52px,10vw,112px);line-height:0.92;letter-spacing:-0.01em;text-transform:uppercase;margin-bottom:22px}
+.sub{font-size:clamp(16px,2.4vw,21px);color:var(--text-soft);max-width:640px;margin:0 auto 40px;line-height:1.55;font-weight:500}
+.cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#000;padding:16px 32px;border-radius:13px;font-size:16px;font-weight:800;display:inline-flex;align-items:center;gap:10px;transition:transform .2s,box-shadow .2s}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(0,255,163,0.3)}
+.btn-ghost{background:var(--surface);border:1px solid var(--border-bright);color:var(--text);padding:16px 32px;border-radius:13px;font-size:16px;font-weight:700;display:inline-flex;align-items:center;gap:10px;transition:all .2s}
+.btn-ghost:hover{border-color:var(--accent);background:var(--surface2)}
+section{max-width:1100px;margin:0 auto;padding:80px 24px}
+.sec-head{text-align:center;margin-bottom:56px}
+.sec-eyebrow{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.16em;color:var(--accent);margin-bottom:14px}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(38px,6vw,64px);line-height:1;text-transform:uppercase}
+.sec-sub{color:var(--text-soft);font-size:17px;max-width:560px;margin:16px auto 0;line-height:1.55;font-weight:500}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.feat{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:30px;transition:transform .25s,border-color .25s}
+.feat:hover{transform:translateY(-4px);border-color:var(--border-bright)}
+.feat-ico{width:54px;height:54px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:20px;background:linear-gradient(135deg,rgba(0,255,163,0.15),rgba(34,211,238,0.12));color:var(--accent)}
+.feat.lava .feat-ico{background:linear-gradient(135deg,rgba(255,140,66,0.15),rgba(255,77,109,0.12));color:var(--lava-2)}
+.feat h3{font-size:20px;font-weight:800;margin-bottom:10px}
+.feat p{color:var(--text-soft);font-size:15px;line-height:1.6;font-weight:500}
+.login-band{background:linear-gradient(135deg,var(--surface2),var(--surface));border:1px solid var(--border-bright);border-radius:28px;padding:56px 40px;text-align:center;max-width:760px;margin:0 auto}
+.login-band h2{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,5vw,56px);line-height:1;text-transform:uppercase;margin-bottom:18px}
+.login-band p{color:var(--text-soft);font-size:16px;line-height:1.6;margin-bottom:30px;font-weight:500;max-width:500px;margin-left:auto;margin-right:auto}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px}
+.step{position:relative;padding-top:8px}
+.step-num{font-family:'Bebas Neue',sans-serif;font-size:64px;line-height:0.8;background:linear-gradient(135deg,var(--aurora-1),var(--aurora-3));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:14px}
+.step h4{font-size:18px;font-weight:800;margin-bottom:8px}
+.step p{color:var(--text-soft);font-size:14px;line-height:1.55;font-weight:500}
+footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
+.footer-inner{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:16px}
+.footer-links{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+.footer-links a{color:var(--muted);font-size:14px;font-weight:600;transition:color .2s}
+.footer-links a:hover{color:var(--accent)}
+.footer-copy{color:var(--muted2);font-size:13px;font-weight:500}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.reveal.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="logo"><span class="gradient">ÍSLAND</span>FIT</a>
+    <div class="nav-links">
+      <a href="index.html">For Athletes</a>
+      <a href="#workspace">Workspace</a>
+      <a href="islandfit.html?coach" class="nav-cta">Coach Login</a>
+    </div>
+  </div>
+</nav>
+<header>
+  <div class="eyebrow reveal"><i class="ti ti-whistle"></i> For certified coaches</div>
+  <h1 class="reveal">Your coaching<br><span class="gradient">workspace</span></h1>
+  <p class="sub reveal">Log in to monitor every client, track adherence and effort, leave notes on their sessions, and build programs your way — with reusable templates, drag &amp; drop, and AI suggestions you fine-tune yourself.</p>
+  <div class="cta-row reveal">
+    <a href="islandfit.html?coach" class="btn-primary"><i class="ti ti-login"></i> Coach Login</a>
+    <a href="#workspace" class="btn-ghost"><i class="ti ti-arrow-down"></i> See the workspace</a>
+  </div>
+</header>
+<section id="workspace">
+  <div class="sec-head">
+    <div class="sec-eyebrow reveal">The workspace</div>
+    <h2 class="sec-title reveal">Everything in one place</h2>
+    <p class="sec-sub reveal">A complete toolkit to coach your athletes — no spreadsheets, no app-switching.</p>
+  </div>
+  <div class="feat-grid">
+    <div class="feat reveal"><div class="feat-ico"><i class="ti ti-layout-dashboard"></i></div><h3>Live client dashboard</h3><p>See each athlete's adherence %, average RPE, workout history and personal records at a glance — color-coded so stalls and missed weeks jump out.</p></div>
+    <div class="feat reveal"><div class="feat-ico"><i class="ti ti-message-dots"></i></div><h3>Session notes</h3><p>Leave a note on any individual workout. Track form cues, how a session felt, or what to change next time — saved per client.</p></div>
+    <div class="feat reveal"><div class="feat-ico"><i class="ti ti-bookmark"></i></div><h3>Template library</h3><p>Save any training day as a reusable template, then load it into any program — replace or append. Build once, reuse everywhere.</p></div>
+    <div class="feat lava reveal"><div class="feat-ico"><i class="ti ti-sparkles"></i></div><h3>AI program suggestions</h3><p>Generate a full program tuned to a client's sport, goal, equipment and injuries — then edit every set, rep and exercise before you assign it.</p></div>
+    <div class="feat lava reveal"><div class="feat-ico"><i class="ti ti-arrows-move"></i></div><h3>Drag &amp; drop builder</h3><p>Build and reorder exercises with a drag of the handle. Full control over sets, reps, target weights and coaching cues for every day.</p></div>
+    <div class="feat lava reveal"><div class="feat-ico"><i class="ti ti-users"></i></div><h3>Connect clients instantly</h3><p>Share an invite code or add a client by email. Once linked, their progress flows straight into your dashboard.</p></div>
+  </div>
+</section>
+<section>
+  <div class="sec-head">
+    <div class="sec-eyebrow reveal">How it works</div>
+    <h2 class="sec-title reveal">From login to programming</h2>
+  </div>
+  <div class="steps">
+    <div class="step reveal"><div class="step-num">1</div><h4>Log in</h4><p>Sign in to your coach account, or apply with your certification to get verified.</p></div>
+    <div class="step reveal"><div class="step-num">2</div><h4>Add clients</h4><p>Share your invite code or add athletes by email — they appear in your client list.</p></div>
+    <div class="step reveal"><div class="step-num">3</div><h4>Monitor</h4><p>Watch adherence, RPE and PRs. Leave notes on sessions that need attention.</p></div>
+    <div class="step reveal"><div class="step-num">4</div><h4>Program</h4><p>Build custom plans, reuse templates, or start from an AI suggestion — then assign.</p></div>
+  </div>
+</section>
+<section>
+  <div class="login-band">
+    <div class="reveal">
+      <h2>Ready to <span class="gradient-lava">coach?</span></h2>
+      <p>Log in to your workspace, or apply as a coach with your certification. Verification keeps the quality high for every athlete on ÍslandFit.</p>
+      <div class="cta-row">
+        <a href="islandfit.html?coach" class="btn-primary"><i class="ti ti-login"></i> Coach Login</a>
+        <a href="islandfit.html?coach" class="btn-ghost"><i class="ti ti-user-plus"></i> Apply as a coach</a>
+      </div>
+    </div>
+  </div>
+</section>
+<footer>
+  <div class="footer-inner">
+    <a href="index.html" class="logo"><span class="gradient">ÍSLAND</span>FIT</a>
+    <div class="footer-links">
+      <a href="index.html">For Athletes</a>
+      <a href="#workspace">Workspace</a>
+      <a href="islandfit.html?coach">Coach Login</a>
+    </div>
+    <div class="footer-copy">© 2026 ÍslandFit · Train like a pro</div>
+  </div>
+</footer>
+</div>
+<script>
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+}, {threshold:0.12});
+document.querySelectorAll('.reveal').forEach((el)=>{ io.observe(el); });
+</script>
+</body>
+</html>

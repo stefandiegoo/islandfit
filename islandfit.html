@@ -519,7 +519,8 @@ body::before{
 <div id="s-auth" class="screen active">
   <div class="auth-wrap">
     <div class="auth-logo">ÍSLAND<br><span class="gradient">FIT</span></div>
-    <div class="auth-tagline">Train like a pro · Made in Iceland</div>
+    <div id="auth-coach-badge" style="display:none;text-align:center;margin-bottom:10px"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);background:rgba(0,255,163,0.1);border:1px solid rgba(0,255,163,0.3);padding:6px 14px;border-radius:100px"><i class="ti ti-whistle"></i> Coach Portal</span></div>
+    <div class="auth-tagline" id="auth-tagline">Train like a pro · Made in Iceland</div>
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchTab('login')">Sign In</button>
       <button class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
@@ -1223,12 +1224,13 @@ body::before{
     <!-- Assign program -->
     <div class="section-label">Assigned Program</div>
     <div id="coach-client-program" style="margin-bottom:8px"></div>
-    <div style="display:flex;gap:8px;margin-bottom:20px">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
       <select id="coach-assign-select" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:13px">
         <option value="">— Select a program —</option>
       </select>
       <button class="btn btn-primary" style="padding:13px 18px;font-size:13px;white-space:nowrap" onclick="assignProgramToClient()">Assign</button>
     </div>
+    <button id="btn-ai-program" class="btn btn-ghost" style="width:100%;margin-bottom:20px;border:1px dashed var(--accent);color:var(--accent)" onclick="suggestAiProgramForClient()"><i class="ti ti-sparkles"></i> AI Program Suggestion</button>
 
     <!-- Coach notes -->
     <div class="section-label">Coach Notes (visible to AI coach)</div>
@@ -1252,7 +1254,7 @@ body::before{
 <!-- COACH: CUSTOM PROGRAM BUILDER -->
 <div id="s-coach-program" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="showS('s-coach');loadCoachScreen()"><i class="ti ti-chevron-left"></i> Portal</button>
+    <button class="back-btn" id="pb-back-btn" onclick="showS('s-coach');loadCoachScreen()"><i class="ti ti-chevron-left"></i> Portal</button>
     <div class="topbar-title" id="prog-builder-title">New Program</div>
     <div style="width:40px"></div>
   </div>
@@ -1270,6 +1272,30 @@ body::before{
 
     <div id="pb-error" class="auth-error"></div>
     <button class="btn btn-primary" id="btn-pb-save" onclick="saveProgramBuilder()" style="margin-bottom:20px"><i class="ti ti-device-floppy"></i> Save Program</button>
+  </div>
+</div>
+
+<!-- TEMPLATE PICKER MODAL -->
+<div id="template-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeTemplatePicker()">
+  <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%;max-width:480px;max-height:70vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:700">Load Template</div>
+      <button onclick="closeTemplatePicker()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="template-picker-list"></div>
+  </div>
+</div>
+
+<!-- SAVE TEMPLATE MODAL -->
+<div id="save-template-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center" onclick="if(event.target===this)closeSaveTemplate()">
+  <div style="background:var(--surface);border-radius:16px;padding:20px 16px;width:90%;max-width:400px">
+    <div style="font-size:16px;font-weight:700;margin-bottom:16px">Save as Template</div>
+    <input type="text" id="save-template-name" placeholder="Template name..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;box-sizing:border-box;margin-bottom:8px">
+    <input type="text" id="save-template-desc" placeholder="Description (optional)..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;box-sizing:border-box;margin-bottom:16px">
+    <div style="display:flex;gap:8px">
+      <button onclick="closeSaveTemplate()" style="flex:1;background:none;border:1px solid var(--border);color:var(--muted);padding:12px;border-radius:10px;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="confirmSaveTemplate()" style="flex:1;background:var(--accent);color:#000;border:none;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Save</button>
+    </div>
   </div>
 </div>
 
@@ -1330,6 +1356,7 @@ let onbState={sport:null,level:null,programId:null};
 let lastWorkoutSummary=null,deferredInstallPrompt=null;
 let charts={};
 let units='metric'; // or 'imperial'
+let coachEntry=false; // true when opened via the coach login link (islandfit.html?coach)
 
 // ── UNIT CONVERSION ──
 function kgToLbs(kg){return Math.round(kg*2.20462*10)/10}
@@ -2240,6 +2267,19 @@ async function onLogin(user){
   currentProfile=profile||{name:(user.email||'').split('@')[0]};
   units=currentProfile.units||'metric';
   applyUnitsToUI();
+  // Coach login entry → go straight to the coach workspace (skips athlete onboarding/home)
+  if(coachEntry && currentProfile.coach_status==='approved'){
+    if(currentProfile.program_id) document.getElementById('bottom-nav').classList.add('show');
+    updateCoachMenuItems();
+    openCoachPortal();
+    return;
+  }
+  // A coach who logs in via the coach link but isn't approved yet → application/status screen
+  if(coachEntry && currentProfile.role==='coach'){
+    updateCoachMenuItems();
+    showS('s-coach-apply'); setNav('profile');
+    return;
+  }
   if(!currentProfile.program_id){await startOnboarding();return}
   document.getElementById('bottom-nav').classList.add('show');
   await loadProgramAndToday();
@@ -3317,6 +3357,15 @@ function setNav(id){
 // ══════════════════════════════════════════════
 
 // ── SIGNUP ROLE SELECTION ──
+// Coach login entry: brand the auth screen and default new signups to the coach role.
+function applyCoachAuthBranding(){
+  const badge = document.getElementById('auth-coach-badge');
+  if(badge) badge.style.display = 'block';
+  const tag = document.getElementById('auth-tagline');
+  if(tag) tag.textContent = 'Sign in to your coaching workspace';
+  selectSignupRole('coach');
+}
+
 let signupRole = 'athlete';
 function selectSignupRole(role){
   signupRole = role;
@@ -3465,7 +3514,7 @@ async function openClientDetail(clientId){
   document.getElementById('coach-client-title').textContent = p.name || 'Client';
   showS('s-coach-client');
   // Stats strip
-  document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
+  document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-adherence">...</div><div class="stat-label">Adherence</div></div><div class="stat-card"><div class="stat-num" id="cc-rpe">...</div><div class="stat-label">Avg RPE</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
   // Profile info cards
   const goalMap={lose_weight:'Lose Weight',build_muscle:'Build Muscle',improve_performance:'Improve Performance',general_fitness:'General Fitness',sport_specific:'Sport Specific'};
   const equipMap={full_gym:'Full Gym',home_gym:'Home Gym',dumbbells_only:'Dumbbells Only',bodyweight_only:'Bodyweight',resistance_bands:'Bands'};
@@ -3491,20 +3540,57 @@ async function openClientDetail(clientId){
   sel.innerHTML = '<option value="">— Select a program —</option>' + (progs||[]).map(pr=>`<option value="${pr.id}"${pr.id===p.program_id?' selected':''}>${escapeHtml(pr.name)}${pr.is_custom?' (custom)':''}</option>`).join('');
   // Notes
   document.getElementById('coach-client-notes').value = p.coach_notes || '';
-  // Workouts
-  const {data:wkts} = await sb.from('workouts').select('id,title,sport,duration_min,completed_at').eq('user_id', clientId).order('completed_at',{ascending:false}).limit(10);
-  document.getElementById('cc-workouts').textContent = wkts ? wkts.length : '—';
-  if(wkts && wkts.length) {
-    const lastDate = new Date(wkts[0].completed_at);
-    const daysAgo = Math.floor((Date.now()-lastDate)/(1000*60*60*24));
-    const lastLabel = daysAgo===0?'today':daysAgo===1?'yesterday':`${daysAgo}d ago`;
-    document.getElementById('cc-workouts').title = `Last: ${lastLabel}`;
-  }
-  document.getElementById('coach-client-workouts').innerHTML = (wkts && wkts.length) ?
-    wkts.map(w=>{
+  // Workouts + adherence + RPE + session notes (all in parallel)
+  const clientJoinedAt = new Date(viewingClient.created_at);
+  const fourWeeksAgo = new Date(Date.now()-28*24*60*60*1000).toISOString();
+  const [wktsRes, setsRes, notesRes] = await Promise.all([
+    sb.from('workouts').select('id,title,sport,duration_min,completed_at').eq('user_id',clientId).order('completed_at',{ascending:false}).limit(200),
+    sb.from('workout_sets').select('rpe').eq('user_id',clientId).not('rpe','is',null).gte('logged_at',fourWeeksAgo),
+    sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',currentUser.id)
+  ]);
+  const wkts = wktsRes.data || [];
+  const sets = setsRes.data || [];
+  const noteMap = Object.fromEntries((notesRes.data||[]).map(n=>[n.workout_id,n.note]));
+
+  // Workout count
+  document.getElementById('cc-workouts').textContent = wkts.length || '0';
+
+  // Adherence % — workouts done vs expected since client joined
+  const daysActive = Math.max(7,(Date.now()-clientJoinedAt)/(1000*60*60*24));
+  const weeksActive = daysActive/7;
+  const expectedWkts = Math.max(1, Math.round(weeksActive*(p.days_available||3)));
+  const adherencePct = Math.min(100,Math.round((wkts.length/expectedWkts)*100));
+  const adherenceColor = adherencePct>=80?'var(--accent)':adherencePct>=50?'#f5a623':'var(--lava-1)';
+  document.getElementById('cc-adherence').innerHTML = `<span style="color:${adherenceColor}">${adherencePct}%</span>`;
+
+  // Avg RPE (last 4 weeks)
+  const avgRpe = sets.length ? (sets.reduce((s,r)=>s+(+r.rpe),0)/sets.length).toFixed(1) : '—';
+  document.getElementById('cc-rpe').textContent = avgRpe;
+
+  // Render recent workouts with session note support
+  const recentWkts = wkts.slice(0,15);
+  document.getElementById('coach-client-workouts').innerHTML = recentWkts.length ?
+    recentWkts.map(w=>{
       const dAgo = Math.floor((Date.now()-new Date(w.completed_at))/(1000*60*60*24));
       const rel = dAgo===0?'Today':dAgo===1?'Yesterday':`${dAgo}d ago`;
-      return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${rel} · ${new Date(w.completed_at).toLocaleDateString()}</div></div><div style="font-size:12px;color:var(--accent);font-weight:700">${w.duration_min?w.duration_min+'m':'—'}</div></div>`;
+      const existingNote = noteMap[w.id]||'';
+      return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${rel} · ${new Date(w.completed_at).toLocaleDateString()}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--accent);font-weight:700">${w.duration_min?w.duration_min+'m':'—'}</span>
+            <button onclick="toggleWorkoutNote('${w.id}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--muted);font-size:11px;cursor:pointer">${existingNote?'Edit note':'+ Note'}</button>
+          </div>
+        </div>
+        ${existingNote?`<div id="note-display-${w.id}" style="margin-top:8px;font-size:12px;color:var(--muted);font-style:italic;border-left:2px solid var(--accent);padding-left:8px">${escapeHtml(existingNote)}</div>`:`<div id="note-display-${w.id}"></div>`}
+        <div id="note-edit-${w.id}" style="display:none;margin-top:8px">
+          <textarea rows="2" id="note-ta-${w.id}" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:12px;box-sizing:border-box;resize:none">${escapeHtml(existingNote)}</textarea>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button onclick="saveWorkoutNote('${w.id}')" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700">Save</button>
+            <button onclick="toggleWorkoutNote('${w.id}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted)">Cancel</button>
+          </div>
+        </div>
+      </div>`;
     }).join('') :
     '<div style="color:var(--muted);font-size:13px;padding:12px 0">No workouts yet</div>';
   // PRs
@@ -3537,6 +3623,30 @@ async function saveClientNotes(){
     if(error) throw error;
     showToast('Notes saved');
   } catch(e){ showToast('Error: ' + e.message); }
+}
+
+function toggleWorkoutNote(workoutId){
+  const ed = document.getElementById(`note-edit-${workoutId}`);
+  if(ed) ed.style.display = ed.style.display==='none'?'block':'none';
+}
+
+async function saveWorkoutNote(workoutId){
+  const ta = document.getElementById(`note-ta-${workoutId}`);
+  if(!ta||!viewingClient) return;
+  const note = ta.value.trim();
+  try {
+    const {error} = await sb.from('coach_workout_notes').upsert(
+      {coach_id:currentUser.id, workout_id:workoutId, note, updated_at:new Date().toISOString()},
+      {onConflict:'coach_id,workout_id'}
+    );
+    if(error) throw error;
+    const disp = document.getElementById(`note-display-${workoutId}`);
+    if(disp) disp.innerHTML = note ? `<div style="margin-top:8px;font-size:12px;color:var(--muted);font-style:italic;border-left:2px solid var(--accent);padding-left:8px">${escapeHtml(note)}</div>` : '';
+    const btn = ta.closest('div[style*="background:var(--surface)"]')?.querySelector('button[onclick*="toggleWorkoutNote"]');
+    if(btn) btn.textContent = note ? 'Edit note' : '+ Note';
+    toggleWorkoutNote(workoutId);
+    showToast('Note saved');
+  } catch(e){ showToast('Error: '+e.message); }
 }
 
 async function removeClient(){
@@ -3622,10 +3732,14 @@ async function adminReview(userId, approve, noteElId){
 // ── CUSTOM PROGRAM BUILDER ──
 let pbDays = []; // [{title, focus, minutes, exercises:[{name,sets,reps,weight,rest,cues}]}]
 let editingProgramId = null;
+let coachTemplates = [];
+let saveTemplateDayIdx = null;
 
 function initProgramBuilder(){
   editingProgramId = null;
   document.getElementById('prog-builder-title').textContent = 'New Program';
+  const backBtn = document.getElementById('pb-back-btn');
+  if(backBtn){ backBtn.onclick=()=>{showS('s-coach');loadCoachScreen();}; backBtn.innerHTML='<i class="ti ti-chevron-left"></i> Portal'; }
   document.getElementById('pb-name').value='';
   document.getElementById('pb-sport').value='';
   document.getElementById('pb-days').value='4';
@@ -3641,21 +3755,32 @@ function addBuilderDay(){
   renderPbDays();
 }
 
+let pbDragSrc = null; // {di, ei}
+
 function renderPbDays(){
   const el = document.getElementById('pb-days-list');
   el.innerHTML = pbDays.map((day, di)=>`
     <div class="prog-builder-day">
       <div class="prog-builder-day-hdr">
-        <div style="flex:1;display:flex;gap:8px;align-items:center">
-          <input value="${escapeHtml(day.title)}" oninput="pbDays[${di}].title=this.value" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;font-weight:700">
-          <input value="${escapeHtml(day.focus)}" placeholder="Focus" oninput="pbDays[${di}].focus=this.value" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:12px;color:var(--muted)">
+        <div style="flex:1;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input value="${escapeHtml(day.title)}" oninput="pbDays[${di}].title=this.value" style="flex:1;min-width:100px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;font-weight:700">
+          <input value="${escapeHtml(day.focus)}" placeholder="Focus" oninput="pbDays[${di}].focus=this.value" style="flex:1;min-width:80px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:12px">
+          <div style="display:flex;gap:4px">
+            <button onclick="openTemplatePicker(${di})" title="Load template" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer"><i class="ti ti-download"></i> Load</button>
+            <button onclick="openSaveTemplate(${di})" title="Save as template" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer"><i class="ti ti-bookmark"></i></button>
+          </div>
         </div>
         ${pbDays.length>1?`<button onclick="pbDays.splice(${di},1);renderPbDays()" style="color:var(--lava-1);margin-left:8px;font-size:18px"><i class="ti ti-x"></i></button>`:''}
       </div>
-      <div class="prog-builder-exercises">
+      <div class="prog-builder-exercises" id="pb-ex-list-${di}">
         ${day.exercises.map((ex, ei)=>`
-          <div class="prog-ex-row">
-            <div class="client-avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${ei+1}</div>
+          <div class="prog-ex-row" draggable="true"
+            ondragstart="pbDragSrc={di:${di},ei:${ei}};event.dataTransfer.effectAllowed='move';this.style.opacity='0.4'"
+            ondragend="this.style.opacity='1'"
+            ondragover="event.preventDefault();event.dataTransfer.dropEffect='move'"
+            ondrop="event.preventDefault();pbDropExercise(${di},${ei});renderPbDays()"
+            style="cursor:grab">
+            <div style="color:var(--muted);font-size:14px;flex-shrink:0;padding:0 4px;cursor:grab"><i class="ti ti-grip-vertical"></i></div>
             <div style="flex:1;min-width:0">
               <input value="${escapeHtml(ex.name)}" placeholder="Exercise name" oninput="pbDays[${di}].exercises[${ei}].name=this.value" style="width:100%;background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;padding:0;margin-bottom:4px">
               <div style="display:flex;gap:6px">
@@ -3670,6 +3795,14 @@ function renderPbDays(){
         <button onclick="pbDays[${di}].exercises.push({name:'',sets:3,reps:'8',weight:'—',rest:90,cues:''});renderPbDays()" style="color:var(--accent);font-size:12px;font-weight:700;padding:8px 0;text-align:left"><i class="ti ti-plus"></i> Add Exercise</button>
       </div>
     </div>`).join('');
+}
+
+function pbDropExercise(targetDi, targetEi){
+  if(!pbDragSrc || pbDragSrc.di !== targetDi) return;
+  const exs = pbDays[targetDi].exercises;
+  const [moved] = exs.splice(pbDragSrc.ei, 1);
+  exs.splice(targetEi, 0, moved);
+  pbDragSrc = null;
 }
 
 async function saveProgramBuilder(){
@@ -3733,6 +3866,145 @@ async function editCustomProgram(progId){
   showS('s-coach-program');
 }
 
+// ── TEMPLATE LIBRARY ──
+async function openTemplatePicker(di){
+  saveTemplateDayIdx = di;
+  const modal = document.getElementById('template-modal');
+  modal.style.display = 'flex';
+  const list = document.getElementById('template-picker-list');
+  list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">Loading...</div>';
+  const {data, error} = await sb.from('coach_workout_templates').select('*').eq('coach_id', currentUser.id).order('created_at',{ascending:false});
+  coachTemplates = data || [];
+  if(error || !coachTemplates.length){
+    list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">No templates saved yet.<br><small>Use the bookmark icon on a day to save one.</small></div>';
+    return;
+  }
+  list.innerHTML = coachTemplates.map(t=>`
+    <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:14px;font-weight:700">${escapeHtml(t.name)}</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="applyTemplate(${di},'${t.id}',false)" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">Replace</button>
+          <button onclick="applyTemplate(${di},'${t.id}',true)" style="background:none;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Append</button>
+        </div>
+      </div>
+      ${t.description?`<div style="font-size:11px;color:var(--muted)">${escapeHtml(t.description)}</div>`:''}
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${(t.exercises||[]).length} exercises · <button onclick="deleteTemplate('${t.id}')" style="background:none;border:none;color:var(--lava-1);font-size:11px;cursor:pointer">Delete</button></div>
+    </div>`).join('');
+}
+
+function closeTemplatePicker(){
+  document.getElementById('template-modal').style.display = 'none';
+  saveTemplateDayIdx = null;
+}
+
+function applyTemplate(di, templateId, append){
+  const t = coachTemplates.find(x=>x.id===templateId);
+  if(!t) return;
+  const exs = (t.exercises||[]).map(e=>({name:e.name||'',sets:e.sets||3,reps:e.reps||'8',weight:e.weight||'—',rest:e.rest||90,cues:e.cues||''}));
+  if(append) pbDays[di].exercises = [...pbDays[di].exercises, ...exs];
+  else pbDays[di].exercises = exs;
+  closeTemplatePicker();
+  renderPbDays();
+  showToast(append ? 'Template appended' : 'Template loaded');
+}
+
+async function deleteTemplate(templateId){
+  if(!confirm('Delete this template?')) return;
+  await sb.from('coach_workout_templates').delete().eq('id', templateId).eq('coach_id', currentUser.id);
+  coachTemplates = coachTemplates.filter(t=>t.id!==templateId);
+  if(saveTemplateDayIdx !== null) openTemplatePicker(saveTemplateDayIdx);
+}
+
+function openSaveTemplate(di){
+  saveTemplateDayIdx = di;
+  document.getElementById('save-template-name').value = pbDays[di].title || '';
+  document.getElementById('save-template-desc').value = '';
+  const modal = document.getElementById('save-template-modal');
+  modal.style.display = 'flex';
+  setTimeout(()=>document.getElementById('save-template-name').focus(), 100);
+}
+
+function closeSaveTemplate(){
+  document.getElementById('save-template-modal').style.display = 'none';
+  saveTemplateDayIdx = null;
+}
+
+async function confirmSaveTemplate(){
+  const name = document.getElementById('save-template-name').value.trim();
+  if(!name){ showToast('Enter a name'); return; }
+  const di = saveTemplateDayIdx;
+  if(di === null) return;
+  const exercises = pbDays[di].exercises.map(e=>({name:e.name,sets:e.sets,reps:e.reps,weight:e.weight,rest:e.rest,cues:e.cues}));
+  const desc = document.getElementById('save-template-desc').value.trim();
+  const {error} = await sb.from('coach_workout_templates').insert({coach_id:currentUser.id, name, description:desc||null, exercises});
+  if(error){ showToast('Error: '+error.message); return; }
+  closeSaveTemplate();
+  showToast('Template saved!');
+}
+
+// ── AI PROGRAM SUGGESTION FOR CLIENT ──
+async function suggestAiProgramForClient(){
+  if(!viewingClient) return;
+  const btn = document.getElementById('btn-ai-program');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> Generating...';
+  try {
+    const p = viewingClient.profile;
+    const profile = {
+      name: p.name,
+      sport: p.sport,
+      experience_level: p.experience_level || 'intermediate',
+      primary_goal: p.primary_goal,
+      equipment: p.equipment,
+      days_per_week: p.days_available || 4,
+      injuries: p.injuries || '',
+      age: p.age,
+      bodyweight_kg: p.bodyweight_kg,
+      coach_notes: p.coach_notes || ''
+    };
+    // Fetch exercise names for the AI to pick from
+    const {data:exData} = await sb.from('personal_records').select('exercise_name').eq('user_id', viewingClient.client_id).limit(30);
+    const knownExercises = (exData||[]).map(e=>e.exercise_name);
+    const res = await aiCall('program', {profile, exercises: knownExercises, lang: aiLang()});
+    if(res.error) throw new Error(res.error);
+    const prog = res.data;
+    if(!prog || !prog.days) throw new Error('AI returned unexpected format');
+    // Pre-fill program builder
+    document.getElementById('pb-name').value = prog.name || (p.name ? p.name+"'s Program" : 'Custom Program');
+    document.getElementById('pb-sport').value = p.sport || '';
+    document.getElementById('pb-days').value = prog.days_per_week || p.days_available || 4;
+    document.getElementById('pb-weeks').value = prog.weeks || 8;
+    document.getElementById('pb-level').value = p.experience_level || 'intermediate';
+    document.getElementById('pb-error').style.display = 'none';
+    editingProgramId = null;
+    document.getElementById('prog-builder-title').textContent = 'AI Suggestion — Edit & Save';
+    pbDays = prog.days.map(d=>({
+      title: d.title || 'Day',
+      focus: d.focus || '',
+      minutes: 60,
+      exercises: (d.exercises||[]).map(e=>({
+        name: e.name || '',
+        sets: e.sets || 3,
+        reps: e.reps || '8',
+        weight: e.target_weight || '—',
+        rest: e.rest_seconds || 90,
+        cues: e.cues || ''
+      }))
+    }));
+    renderPbDays();
+    // Back button goes to client detail, not portal
+    const backBtn = document.getElementById('pb-back-btn');
+    if(backBtn) { backBtn.onclick = ()=>showS('s-coach-client'); backBtn.innerHTML = '<i class="ti ti-chevron-left"></i> Client'; }
+    showS('s-coach-program');
+  } catch(e){
+    showToast('AI error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-sparkles"></i> AI Program Suggestion';
+  }
+}
+
 // ── INIT ──
 document.addEventListener('visibilitychange',async()=>{
   // Re-acquire wake lock if we lost it during active workout
@@ -3744,6 +4016,8 @@ document.addEventListener('visibilitychange',async()=>{
 (async()=>{
   renderWeekCal();
   applyUnitsToUI();
+  coachEntry = /[?&#]coach\b/i.test(location.search + location.hash);
+  if(coachEntry) applyCoachAuthBranding();
   const {data:{session}}=await sb.auth.getSession();
   if(session?.user) await onLogin(session.user);
 })();
