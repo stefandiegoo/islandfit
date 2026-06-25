@@ -377,17 +377,19 @@ async function loadAll(){
   // Bulk fetch workouts, rpe sets, PRs, notes for all clients at once
   const fourWk = new Date(Date.now()-28*864e5).toISOString();
   const sevenDays = Date.now()-7*864e5;
-  let workouts=[], sets=[], prs=[], notes=[];
+  let workouts=[], sets=[], prs=[], notes=[], pendingFc=[];
   if(ids.length){
-    const [w,s,r,n] = await Promise.all([
+    const [w,s,r,n,fc] = await Promise.all([
       sb.from('workouts').select('id,title,sport,duration_min,completed_at,user_id').in('user_id',ids).order('completed_at',{ascending:false}),
       sb.from('workout_sets').select('user_id,rpe').in('user_id',ids).not('rpe','is',null).gte('logged_at',fourWk),
       sb.from('personal_records').select('user_id,exercise_name,weight_kg,reps').in('user_id',ids).order('weight_kg',{ascending:false}),
-      sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',me_.id)
+      sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',me_.id),
+      sb.from('form_checks').select('client_id').eq('coach_id',me_.id).eq('status','pending')
     ]);
-    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[];
+    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[]; pendingFc=fc.data||[];
   }
   const noteMap = Object.fromEntries(notes.map(x=>[x.workout_id,x.note]));
+  const fcPendingMap = {}; pendingFc.forEach(x=>{ fcPendingMap[x.client_id]=(fcPendingMap[x.client_id]||0)+1; });
   // Assemble per-client
   clients = (links||[]).map(l=>{
     const pr = profiles.find(x=>x.id===l.client_id) || {name:'—',sport:'—'};
@@ -399,7 +401,7 @@ async function loadAll(){
     const expected = Math.max(1, Math.round(weeks*(pr.days_available||3)));
     const adherence = Math.min(100, Math.round((cw.length/expected)*100));
     const avgRpe = cs.length ? (cs.reduce((a,b)=>a+(+b.rpe),0)/cs.length) : null;
-    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays };
+    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays, pendingFc:fcPendingMap[l.client_id]||0 };
   });
   renderStats();
   renderAlerts();
@@ -426,6 +428,8 @@ function renderAlerts(){
   active.forEach(c=>{
     const last = c.workouts.length ? c.workouts[0].completed_at : null;
     const since = daysSince(last);
+    // 0. Form checks awaiting review — highest priority
+    if(c.pendingFc>0) alerts.push({c, level:'red', icon:'ti-video', tag:'Form check', msg:c.pendingFc+' video'+(c.pendingFc>1?'s':'')+' awaiting your review'});
     // 1. Inactive — no workout in a while
     if(since>=10) alerts.push({c, level:'red', icon:'ti-zzz', tag:'Inactive', msg:(c.workouts.length?since+' days since last workout':'never logged a workout')});
     else if(since>=6) alerts.push({c, level:'amber', icon:'ti-clock-exclamation', tag:'Slipping', msg:since+' days since last workout'});
@@ -561,6 +565,9 @@ async function renderDetail(){
       <button class="btn btn-primary" style="padding:12px 18px" onclick="sendMessage()"><i class="ti ti-send"></i></button>
     </div>
 
+    <div class="section-lbl">Form Checks <span id="fc-count" style="text-transform:none;color:var(--amber);font-weight:700"></span></div>
+    <div id="fc-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
     <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
@@ -572,6 +579,45 @@ async function renderDetail(){
   `;
   loadMessages();
   renderProgress();
+  renderFormChecks();
+}
+
+// ── FORM CHECKS (coach reviews client lift videos) ──
+async function renderFormChecks(){
+  const c = selected; if(!c) return;
+  const wrap = $('fc-wrap'); if(!wrap) return;
+  const {data:fcs} = await sb.from('form_checks').select('*').eq('coach_id',me_.id).eq('client_id',c.client_id).order('created_at',{ascending:false});
+  const countEl = $('fc-count');
+  if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No form checks submitted yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  const pending = fcs.filter(f=>f.status!=='reviewed' && !f.coach_feedback).length;
+  if(countEl) countEl.textContent = pending ? '· '+pending+' to review' : '';
+  const paths = fcs.map(f=>f.video_path);
+  const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
+  const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+  wrap.innerHTML = fcs.map(f=>{
+    const url = urlMap[f.video_path];
+    const reviewed = f.status==='reviewed' || f.coach_feedback;
+    return `<div style="background:var(--surface2);border:1px solid ${reviewed?'var(--border)':'rgba(245,166,35,0.3)'};border-radius:12px;padding:13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:700">${esc(f.exercise_name)}</div>
+        <span class="pill ${reviewed?'pill-green':'pill-amber'}">${reviewed?'Reviewed':'Pending'}</span>
+      </div>
+      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:340px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">Client: ${esc(f.client_note)}</div>`:''}
+      <textarea class="txta" id="fcfb-${f.id}" rows="2" placeholder="Technique feedback for the client..." style="margin-top:8px">${esc(f.coach_feedback||'')}</textarea>
+      <button class="btn btn-primary" style="margin-top:6px;padding:9px 16px;font-size:13px" onclick="saveFormCheckFeedback('${f.id}')"><i class="ti ti-send"></i> ${reviewed?'Update feedback':'Send feedback'}</button>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+async function saveFormCheckFeedback(id){
+  const fb = $('fcfb-'+id).value.trim();
+  if(!fb){ toast('Write some feedback first'); return; }
+  const {error} = await sb.from('form_checks').update({coach_feedback:fb, status:'reviewed', reviewed_at:new Date().toISOString()}).eq('id', id);
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Feedback sent to client');
+  renderFormChecks();
 }
 
 // ── PROGRESS CHART (estimated 1RM over time) ──
