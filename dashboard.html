@@ -377,19 +377,22 @@ async function loadAll(){
   // Bulk fetch workouts, rpe sets, PRs, notes for all clients at once
   const fourWk = new Date(Date.now()-28*864e5).toISOString();
   const sevenDays = Date.now()-7*864e5;
-  let workouts=[], sets=[], prs=[], notes=[], pendingFc=[];
+  let workouts=[], sets=[], prs=[], notes=[], pendingFc=[], latestCheckins=[];
   if(ids.length){
-    const [w,s,r,n,fc] = await Promise.all([
+    const thisWeek = ciWeekDateDash();
+    const [w,s,r,n,fc,ci] = await Promise.all([
       sb.from('workouts').select('id,title,sport,duration_min,completed_at,user_id').in('user_id',ids).order('completed_at',{ascending:false}),
       sb.from('workout_sets').select('user_id,rpe').in('user_id',ids).not('rpe','is',null).gte('logged_at',fourWk),
       sb.from('personal_records').select('user_id,exercise_name,weight_kg,reps').in('user_id',ids).order('weight_kg',{ascending:false}),
       sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',me_.id),
-      sb.from('form_checks').select('client_id').eq('coach_id',me_.id).eq('status','pending')
+      sb.from('form_checks').select('client_id').eq('coach_id',me_.id).eq('status','pending'),
+      sb.from('weekly_checkins').select('client_id,week_date').in('client_id',ids).gte('week_date',thisWeek)
     ]);
-    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[]; pendingFc=fc.data||[];
+    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[]; pendingFc=fc.data||[]; latestCheckins=ci.data||[];
   }
   const noteMap = Object.fromEntries(notes.map(x=>[x.workout_id,x.note]));
   const fcPendingMap = {}; pendingFc.forEach(x=>{ fcPendingMap[x.client_id]=(fcPendingMap[x.client_id]||0)+1; });
+  const checkinThisWeek = new Set(latestCheckins.map(x=>x.client_id));
   // Assemble per-client
   clients = (links||[]).map(l=>{
     const pr = profiles.find(x=>x.id===l.client_id) || {name:'—',sport:'—'};
@@ -401,7 +404,7 @@ async function loadAll(){
     const expected = Math.max(1, Math.round(weeks*(pr.days_available||3)));
     const adherence = Math.min(100, Math.round((cw.length/expected)*100));
     const avgRpe = cs.length ? (cs.reduce((a,b)=>a+(+b.rpe),0)/cs.length) : null;
-    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays, pendingFc:fcPendingMap[l.client_id]||0 };
+    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays, pendingFc:fcPendingMap[l.client_id]||0, checkedInThisWeek:checkinThisWeek.has(l.client_id) };
   });
   renderStats();
   renderAlerts();
@@ -437,6 +440,9 @@ function renderAlerts(){
     else if(c.workouts.length>=2 && c.adherence<50) alerts.push({c, level:'amber', icon:'ti-chart-arrows-vertical', tag:'Low adherence', msg:c.adherence+'% of expected sessions'});
     // 3. Overreaching — sustained very high RPE
     if(c.avgRpe!=null && c.avgRpe>=9 && since<6) alerts.push({c, level:'amber', icon:'ti-flame', tag:'High RPE', msg:'avg RPE '+c.avgRpe.toFixed(1)+' — watch for overtraining'});
+    // 4. No weekly check-in (only flag if client has been around 2+ weeks)
+    const joinedWeeks = (Date.now()-new Date(c.created_at))/(7*864e5);
+    if(joinedWeeks>=2 && !c.checkedInThisWeek) alerts.push({c, level:'amber', icon:'ti-clipboard-check', tag:'No check-in', msg:'no weekly check-in submitted yet this week'});
   });
   // Sort: red first
   alerts.sort((a,b)=> (a.level==='red'?0:1)-(b.level==='red'?0:1));
@@ -565,6 +571,9 @@ async function renderDetail(){
       <button class="btn btn-primary" style="padding:12px 18px" onclick="sendMessage()"><i class="ti ti-send"></i></button>
     </div>
 
+    <div class="section-lbl">Weekly Check-ins <span id="ci-count" style="text-transform:none;color:var(--lava-2);font-weight:700"></span></div>
+    <div id="ci-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Form Checks <span id="fc-count" style="text-transform:none;color:var(--amber);font-weight:700"></span></div>
     <div id="fc-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
@@ -580,6 +589,37 @@ async function renderDetail(){
   loadMessages();
   renderProgress();
   renderFormChecks();
+  renderCheckins();
+}
+
+// ── WEEKLY CHECK-INS (coach reads client check-ins) ──
+function ciWeekDateDash(){
+  const d=new Date(); d.setHours(0,0,0,0);
+  const day=d.getDay(); const diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+async function renderCheckins(){
+  const c = selected; if(!c) return;
+  const wrap = $('ci-wrap'); if(!wrap) return;
+  const {data:rows} = await sb.from('weekly_checkins').select('*').eq('client_id',c.client_id).order('week_date',{ascending:false}).limit(12);
+  const countEl = $('ci-count');
+  if(!rows||!rows.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No check-ins yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  const thisWeek = ciWeekDateDash();
+  const hasThisWeek = rows.some(r=>r.week_date===thisWeek);
+  if(countEl) countEl.textContent = hasThisWeek ? '' : '· no check-in this week';
+  const bar=n=>{const pct=Math.round(n/5*100);const col=n>=4?'var(--accent)':n>=3?'#f5a623':'var(--lava-1)';return `<div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div></div>`;};
+  wrap.innerHTML = rows.map((r,i)=>`
+    <div style="background:var(--surface2);border:1px solid ${i===0?'rgba(255,140,66,0.4)':'var(--border)'};border-radius:12px;padding:13px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:8px">${i===0?'<span style="color:#f5a623">Latest · </span>':''}Week of ${new Date(r.week_date+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);width:44px">Energy</span>${bar(r.energy)}<span style="font-size:12px;font-weight:700;color:var(--text-soft);width:14px">${r.energy}</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);width:44px">Sleep</span>${bar(r.sleep)}<span style="font-size:12px;font-weight:700;color:var(--text-soft);width:14px">${r.sleep}</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);width:44px">Stress</span>${bar(r.stress)}<span style="font-size:12px;font-weight:700;color:var(--text-soft);width:14px">${r.stress}</span></div>
+      </div>
+      ${r.weight_kg?`<div style="font-size:11px;color:var(--muted)">Weight: <b style="color:var(--text)">${r.weight_kg} kg</b></div>`:''}
+      ${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:6px;border-left:2px solid var(--border-bright);padding-left:8px">"${esc(r.notes)}"</div>`:''}
+    </div>`).join('');
 }
 
 // ── FORM CHECKS (coach reviews client lift videos) ──

@@ -518,6 +518,18 @@ body::before{
 .cc-them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
 .cc-me{align-self:flex-end;background:linear-gradient(135deg,rgba(0,255,163,0.18),rgba(34,211,238,0.12));border:1px solid rgba(0,255,163,0.25);border-bottom-right-radius:4px}
 .cc-time{font-size:10px;color:var(--muted);margin-top:3px;opacity:0.8}
+/* weekly check-in */
+.ci-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+.ci-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ci-label{font-size:13px;color:var(--text-soft);font-weight:600}
+.ci-stars{display:flex;gap:4px}
+.ci-star{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:15px;font-weight:800;transition:all 0.15s;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ci-star.active{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));border-color:var(--aurora-1);color:#000}
+.ci-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px}
+.ci-card-date{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:8px}
+.ci-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.ci-metric{font-size:11px;background:var(--surface2);border-radius:8px;padding:4px 9px;color:var(--text-soft)}
+.ci-metric b{color:var(--text)}
 </style>
 </head>
 <body>
@@ -1256,6 +1268,10 @@ body::before{
     <div class="section-label">Coach Notes (visible to AI coach)</div>
     <textarea id="coach-client-notes" class="ai-onboard-text" rows="3" placeholder="Injuries, goals, things to keep in mind..." style="margin-bottom:8px"></textarea>
     <button class="btn btn-primary" onclick="saveClientNotes()" style="margin-bottom:20px">Save Notes</button>
+
+    <!-- Weekly check-ins -->
+    <div class="section-label">Weekly Check-ins <span id="coach-ci-count" style="color:var(--lava-2)"></span></div>
+    <div id="coach-client-checkins"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
     <!-- Form checks -->
     <div class="section-label">Form Checks <span id="coach-fc-count" style="color:var(--amber)"></span></div>
@@ -3651,6 +3667,34 @@ async function openClientDetail(clientId){
     '<div style="color:var(--muted);font-size:13px;padding:12px 0">No PRs yet</div>';
   renderCoachClientProgress(clientId);
   renderCoachFormChecks(clientId);
+  renderCoachCheckins(clientId);
+}
+
+// ── COACH: client weekly check-ins ──
+async function renderCoachCheckins(clientId){
+  const wrap = document.getElementById('coach-client-checkins'); if(!wrap) return;
+  const {data:rows} = await sb.from('weekly_checkins').select('*').eq('client_id',clientId).order('week_date',{ascending:false}).limit(12);
+  const countEl = document.getElementById('coach-ci-count');
+  if(!rows||!rows.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No check-ins yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  const thisWeek = ciWeekDate ? ciWeekDate() : (()=>{const d=new Date();d.setHours(0,0,0,0);const day=d.getDay();const diff=day===0?-6:1-day;d.setDate(d.getDate()+diff);return d.toISOString().slice(0,10);})();
+  const hasThisWeek = rows.some(r=>r.week_date===thisWeek);
+  if(countEl) countEl.textContent = hasThisWeek ? '' : '· no check-in this week';
+  const bar=n=>{const pct=Math.round(n/5*100);const col=n>=4?'var(--aurora-1)':n>=3?'var(--lava-2)':'var(--lava-1)';return `<div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div></div>`;};
+  wrap.innerHTML = rows.map((r,i)=>{
+    const latest = i===0;
+    return `<div class="ci-card" style="${latest?'border-color:rgba(255,140,66,0.4)':''}">
+      <div class="ci-card-date">${latest?'<b style="color:var(--lava-2)">Latest · </b>':''}Week of ${new Date(r.week_date+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);width:44px">Energy</span>${bar(r.energy)}<span style="font-size:12px;font-weight:700;color:var(--text-soft);width:12px">${r.energy}</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);width:44px">Sleep</span>${bar(r.sleep)}<span style="font-size:12px;font-weight:700;color:var(--text-soft);width:12px">${r.sleep}</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--muted);width:44px">Stress</span>${bar(r.stress)}<span style="font-size:12px;font-weight:700;color:var(--text-soft);width:12px">${r.stress}</span></div>
+      </div>
+      <div class="ci-metrics">
+        ${r.weight_kg?`<span class="ci-metric"><b>Weight</b> ${r.weight_kg} kg</span>`:''}
+      </div>
+      ${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:4px">"${escapeHtml(r.notes)}"</div>`:''}
+    </div>`;
+  }).join('');
 }
 
 // ── COACH: review client form-check videos ──
@@ -3810,6 +3854,7 @@ async function loadMyCoachSection(){
         <div style="display:flex;gap:6px">
           <button onclick="toggleCoachChat('${a.coach_id}')" id="chat-toggle-${a.coach_id}" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-message"></i> Message</button>
           <button onclick="toggleFormCheck('${a.coach_id}')" id="fc-toggle-${a.coach_id}" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-video"></i> Form check</button>
+          <button onclick="toggleCheckin('${a.coach_id}')" style="font-size:11px;color:var(--lava-2);padding:6px 10px;border:1px solid var(--lava-2);border-radius:8px"><i class="ti ti-clipboard-check"></i> Check-in</button>
           <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
         </div>
       </div>
@@ -3827,6 +3872,21 @@ async function loadMyCoachSection(){
         <input type="file" id="fc-file-${a.coach_id}" accept="video/*" style="width:100%;font-size:12px;color:var(--text-soft);margin-bottom:8px">
         <button class="btn btn-primary" style="width:100%" id="fc-send-${a.coach_id}" onclick="sendFormCheck('${a.coach_id}')"><i class="ti ti-upload"></i> Send form check</button>
         <div id="fc-list-${a.coach_id}" style="margin-top:12px"></div>
+      </div>
+      <div id="ci-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Quick weekly check-in — how are you feeling this week? Your coach sees this.</div>
+        <div class="ci-wrap">
+          <div class="ci-row"><span class="ci-label"><i class="ti ti-bolt"></i> Energy</span><div class="ci-stars" id="ci-energy-${a.coach_id}">${[1,2,3,4,5].map(n=>`<button class="ci-star" data-v="${n}" onclick="setCiVal('energy','${a.coach_id}',${n})">${n}</button>`).join('')}</div></div>
+          <div class="ci-row"><span class="ci-label"><i class="ti ti-moon"></i> Sleep</span><div class="ci-stars" id="ci-sleep-${a.coach_id}">${[1,2,3,4,5].map(n=>`<button class="ci-star" data-v="${n}" onclick="setCiVal('sleep','${a.coach_id}',${n})">${n}</button>`).join('')}</div></div>
+          <div class="ci-row"><span class="ci-label"><i class="ti ti-brain"></i> Stress</span><div class="ci-stars" id="ci-stress-${a.coach_id}">${[1,2,3,4,5].map(n=>`<button class="ci-star" data-v="${n}" onclick="setCiVal('stress','${a.coach_id}',${n})">${n}</button>`).join('')}</div></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="ci-label" style="white-space:nowrap"><i class="ti ti-scale"></i> Weight</span>
+            <input id="ci-weight-${a.coach_id}" type="number" min="30" max="300" step="0.1" placeholder="${units==='imperial'?'lbs':'kg'}" style="width:90px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:10px;font-size:14px">
+          </div>
+          <textarea id="ci-notes-${a.coach_id}" rows="2" placeholder="Anything notable this week? (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px;resize:vertical"></textarea>
+          <button class="btn btn-primary" style="width:100%" id="ci-send-${a.coach_id}" onclick="submitCheckin('${a.coach_id}')"><i class="ti ti-clipboard-check"></i> Submit check-in</button>
+        </div>
+        <div id="ci-history-${a.coach_id}"></div>
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
@@ -3930,6 +3990,84 @@ async function loadClientFormChecks(coachId){
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
     </div>`;
   }).join('');
+}
+
+// ── WEEKLY CHECK-IN (client side) ──
+const ciVals = {}; // {coachId: {energy, sleep, stress}}
+
+function toggleCheckin(coachId){
+  const box = document.getElementById('ci-box-'+coachId);
+  if(!box) return;
+  const open = box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadCheckinHistory(coachId);
+}
+
+function setCiVal(field, coachId, n){
+  if(!ciVals[coachId]) ciVals[coachId]={};
+  ciVals[coachId][field]=n;
+  const row = document.getElementById('ci-'+field+'-'+coachId);
+  if(!row) return;
+  row.querySelectorAll('.ci-star').forEach(btn=>{
+    btn.classList.toggle('active', parseInt(btn.dataset.v)<=n);
+  });
+}
+
+function ciWeekDate(){
+  const d=new Date(); d.setHours(0,0,0,0);
+  const day=d.getDay(); const diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+
+async function submitCheckin(coachId){
+  const v = ciVals[coachId]||{};
+  if(!v.energy||!v.sleep||!v.stress){ showToast('Rate energy, sleep and stress first'); return; }
+  const weightRaw = document.getElementById('ci-weight-'+coachId).value;
+  let weight_kg = null;
+  if(weightRaw){
+    const w=parseFloat(weightRaw);
+    weight_kg = units==='imperial' ? Math.round(w/2.20462*10)/10 : w;
+  }
+  const notes = document.getElementById('ci-notes-'+coachId).value.trim()||null;
+  const btn = document.getElementById('ci-send-'+coachId);
+  btn.disabled=true; btn.textContent='Saving...';
+  const {error} = await sb.from('weekly_checkins').upsert({
+    client_id: currentUser.id,
+    week_date: ciWeekDate(),
+    energy: v.energy, sleep: v.sleep, stress: v.stress,
+    weight_kg, notes
+  }, {onConflict:'client_id,week_date'});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-clipboard-check"></i> Submit check-in';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Check-in submitted!');
+  ciVals[coachId]={};
+  ['energy','sleep','stress'].forEach(f=>{
+    const row=document.getElementById('ci-'+f+'-'+coachId);
+    if(row) row.querySelectorAll('.ci-star').forEach(b=>b.classList.remove('active'));
+  });
+  document.getElementById('ci-weight-'+coachId).value='';
+  document.getElementById('ci-notes-'+coachId).value='';
+  loadCheckinHistory(coachId);
+}
+
+async function loadCheckinHistory(coachId){
+  const wrap = document.getElementById('ci-history-'+coachId); if(!wrap) return;
+  const {data:rows} = await sb.from('weekly_checkins').select('*').eq('client_id',currentUser.id).order('week_date',{ascending:false}).limit(8);
+  if(!rows||!rows.length){ wrap.innerHTML=''; return; }
+  const dot=n=>'●'.repeat(n)+'○'.repeat(5-n);
+  wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Your recent check-ins</div>'+rows.map(r=>`
+    <div class="ci-card">
+      <div class="ci-card-date">Week of ${new Date(r.week_date+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div>
+      <div class="ci-metrics">
+        <span class="ci-metric"><b>Energy</b> ${dot(r.energy)}</span>
+        <span class="ci-metric"><b>Sleep</b> ${dot(r.sleep)}</span>
+        <span class="ci-metric"><b>Stress</b> ${dot(r.stress)}</span>
+        ${r.weight_kg?`<span class="ci-metric"><b>Weight</b> ${units==='imperial'?Math.round(r.weight_kg*2.20462)+' lbs':r.weight_kg+' kg'}</span>`:''}
+      </div>
+      ${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}
+    </div>`).join('');
 }
 
 async function redeemInviteCode(){
