@@ -702,6 +702,12 @@ body::before{
 
       <div id="onb-program-preview" style="margin-top:8px"></div>
 
+      <div style="margin-top:16px">
+        <div class="onboard-opt-name" style="margin-bottom:8px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700">Peak / competition date <span style="text-transform:none;font-weight:600;color:var(--muted)">· optional</span></div>
+        <input type="date" id="onb-peak" oninput="onbState.peakDate=this.value" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:11px;font-size:15px">
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">If you have a game, meet or race, the plan tapers and peaks into it. Leave blank for a repeating 4-week wave.</div>
+      </div>
+
       <div class="onboard-actions">
         <button class="btn btn-ghost" onclick="onbBack(6)" style="width:auto;padding:15px 22px">← Back</button>
         <button class="btn btn-primary" id="onb-finish" onclick="finishOnboard()" disabled>Let's Go 🔥</button>
@@ -1235,6 +1241,12 @@ body::before{
       </select>
       <button class="btn btn-primary" style="padding:13px 18px;font-size:13px;white-space:nowrap" onclick="assignProgramToClient()">Assign</button>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--muted);white-space:nowrap"><i class="ti ti-flag"></i> Peak date</div>
+      <input type="date" id="coach-peak-date" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:11px 12px;border-radius:10px;font-size:13px">
+      <button class="btn btn-ghost" style="padding:11px 14px;font-size:12px;white-space:nowrap" onclick="saveClientPeakDate()">Save date</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Set the client's game/meet/race date — the plan tapers and peaks into it. Saved automatically when you assign a program too.</div>
     <button id="btn-ai-program" class="btn btn-ghost" style="width:100%;margin-bottom:20px;border:1px dashed var(--accent);color:var(--accent)" onclick="suggestAiProgramForClient()"><i class="ti ti-sparkles"></i> AI Program Suggestion</button>
 
     <!-- Coach notes -->
@@ -1493,11 +1505,18 @@ function levelFactor(){
   return lv==='beginner'?0.88:(lv==='advanced'?1.0:0.94);
 }
 // ── PEAK DATE (Peak-Strength-style: taper & peak into a competition date) ──
-function getPeakDate(){ try{ return localStorage.getItem('if_peak_date')||''; }catch(e){ return ''; } }
+// Source of truth is the profile (so a coach can set it too); localStorage is an offline cache.
+function getPeakDate(){
+  if(currentProfile && currentProfile.peak_date) return currentProfile.peak_date;
+  try{ return localStorage.getItem('if_peak_date')||''; }catch(e){ return ''; }
+}
 function setPeakDate(v){
   try{ if(v) localStorage.setItem('if_peak_date',v); else localStorage.removeItem('if_peak_date'); }catch(e){}
+  if(currentProfile) currentProfile.peak_date = v || null;
   updatePeakInfo();
   if(document.getElementById('s-active')?.classList.contains('active')) renderExercise();
+  // Persist to the profile so it follows the user across devices and is visible to the coach
+  if(currentUser){ sb.from('profiles').update({peak_date: v || null}).eq('id', currentUser.id).then(()=>{}, ()=>{}); }
 }
 function weeksToPeak(){ const d=getPeakDate(); if(!d) return null; return Math.ceil((new Date(d+'T00:00:00')-new Date())/(7*86400000)); }
 function updatePeakInfo(){
@@ -2037,9 +2056,11 @@ async function finishOnboard(){
     equipment:onbState.equipment,
     days_available:onbState.days,
     session_length:onbState.session,
+    peak_date:onbState.peakDate||null,
     current_week:1,
     current_day:1
   }).eq('id',currentUser.id);
+  try{ if(onbState.peakDate) localStorage.setItem('if_peak_date',onbState.peakDate); else localStorage.removeItem('if_peak_date'); }catch(e){}
   // Persist injuries from AI onboarding into coach memory (guarded — needs migration 16; harmless if absent)
   if(onbState.injuries && onbState.injuries.length){
     try{ await sb.from('profiles').update({injuries: Array.isArray(onbState.injuries)?onbState.injuries.join('; '):String(onbState.injuries)}).eq('id',currentUser.id); }catch(e){}
@@ -3453,7 +3474,7 @@ async function loadCoachScreen(){
   const {data:links} = await sb.from('coach_clients').select('client_id, status, source, created_at').eq('coach_id', currentUser.id).order('created_at',{ascending:false});
   if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
   const ids = links.map(l=>l.client_id);
-  const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id, age, primary_goal, equipment, days_available, bodyweight_kg, current_day, coach_notes, injuries').in('id', ids);
+  const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id, age, primary_goal, equipment, days_available, bodyweight_kg, current_day, coach_notes, injuries, peak_date').in('id', ids);
   coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'} }));
   document.getElementById('coach-client-count').textContent = '(' + coachClients.filter(c=>c.status==='active').length + ')';
   renderCoachClientList();
@@ -3543,6 +3564,8 @@ async function openClientDetail(clientId){
   const {data:progs} = await sb.from('programs').select('id, name, sport, is_custom').order('name');
   const sel = document.getElementById('coach-assign-select');
   sel.innerHTML = '<option value="">— Select a program —</option>' + (progs||[]).map(pr=>`<option value="${pr.id}"${pr.id===p.program_id?' selected':''}>${escapeHtml(pr.name)}${pr.is_custom?' (custom)':''}</option>`).join('');
+  // Peak date
+  const peakEl = document.getElementById('coach-peak-date'); if(peakEl) peakEl.value = p.peak_date || '';
   // Notes
   document.getElementById('coach-client-notes').value = p.coach_notes || '';
   // Workouts + adherence + RPE + session notes (all in parallel)
@@ -3610,13 +3633,26 @@ async function assignProgramToClient(){
   if(!viewingClient) return;
   const progId = document.getElementById('coach-assign-select').value;
   if(!progId){ showToast('Select a program first'); return; }
+  const peak = (document.getElementById('coach-peak-date')||{}).value || null;
   try {
-    const {error} = await sb.rpc('coach_assign_program',{p_client:viewingClient.client_id, p_program:progId});
+    const {error} = await sb.rpc('coach_assign_program',{p_client:viewingClient.client_id, p_program:progId, p_peak:peak});
     if(error) throw error;
-    showToast('Program assigned!');
+    if(viewingClient.profile) viewingClient.profile.peak_date = peak;
+    showToast(peak ? 'Program assigned · peaks ' + peak : 'Program assigned!');
     const sel = document.getElementById('coach-assign-select');
     const name = sel.options[sel.selectedIndex].text;
     document.getElementById('coach-client-program').innerHTML = `<div class="coach-badge"><i class="ti ti-barbell"></i> ${escapeHtml(name)}</div>`;
+  } catch(e){ showToast('Error: ' + e.message); }
+}
+
+async function saveClientPeakDate(){
+  if(!viewingClient) return;
+  const peak = (document.getElementById('coach-peak-date')||{}).value || null;
+  try {
+    const {error} = await sb.rpc('coach_set_peak_date',{p_client:viewingClient.client_id, p_peak:peak});
+    if(error) throw error;
+    if(viewingClient.profile) viewingClient.profile.peak_date = peak;
+    showToast(peak ? 'Peak date saved' : 'Peak date cleared');
   } catch(e){ showToast('Error: ' + e.message); }
 }
 
