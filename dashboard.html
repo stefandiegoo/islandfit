@@ -124,6 +124,14 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .ai-ex{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;color:var(--text-soft)}
 .ai-ex+.ai-ex{border-top:1px solid var(--border)}
 
+/* ── MESSAGES ── */
+.msg-thread{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:78%;padding:9px 13px;border-radius:14px;font-size:13px;line-height:1.4;word-break:break-word}
+.msg-them{align-self:flex-start;background:var(--surface3);border-bottom-left-radius:4px}
+.msg-me{align-self:flex-end;background:linear-gradient(135deg,rgba(0,255,163,0.18),rgba(34,211,238,0.12));border:1px solid rgba(0,255,163,0.25);border-bottom-right-radius:4px}
+.msg-time{font-size:10px;color:var(--muted);margin-top:3px;opacity:0.8}
+.msg-empty{color:var(--muted);font-size:13px;text-align:center;padding:14px}
+
 /* ── PROGRAM BUILDER ── */
 .pb-modal-bg{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,0.8);display:flex;align-items:stretch;justify-content:flex-end;padding:0}
 .pb-modal{background:var(--bg);border-left:1px solid var(--border-bright);width:100%;max-width:760px;display:flex;flex-direction:column;overflow:hidden}
@@ -497,12 +505,54 @@ async function renderDetail(){
     <textarea class="txta" id="coach-notes" rows="3" placeholder="Injuries, goals, things to keep in mind...">${esc(p.coach_notes||'')}</textarea>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="saveNotes()"><i class="ti ti-device-floppy"></i> Save notes</button>
 
+    <div class="section-lbl">Messages <span style="text-transform:none;color:var(--muted2);font-weight:600">· two-way chat with ${esc(p.name||'client')}</span></div>
+    <div id="msg-thread" class="msg-thread"><div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">Loading...</div></div>
+    <div class="row-gap" style="margin-top:10px">
+      <input id="msg-input" class="sel" style="flex:1" placeholder="Write a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+      <button class="btn btn-primary" style="padding:12px 18px" onclick="sendMessage()"><i class="ti ti-send"></i></button>
+    </div>
+
     <div class="section-lbl">Recent Workouts</div>
     <div id="wk-list">${recent.length?recent.map(w=>wkHtml(w, c.noteMap[w.id]||'')).join(''):'<div style="color:var(--muted);font-size:13px">No workouts yet</div>'}</div>
 
     <div class="section-lbl">Personal Records</div>
     ${prs.length?`<div class="pr-table">${prs.map(pr=>`<div class="pr-row"><span style="font-weight:600">${esc(pr.exercise_name)}</span><span style="font-weight:800;color:var(--accent)">${(+pr.weight_kg)} kg × ${pr.reps}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">No PRs yet</div>'}
   `;
+  loadMessages();
+}
+
+// ── MESSAGES (two-way coach ⇄ client) ──
+async function loadMessages(){
+  const c = selected; if(!c) return;
+  const {data:msgs,error} = await sb.from('coach_messages').select('*').eq('coach_id',me_.id).eq('client_id',c.client_id).order('created_at',{ascending:true});
+  const box = $('msg-thread'); if(!box) return;
+  if(error){ box.innerHTML='<div class="msg-empty">Could not load messages.</div>'; return; }
+  if(!msgs || !msgs.length){ box.innerHTML='<div class="msg-empty">No messages yet — say hi to '+esc(c.profile.name||'your client')+'.</div>'; return; }
+  box.innerHTML = msgs.map(m=>{
+    const mine = m.sender_id===me_.id;
+    return `<div class="msg ${mine?'msg-me':'msg-them'}">${esc(m.body)}<div class="msg-time">${msgTime(m.created_at)}</div></div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+  // Mark client→coach messages as read
+  const unread = msgs.filter(m=>m.sender_id!==me_.id && !m.read_at).map(m=>m.id);
+  if(unread.length){ await sb.from('coach_messages').update({read_at:new Date().toISOString()}).in('id',unread); }
+}
+
+function msgTime(d){
+  const dt = new Date(d), now = new Date();
+  const sameDay = dt.toDateString()===now.toDateString();
+  return sameDay ? dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : dt.toLocaleDateString()+' '+dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+async function sendMessage(){
+  const c = selected; if(!c) return;
+  const inp = $('msg-input'); const body = inp.value.trim();
+  if(!body) return;
+  inp.value=''; inp.disabled=true;
+  const {error} = await sb.from('coach_messages').insert({coach_id:me_.id, client_id:c.client_id, sender_id:me_.id, body});
+  inp.disabled=false; inp.focus();
+  if(error){ toast('Error: '+error.message); inp.value=body; return; }
+  loadMessages();
 }
 
 function wkHtml(w, note){
