@@ -3465,7 +3465,7 @@ async function openClientDetail(clientId){
   document.getElementById('coach-client-title').textContent = p.name || 'Client';
   showS('s-coach-client');
   // Stats strip
-  document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
+  document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-adherence">...</div><div class="stat-label">Adherence</div></div><div class="stat-card"><div class="stat-num" id="cc-rpe">...</div><div class="stat-label">Avg RPE</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
   // Profile info cards
   const goalMap={lose_weight:'Lose Weight',build_muscle:'Build Muscle',improve_performance:'Improve Performance',general_fitness:'General Fitness',sport_specific:'Sport Specific'};
   const equipMap={full_gym:'Full Gym',home_gym:'Home Gym',dumbbells_only:'Dumbbells Only',bodyweight_only:'Bodyweight',resistance_bands:'Bands'};
@@ -3491,20 +3491,57 @@ async function openClientDetail(clientId){
   sel.innerHTML = '<option value="">— Select a program —</option>' + (progs||[]).map(pr=>`<option value="${pr.id}"${pr.id===p.program_id?' selected':''}>${escapeHtml(pr.name)}${pr.is_custom?' (custom)':''}</option>`).join('');
   // Notes
   document.getElementById('coach-client-notes').value = p.coach_notes || '';
-  // Workouts
-  const {data:wkts} = await sb.from('workouts').select('id,title,sport,duration_min,completed_at').eq('user_id', clientId).order('completed_at',{ascending:false}).limit(10);
-  document.getElementById('cc-workouts').textContent = wkts ? wkts.length : '—';
-  if(wkts && wkts.length) {
-    const lastDate = new Date(wkts[0].completed_at);
-    const daysAgo = Math.floor((Date.now()-lastDate)/(1000*60*60*24));
-    const lastLabel = daysAgo===0?'today':daysAgo===1?'yesterday':`${daysAgo}d ago`;
-    document.getElementById('cc-workouts').title = `Last: ${lastLabel}`;
-  }
-  document.getElementById('coach-client-workouts').innerHTML = (wkts && wkts.length) ?
-    wkts.map(w=>{
+  // Workouts + adherence + RPE + session notes (all in parallel)
+  const clientJoinedAt = new Date(viewingClient.created_at);
+  const fourWeeksAgo = new Date(Date.now()-28*24*60*60*1000).toISOString();
+  const [wktsRes, setsRes, notesRes] = await Promise.all([
+    sb.from('workouts').select('id,title,sport,duration_min,completed_at').eq('user_id',clientId).order('completed_at',{ascending:false}).limit(200),
+    sb.from('workout_sets').select('rpe').eq('user_id',clientId).not('rpe','is',null).gte('logged_at',fourWeeksAgo),
+    sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',currentUser.id)
+  ]);
+  const wkts = wktsRes.data || [];
+  const sets = setsRes.data || [];
+  const noteMap = Object.fromEntries((notesRes.data||[]).map(n=>[n.workout_id,n.note]));
+
+  // Workout count
+  document.getElementById('cc-workouts').textContent = wkts.length || '0';
+
+  // Adherence % — workouts done vs expected since client joined
+  const daysActive = Math.max(7,(Date.now()-clientJoinedAt)/(1000*60*60*24));
+  const weeksActive = daysActive/7;
+  const expectedWkts = Math.max(1, Math.round(weeksActive*(p.days_available||3)));
+  const adherencePct = Math.min(100,Math.round((wkts.length/expectedWkts)*100));
+  const adherenceColor = adherencePct>=80?'var(--accent)':adherencePct>=50?'#f5a623':'var(--lava-1)';
+  document.getElementById('cc-adherence').innerHTML = `<span style="color:${adherenceColor}">${adherencePct}%</span>`;
+
+  // Avg RPE (last 4 weeks)
+  const avgRpe = sets.length ? (sets.reduce((s,r)=>s+(+r.rpe),0)/sets.length).toFixed(1) : '—';
+  document.getElementById('cc-rpe').textContent = avgRpe;
+
+  // Render recent workouts with session note support
+  const recentWkts = wkts.slice(0,15);
+  document.getElementById('coach-client-workouts').innerHTML = recentWkts.length ?
+    recentWkts.map(w=>{
       const dAgo = Math.floor((Date.now()-new Date(w.completed_at))/(1000*60*60*24));
       const rel = dAgo===0?'Today':dAgo===1?'Yesterday':`${dAgo}d ago`;
-      return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${rel} · ${new Date(w.completed_at).toLocaleDateString()}</div></div><div style="font-size:12px;color:var(--accent);font-weight:700">${w.duration_min?w.duration_min+'m':'—'}</div></div>`;
+      const existingNote = noteMap[w.id]||'';
+      return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:13px;font-weight:700">${escapeHtml(w.title||w.sport)}</div><div style="font-size:11px;color:var(--muted)">${rel} · ${new Date(w.completed_at).toLocaleDateString()}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--accent);font-weight:700">${w.duration_min?w.duration_min+'m':'—'}</span>
+            <button onclick="toggleWorkoutNote('${w.id}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--muted);font-size:11px;cursor:pointer">${existingNote?'Edit note':'+ Note'}</button>
+          </div>
+        </div>
+        ${existingNote?`<div id="note-display-${w.id}" style="margin-top:8px;font-size:12px;color:var(--muted);font-style:italic;border-left:2px solid var(--accent);padding-left:8px">${escapeHtml(existingNote)}</div>`:`<div id="note-display-${w.id}"></div>`}
+        <div id="note-edit-${w.id}" style="display:none;margin-top:8px">
+          <textarea rows="2" id="note-ta-${w.id}" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:12px;box-sizing:border-box;resize:none">${escapeHtml(existingNote)}</textarea>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <button onclick="saveWorkoutNote('${w.id}')" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700">Save</button>
+            <button onclick="toggleWorkoutNote('${w.id}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted)">Cancel</button>
+          </div>
+        </div>
+      </div>`;
     }).join('') :
     '<div style="color:var(--muted);font-size:13px;padding:12px 0">No workouts yet</div>';
   // PRs
@@ -3537,6 +3574,30 @@ async function saveClientNotes(){
     if(error) throw error;
     showToast('Notes saved');
   } catch(e){ showToast('Error: ' + e.message); }
+}
+
+function toggleWorkoutNote(workoutId){
+  const ed = document.getElementById(`note-edit-${workoutId}`);
+  if(ed) ed.style.display = ed.style.display==='none'?'block':'none';
+}
+
+async function saveWorkoutNote(workoutId){
+  const ta = document.getElementById(`note-ta-${workoutId}`);
+  if(!ta||!viewingClient) return;
+  const note = ta.value.trim();
+  try {
+    const {error} = await sb.from('coach_workout_notes').upsert(
+      {coach_id:currentUser.id, workout_id:workoutId, note, updated_at:new Date().toISOString()},
+      {onConflict:'coach_id,workout_id'}
+    );
+    if(error) throw error;
+    const disp = document.getElementById(`note-display-${workoutId}`);
+    if(disp) disp.innerHTML = note ? `<div style="margin-top:8px;font-size:12px;color:var(--muted);font-style:italic;border-left:2px solid var(--accent);padding-left:8px">${escapeHtml(note)}</div>` : '';
+    const btn = ta.closest('div[style*="background:var(--surface)"]')?.querySelector('button[onclick*="toggleWorkoutNote"]');
+    if(btn) btn.textContent = note ? 'Edit note' : '+ Note';
+    toggleWorkoutNote(workoutId);
+    showToast('Note saved');
+  } catch(e){ showToast('Error: '+e.message); }
 }
 
 async function removeClient(){
