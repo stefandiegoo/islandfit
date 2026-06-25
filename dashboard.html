@@ -358,7 +358,7 @@ async function loadAll(){
   const ids = (links||[]).map(l=>l.client_id);
   let profiles = [];
   if(ids.length){
-    const {data:pf} = await sb.from('profiles').select('id,name,sport,program_id,age,primary_goal,equipment,days_available,bodyweight_kg,experience_level,current_day,coach_notes,injuries').in('id', ids);
+    const {data:pf} = await sb.from('profiles').select('id,name,sport,program_id,age,primary_goal,equipment,days_available,bodyweight_kg,experience_level,current_day,coach_notes,injuries,peak_date').in('id', ids);
     profiles = pf||[];
   }
   // Bulk fetch workouts, rpe sets, PRs, notes for all clients at once
@@ -499,6 +499,12 @@ async function renderDetail(){
       <select class="sel" id="assign-sel" style="flex:1"><option value="">— Select a program —</option>${(allProgs||[]).map(x=>`<option value="${x.id}"${x.id===p.program_id?' selected':''}>${esc(x.name)}${x.is_custom?' (custom)':''}</option>`).join('')}</select>
       <button class="btn btn-primary" style="padding:12px 18px" onclick="assignProgram()">Assign</button>
     </div>
+    <div class="row-gap" style="margin-bottom:4px;align-items:center">
+      <div style="font-size:12px;color:var(--muted);white-space:nowrap"><i class="ti ti-flag"></i> Peak date</div>
+      <input type="date" class="sel" id="peak-date" style="flex:1" value="${p.peak_date||''}">
+      <button class="btn btn-ghost" style="padding:12px 16px;white-space:nowrap" onclick="savePeakDate()">Save date</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Game / meet / race date — the plan tapers and peaks into it. Saved automatically when you assign a program too.</div>
     <button class="btn btn-ghost btn-block" style="border-style:dashed;border-color:var(--accent);color:var(--accent);margin-bottom:4px" onclick="aiSuggest()"><i class="ti ti-sparkles"></i> AI Program Suggestion</button>
 
     <div class="section-lbl">Coach Notes <span style="text-transform:none;color:var(--muted2);font-weight:600">· visible to AI coach</span></div>
@@ -574,11 +580,20 @@ function toggleNote(id){ $('ne-'+id).classList.toggle('hidden'); }
 async function assignProgram(){
   const pid = $('assign-sel').value;
   if(!pid){ toast('Select a program first'); return; }
-  const {error} = await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid});
+  const peak = ($('peak-date')||{}).value || null;
+  const {error} = await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid, p_peak:peak});
   if(error){ toast('Error: '+error.message); return; }
-  toast('Program assigned!');
+  toast(peak ? 'Program assigned · peaks '+peak : 'Program assigned!');
   selected.profile.program_id = pid;
+  selected.profile.peak_date = peak;
   renderDetail();
+}
+async function savePeakDate(){
+  const peak = ($('peak-date')||{}).value || null;
+  const {error} = await sb.rpc('coach_set_peak_date',{p_client:selected.client_id, p_peak:peak});
+  if(error){ toast('Error: '+error.message); return; }
+  selected.profile.peak_date = peak;
+  toast(peak ? 'Peak date saved' : 'Peak date cleared');
 }
 async function saveNotes(){
   const notes = $('coach-notes').value;
