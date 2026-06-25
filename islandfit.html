@@ -510,6 +510,9 @@ body::before{
 .btn-reject{flex:1;background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.3);color:var(--lava-1);font-weight:700;padding:12px;border-radius:10px;font-size:13px}
 .coach-request-card{background:rgba(255,140,66,0.06);border:1px solid rgba(255,140,66,0.25);border-radius:12px;padding:14px;margin-bottom:10px}
 .section-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:20px 0 10px}
+.client-flag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;padding:4px 9px;border-radius:100px;white-space:nowrap;margin-right:6px}
+.flag-red{background:rgba(255,77,109,0.16);color:var(--lava-1)}
+.flag-amber{background:rgba(245,166,35,0.16);color:var(--amber)}
 .coach-chat-thread{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:7px}
 .cc-msg{max-width:80%;padding:8px 12px;border-radius:13px;font-size:13px;line-height:1.4;word-break:break-word}
 .cc-them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
@@ -1253,6 +1256,14 @@ body::before{
     <div class="section-label">Coach Notes (visible to AI coach)</div>
     <textarea id="coach-client-notes" class="ai-onboard-text" rows="3" placeholder="Injuries, goals, things to keep in mind..." style="margin-bottom:8px"></textarea>
     <button class="btn btn-primary" onclick="saveClientNotes()" style="margin-bottom:20px">Save Notes</button>
+
+    <!-- Form checks -->
+    <div class="section-label">Form Checks <span id="coach-fc-count" style="color:var(--amber)"></span></div>
+    <div id="coach-client-formchecks"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
+    <!-- Strength progress -->
+    <div class="section-label">Strength Progress · est. 1RM over time</div>
+    <div id="coach-client-progress"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
     <!-- Recent workouts -->
     <div class="section-label">Recent Workouts</div>
@@ -3475,7 +3486,10 @@ async function loadCoachScreen(){
   if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
   const ids = links.map(l=>l.client_id);
   const {data:profiles} = await sb.from('profiles').select('id, name, sport, program_id, age, primary_goal, equipment, days_available, bodyweight_kg, current_day, coach_notes, injuries, peak_date').in('id', ids);
-  coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'} }));
+  // Last workout per client (for inactivity flags)
+  const {data:recentWk} = await sb.from('workouts').select('user_id, completed_at').in('user_id', ids).order('completed_at',{ascending:false});
+  const lastWk = {}; (recentWk||[]).forEach(w=>{ if(!lastWk[w.user_id]) lastWk[w.user_id]=w.completed_at; });
+  coachClients = links.map(l=> ({ ...l, profile: (profiles||[]).find(p=>p.id===l.client_id)||{name:'—',sport:'—'}, lastWorkout: lastWk[l.client_id]||null }));
   document.getElementById('coach-client-count').textContent = '(' + coachClients.filter(c=>c.status==='active').length + ')';
   renderCoachClientList();
   // Load custom programs
@@ -3492,12 +3506,20 @@ function renderCoachClientList(){
     const p = c.profile;
     const isPending = c.status === 'pending';
     const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    // Inactivity flag for active clients
+    let flag = '';
+    if(!isPending){
+      const since = c.lastWorkout ? Math.floor((Date.now()-new Date(c.lastWorkout))/864e5) : Infinity;
+      if(since>=10) flag = `<span class="client-flag flag-red"><i class="ti ti-zzz"></i> ${c.lastWorkout?since+'d':'never'}</span>`;
+      else if(since>=6) flag = `<span class="client-flag flag-amber"><i class="ti ti-clock-exclamation"></i> ${since}d</span>`;
+    }
     return `<div class="client-card${isPending?' client-pending':''}" onclick="openClientDetail('${c.client_id}')">
       <div class="client-avatar">${escapeHtml(initials)}</div>
       <div class="client-info">
         <div class="client-name">${escapeHtml(p.name||'—')}</div>
         <div class="client-meta">${isPending ? '⏳ Waiting for client to accept' : escapeHtml(p.sport||'—')}</div>
       </div>
+      ${flag}
       <i class="ti ti-chevron-right" style="color:var(--muted)"></i>
     </div>`;
   }).join('');
@@ -3627,6 +3649,73 @@ async function openClientDetail(clientId){
   document.getElementById('coach-client-prs').innerHTML = (prs && prs.length) ?
     `<div style="background:var(--surface);border-radius:10px;overflow:hidden">${prs.map((pr,i)=>`<div style="padding:11px 14px;display:flex;justify-content:space-between;align-items:center${i?';border-top:1px solid var(--border)':''}"><div style="font-size:13px;font-weight:600">${escapeHtml(pr.exercise_name)}</div><div style="font-size:13px;font-weight:700;color:var(--accent)">${displayWeight(pr.weight_kg)} ${weightUnit()} × ${pr.reps}</div></div>`).join('')}</div>` :
     '<div style="color:var(--muted);font-size:13px;padding:12px 0">No PRs yet</div>';
+  renderCoachClientProgress(clientId);
+  renderCoachFormChecks(clientId);
+}
+
+// ── COACH: review client form-check videos ──
+async function renderCoachFormChecks(clientId){
+  const wrap = document.getElementById('coach-client-formchecks'); if(!wrap) return;
+  const {data:fcs} = await sb.from('form_checks').select('*').eq('coach_id',currentUser.id).eq('client_id',clientId).order('created_at',{ascending:false});
+  const countEl = document.getElementById('coach-fc-count');
+  if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No form checks submitted yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  const pending = fcs.filter(f=>f.status!=='reviewed' && !f.coach_feedback).length;
+  if(countEl) countEl.textContent = pending ? '· '+pending+' to review' : '';
+  const paths = fcs.map(f=>f.video_path);
+  const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
+  const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+  wrap.innerHTML = fcs.map(f=>{
+    const url = urlMap[f.video_path];
+    const reviewed = f.status==='reviewed' || f.coach_feedback;
+    return `<div style="background:var(--surface);border:1px solid ${reviewed?'var(--border)':'rgba(245,166,35,0.3)'};border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:700">${escapeHtml(f.exercise_name)}</div>
+        <span style="font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:100px;${reviewed?'background:rgba(0,255,163,0.16);color:var(--accent)':'background:rgba(245,166,35,0.16);color:var(--amber)'}">${reviewed?'Reviewed':'Pending'}</span>
+      </div>
+      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:320px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">Client: ${escapeHtml(f.client_note)}</div>`:''}
+      <textarea id="fcfb-${f.id}" rows="2" placeholder="Technique feedback for the client..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px;font-size:13px;margin-top:8px;resize:vertical">${escapeHtml(f.coach_feedback||'')}</textarea>
+      <button class="btn btn-primary" style="margin-top:6px;font-size:13px;padding:9px 16px" onclick="saveFormCheckFeedback('${f.id}')"><i class="ti ti-send"></i> ${reviewed?'Update feedback':'Send feedback'}</button>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+async function saveFormCheckFeedback(id){
+  const fb = document.getElementById('fcfb-'+id).value.trim();
+  if(!fb){ showToast('Write some feedback first'); return; }
+  const {error} = await sb.from('form_checks').update({coach_feedback:fb, status:'reviewed', reviewed_at:new Date().toISOString()}).eq('id', id);
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Feedback sent to client');
+  if(viewingClient) renderCoachFormChecks(viewingClient.client_id);
+}
+
+// Strength progress chart for the client a coach is viewing (top 3 lifts, est. 1RM over time)
+async function renderCoachClientProgress(clientId){
+  const wrap = document.getElementById('coach-client-progress'); if(!wrap) return;
+  const {data:sets} = await sb.from('workout_sets')
+    .select('exercise_name,weight_kg,reps,logged_at')
+    .eq('user_id', clientId).not('weight_kg','is',null).gt('weight_kg',0)
+    .order('logged_at',{ascending:true});
+  if(!sets || sets.length<2){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px 0">Not enough logged sets yet to chart progress.</div>'; return; }
+  const freq={}; sets.forEach(s=>{freq[s.exercise_name]=(freq[s.exercise_name]||0)+1;});
+  const topEx=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,3);
+  const perEx={}, daySet=new Set();
+  topEx.forEach(ex=>{ const byDay={}; sets.filter(s=>s.exercise_name===ex).forEach(s=>{ const day=s.logged_at.slice(0,10); const e=epley1RM(s.weight_kg,s.reps); if(e>0&&(!byDay[day]||e>byDay[day])) byDay[day]=e; daySet.add(day); }); perEx[ex]=byDay; });
+  const days=Array.from(daySet).sort();
+  const labels=days.map(d=>{const dt=new Date(d+'T00:00:00');return (dt.getMonth()+1)+'/'+dt.getDate();});
+  const conv=v=>units==='imperial'?Math.round(kgToLbs(v)):Math.round(v);
+  const colors=['#00ffa3','#22d3ee','#a78bfa'];
+  const datasets=topEx.map((ex,i)=>({label:ex, data:days.map(d=>perEx[ex][d]!=null?conv(perEx[ex][d]):null), borderColor:colors[i], backgroundColor:colors[i]+'22', tension:0.3, pointRadius:3, borderWidth:2, fill:false, spanGaps:true}));
+  wrap.innerHTML='<div style="background:var(--surface);border-radius:12px;padding:12px;position:relative;height:230px"><canvas id="coach-prog-canvas"></canvas></div>';
+  if(charts.coachProg){ try{charts.coachProg.destroy();}catch(e){} charts.coachProg=null; }
+  charts.coachProg=new Chart(document.getElementById('coach-prog-canvas'),{
+    type:'line', data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#c7d2e8',font:{size:11},usePointStyle:true,boxWidth:8}},
+        tooltip:{backgroundColor:'#10162a',borderColor:'#1f2847',borderWidth:1,callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+' '+weightUnit()+' est 1RM'}}},
+      scales:{x:{grid:{display:false},ticks:{color:'#6b7896',font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8}},y:{grid:{color:'#1f2847'},ticks:{color:'#6b7896',font:{size:10}}}}}
+  });
 }
 
 async function assignProgramToClient(){
@@ -3720,6 +3809,7 @@ async function loadMyCoachSection(){
         <div><div style="font-size:14px;font-weight:700">${escapeHtml(c.name||'Coach')}</div><div style="font-size:11px;color:var(--muted)">Since ${new Date(a.created_at).toLocaleDateString()}</div></div>
         <div style="display:flex;gap:6px">
           <button onclick="toggleCoachChat('${a.coach_id}')" id="chat-toggle-${a.coach_id}" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-message"></i> Message</button>
+          <button onclick="toggleFormCheck('${a.coach_id}')" id="fc-toggle-${a.coach_id}" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-video"></i> Form check</button>
           <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
         </div>
       </div>
@@ -3729,6 +3819,14 @@ async function loadMyCoachSection(){
           <input id="chat-input-${a.coach_id}" placeholder="Message your coach..." style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px" onkeydown="if(event.key==='Enter')sendCoachMessage('${a.coach_id}')">
           <button class="btn btn-primary" style="padding:11px 16px" onclick="sendCoachMessage('${a.coach_id}')"><i class="ti ti-send"></i></button>
         </div>
+      </div>
+      <div id="fc-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Upload a video of a lift — your coach reviews your technique and replies.</div>
+        <input id="fc-ex-${a.coach_id}" placeholder="Which exercise? e.g. Back Squat" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px">
+        <textarea id="fc-note-${a.coach_id}" rows="2" placeholder="Anything you want them to look at? (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px;resize:vertical"></textarea>
+        <input type="file" id="fc-file-${a.coach_id}" accept="video/*" style="width:100%;font-size:12px;color:var(--text-soft);margin-bottom:8px">
+        <button class="btn btn-primary" style="width:100%" id="fc-send-${a.coach_id}" onclick="sendFormCheck('${a.coach_id}')"><i class="ti ti-upload"></i> Send form check</button>
+        <div id="fc-list-${a.coach_id}" style="margin-top:12px"></div>
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
@@ -3772,6 +3870,66 @@ async function sendCoachMessage(coachId){
   inp.disabled=false; inp.focus();
   if(error){ showToast('Error: '+error.message); inp.value=body; return; }
   loadCoachMessages(coachId);
+}
+
+// ── CLIENT FORM CHECKS (upload lift videos for coach review) ──
+function toggleFormCheck(coachId){
+  const box = document.getElementById('fc-box-'+coachId);
+  if(!box) return;
+  const open = box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadClientFormChecks(coachId);
+}
+
+async function sendFormCheck(coachId){
+  const ex = document.getElementById('fc-ex-'+coachId).value.trim();
+  const note = document.getElementById('fc-note-'+coachId).value.trim();
+  const fileEl = document.getElementById('fc-file-'+coachId);
+  const file = fileEl.files && fileEl.files[0];
+  if(!ex){ showToast('Which exercise is it?'); return; }
+  if(!file){ showToast('Pick a video first'); return; }
+  if(file.size > 52428800){ showToast('Video is too big (max 50MB) — trim it or lower quality'); return; }
+  const btn = document.getElementById('fc-send-'+coachId);
+  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Uploading...';
+  try{
+    const ext = (file.name.split('.').pop()||'mp4').toLowerCase();
+    const path = currentUser.id + '/' + (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(36).slice(2)) + '.' + ext;
+    const {error:upErr} = await sb.storage.from('form-checks').upload(path, file, {contentType:file.type||'video/mp4', upsert:false});
+    if(upErr) throw upErr;
+    const {error:insErr} = await sb.from('form_checks').insert({client_id:currentUser.id, coach_id:coachId, exercise_name:ex, video_path:path, client_note:note||null});
+    if(insErr) throw insErr;
+    document.getElementById('fc-ex-'+coachId).value='';
+    document.getElementById('fc-note-'+coachId).value='';
+    fileEl.value='';
+    showToast('Form check sent to your coach 🎥');
+    loadClientFormChecks(coachId);
+  }catch(e){ showToast('Error: '+e.message); }
+  finally{ btn.disabled=false; btn.innerHTML='<i class="ti ti-upload"></i> Send form check'; }
+}
+
+async function loadClientFormChecks(coachId){
+  const wrap = document.getElementById('fc-list-'+coachId); if(!wrap) return;
+  const {data:fcs} = await sb.from('form_checks').select('*').eq('client_id',currentUser.id).eq('coach_id',coachId).order('created_at',{ascending:false});
+  if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">No form checks sent yet.</div>'; return; }
+  // Signed URLs for playback
+  const paths = fcs.map(f=>f.video_path);
+  const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
+  const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+  wrap.innerHTML = fcs.map(f=>{
+    const url = urlMap[f.video_path];
+    const reviewed = f.status==='reviewed' || f.coach_feedback;
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700">${escapeHtml(f.exercise_name)}</div>
+        <span style="font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:100px;${reviewed?'background:rgba(0,255,163,0.16);color:var(--accent)':'background:rgba(245,166,35,0.16);color:var(--amber)'}">${reviewed?'Reviewed':'Pending'}</span>
+      </div>
+      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:280px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">You: ${escapeHtml(f.client_note)}</div>`:''}
+      ${f.coach_feedback?`<div style="font-size:13px;color:var(--text);margin-top:8px;border-left:2px solid var(--accent);padding-left:9px"><b style="color:var(--accent)">Coach:</b> ${escapeHtml(f.coach_feedback)}</div>`:''}
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
+    </div>`;
+  }).join('');
 }
 
 async function redeemInviteCode(){

@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -65,6 +66,16 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px}
 .stat-num{font-family:'Bebas Neue',sans-serif;font-size:46px;line-height:0.9;margin-bottom:6px}
 .stat-lbl{font-size:12px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:700}
+
+/* ── ALERTS ── */
+.alert-banner{background:linear-gradient(135deg,rgba(255,77,109,0.1),rgba(255,140,66,0.06));border:1px solid rgba(255,140,66,0.35);border-radius:16px;padding:16px 20px;margin-bottom:24px}
+.alert-row{display:flex;align-items:center;gap:12px;padding:9px 0;cursor:pointer}
+.alert-row+.alert-row{border-top:1px solid var(--border)}
+.alert-row:hover{opacity:0.85}
+.alert-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:17px}
+.alert-tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;padding:3px 9px;border-radius:100px;white-space:nowrap}
+.alert-red{background:rgba(255,77,109,0.16);color:var(--lava-1)}
+.alert-amber{background:rgba(245,166,35,0.16);color:var(--amber)}
 
 /* ── REQUESTS ── */
 .req-banner{background:linear-gradient(135deg,rgba(0,255,163,0.08),rgba(34,211,238,0.05));border:1px solid var(--border-bright);border-radius:16px;padding:16px 20px;margin-bottom:24px}
@@ -205,6 +216,8 @@ main{max-width:1400px;margin:0 auto;padding:28px}
   <main>
     <!-- Stats -->
     <div class="stats" id="stats"></div>
+    <!-- Attention needed -->
+    <div id="alerts"></div>
     <!-- Pending requests -->
     <div id="requests"></div>
     <!-- Grid -->
@@ -364,17 +377,19 @@ async function loadAll(){
   // Bulk fetch workouts, rpe sets, PRs, notes for all clients at once
   const fourWk = new Date(Date.now()-28*864e5).toISOString();
   const sevenDays = Date.now()-7*864e5;
-  let workouts=[], sets=[], prs=[], notes=[];
+  let workouts=[], sets=[], prs=[], notes=[], pendingFc=[];
   if(ids.length){
-    const [w,s,r,n] = await Promise.all([
+    const [w,s,r,n,fc] = await Promise.all([
       sb.from('workouts').select('id,title,sport,duration_min,completed_at,user_id').in('user_id',ids).order('completed_at',{ascending:false}),
       sb.from('workout_sets').select('user_id,rpe').in('user_id',ids).not('rpe','is',null).gte('logged_at',fourWk),
       sb.from('personal_records').select('user_id,exercise_name,weight_kg,reps').in('user_id',ids).order('weight_kg',{ascending:false}),
-      sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',me_.id)
+      sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',me_.id),
+      sb.from('form_checks').select('client_id').eq('coach_id',me_.id).eq('status','pending')
     ]);
-    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[];
+    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[]; pendingFc=fc.data||[];
   }
   const noteMap = Object.fromEntries(notes.map(x=>[x.workout_id,x.note]));
+  const fcPendingMap = {}; pendingFc.forEach(x=>{ fcPendingMap[x.client_id]=(fcPendingMap[x.client_id]||0)+1; });
   // Assemble per-client
   clients = (links||[]).map(l=>{
     const pr = profiles.find(x=>x.id===l.client_id) || {name:'—',sport:'—'};
@@ -386,9 +401,10 @@ async function loadAll(){
     const expected = Math.max(1, Math.round(weeks*(pr.days_available||3)));
     const adherence = Math.min(100, Math.round((cw.length/expected)*100));
     const avgRpe = cs.length ? (cs.reduce((a,b)=>a+(+b.rpe),0)/cs.length) : null;
-    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays };
+    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays, pendingFc:fcPendingMap[l.client_id]||0 };
   });
   renderStats();
+  renderAlerts();
   renderRequests();
   renderClientList();
   renderPrograms();
@@ -402,6 +418,37 @@ async function loadInvite(){
     const exp = data[0].expires_at ? new Date(data[0].expires_at) : null;
     $('invite-expire').textContent = (exp?'Expires '+exp.toLocaleDateString()+' · ':'') + 'Used '+data[0].used_count+'/'+data[0].max_uses;
   } else { $('invite-code').textContent='—'; $('invite-expire').textContent='Generate a code to share'; }
+}
+
+// ── RENDER: ALERTS (clients needing attention) ──
+function daysSince(d){ if(!d) return Infinity; return Math.floor((Date.now()-new Date(d))/864e5); }
+function renderAlerts(){
+  const active = clients.filter(c=>c.status==='active');
+  const alerts = [];
+  active.forEach(c=>{
+    const last = c.workouts.length ? c.workouts[0].completed_at : null;
+    const since = daysSince(last);
+    // 0. Form checks awaiting review — highest priority
+    if(c.pendingFc>0) alerts.push({c, level:'red', icon:'ti-video', tag:'Form check', msg:c.pendingFc+' video'+(c.pendingFc>1?'s':'')+' awaiting your review'});
+    // 1. Inactive — no workout in a while
+    if(since>=10) alerts.push({c, level:'red', icon:'ti-zzz', tag:'Inactive', msg:(c.workouts.length?since+' days since last workout':'never logged a workout')});
+    else if(since>=6) alerts.push({c, level:'amber', icon:'ti-clock-exclamation', tag:'Slipping', msg:since+' days since last workout'});
+    // 2. Low adherence (only if they've been around enough to judge)
+    else if(c.workouts.length>=2 && c.adherence<50) alerts.push({c, level:'amber', icon:'ti-chart-arrows-vertical', tag:'Low adherence', msg:c.adherence+'% of expected sessions'});
+    // 3. Overreaching — sustained very high RPE
+    if(c.avgRpe!=null && c.avgRpe>=9 && since<6) alerts.push({c, level:'amber', icon:'ti-flame', tag:'High RPE', msg:'avg RPE '+c.avgRpe.toFixed(1)+' — watch for overtraining'});
+  });
+  // Sort: red first
+  alerts.sort((a,b)=> (a.level==='red'?0:1)-(b.level==='red'?0:1));
+  if(!alerts.length){ $('alerts').innerHTML=''; return; }
+  $('alerts').innerHTML = `<div class="alert-banner">
+    <div class="panel-title" style="margin-bottom:6px"><i class="ti ti-alert-triangle"></i> Needs attention (${alerts.length})</div>
+    ${alerts.map(a=>`<div class="alert-row" onclick="selectClient('${a.c.client_id}')">
+      <div class="alert-icon ${a.level==='red'?'alert-red':'alert-amber'}"><i class="ti ${a.icon}"></i></div>
+      <div style="flex:1;min-width:0"><div class="client-name">${esc(a.c.profile.name||'—')}</div><div class="client-meta">${esc(a.msg)}</div></div>
+      <span class="alert-tag ${a.level==='red'?'alert-red':'alert-amber'}">${a.tag}</span>
+    </div>`).join('')}
+  </div>`;
 }
 
 // ── RENDER: STATS ──
@@ -518,6 +565,12 @@ async function renderDetail(){
       <button class="btn btn-primary" style="padding:12px 18px" onclick="sendMessage()"><i class="ti ti-send"></i></button>
     </div>
 
+    <div class="section-lbl">Form Checks <span id="fc-count" style="text-transform:none;color:var(--amber);font-weight:700"></span></div>
+    <div id="fc-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
+    <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
+    <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Recent Workouts</div>
     <div id="wk-list">${recent.length?recent.map(w=>wkHtml(w, c.noteMap[w.id]||'')).join(''):'<div style="color:var(--muted);font-size:13px">No workouts yet</div>'}</div>
 
@@ -525,6 +578,101 @@ async function renderDetail(){
     ${prs.length?`<div class="pr-table">${prs.map(pr=>`<div class="pr-row"><span style="font-weight:600">${esc(pr.exercise_name)}</span><span style="font-weight:800;color:var(--accent)">${(+pr.weight_kg)} kg × ${pr.reps}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">No PRs yet</div>'}
   `;
   loadMessages();
+  renderProgress();
+  renderFormChecks();
+}
+
+// ── FORM CHECKS (coach reviews client lift videos) ──
+async function renderFormChecks(){
+  const c = selected; if(!c) return;
+  const wrap = $('fc-wrap'); if(!wrap) return;
+  const {data:fcs} = await sb.from('form_checks').select('*').eq('coach_id',me_.id).eq('client_id',c.client_id).order('created_at',{ascending:false});
+  const countEl = $('fc-count');
+  if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No form checks submitted yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  const pending = fcs.filter(f=>f.status!=='reviewed' && !f.coach_feedback).length;
+  if(countEl) countEl.textContent = pending ? '· '+pending+' to review' : '';
+  const paths = fcs.map(f=>f.video_path);
+  const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
+  const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+  wrap.innerHTML = fcs.map(f=>{
+    const url = urlMap[f.video_path];
+    const reviewed = f.status==='reviewed' || f.coach_feedback;
+    return `<div style="background:var(--surface2);border:1px solid ${reviewed?'var(--border)':'rgba(245,166,35,0.3)'};border-radius:12px;padding:13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:700">${esc(f.exercise_name)}</div>
+        <span class="pill ${reviewed?'pill-green':'pill-amber'}">${reviewed?'Reviewed':'Pending'}</span>
+      </div>
+      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:340px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">Client: ${esc(f.client_note)}</div>`:''}
+      <textarea class="txta" id="fcfb-${f.id}" rows="2" placeholder="Technique feedback for the client..." style="margin-top:8px">${esc(f.coach_feedback||'')}</textarea>
+      <button class="btn btn-primary" style="margin-top:6px;padding:9px 16px;font-size:13px" onclick="saveFormCheckFeedback('${f.id}')"><i class="ti ti-send"></i> ${reviewed?'Update feedback':'Send feedback'}</button>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+async function saveFormCheckFeedback(id){
+  const fb = $('fcfb-'+id).value.trim();
+  if(!fb){ toast('Write some feedback first'); return; }
+  const {error} = await sb.from('form_checks').update({coach_feedback:fb, status:'reviewed', reviewed_at:new Date().toISOString()}).eq('id', id);
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Feedback sent to client');
+  renderFormChecks();
+}
+
+// ── PROGRESS CHART (estimated 1RM over time) ──
+let progChart = null;
+function epley1rm(w, reps){ const wn=+w, r=+reps; if(!wn||!r) return 0; return r===1 ? wn : wn*(1+r/30); }
+async function renderProgress(){
+  const c = selected; if(!c) return;
+  const wrap = $('prog-wrap'); if(!wrap) return;
+  const {data:sets} = await sb.from('workout_sets')
+    .select('exercise_name,weight_kg,reps,logged_at')
+    .eq('user_id', c.client_id).not('weight_kg','is',null).gt('weight_kg',0)
+    .order('logged_at',{ascending:true});
+  if(!sets || sets.length<2){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">Not enough logged sets yet to chart progress.</div>'; return; }
+  // Pick the 3 most frequently performed exercises
+  const freq = {};
+  sets.forEach(s=>{ freq[s.exercise_name]=(freq[s.exercise_name]||0)+1; });
+  const topEx = Object.keys(freq).sort((a,b)=>freq[b]-freq[a]).slice(0,3);
+  // Best estimated 1RM per day, per exercise
+  const perEx = {};
+  const daySet = new Set();
+  topEx.forEach(ex=>{
+    const byDay = {};
+    sets.filter(s=>s.exercise_name===ex).forEach(s=>{
+      const day = s.logged_at.slice(0,10);
+      const e = epley1rm(s.weight_kg, s.reps);
+      if(!byDay[day] || e>byDay[day]) byDay[day]=Math.round(e);
+      daySet.add(day);
+    });
+    perEx[ex]=byDay;
+  });
+  const days = Array.from(daySet).sort();
+  const labels = days.map(d=>{ const dt=new Date(d+'T00:00:00'); return (dt.getMonth()+1)+'/'+dt.getDate(); });
+  const colors = ['#00ffa3','#22d3ee','#a78bfa'];
+  const datasets = topEx.map((ex,i)=>({
+    label:ex,
+    data:days.map(d=> perEx[ex][d]!=null ? perEx[ex][d] : null),
+    borderColor:colors[i], backgroundColor:colors[i]+'22', tension:0.3, pointRadius:3, borderWidth:2, fill:false, spanGaps:true
+  }));
+  wrap.innerHTML = '<div style="position:relative;height:240px"><canvas id="prog-canvas"></canvas></div>';
+  if(progChart){ try{progChart.destroy();}catch(e){} progChart=null; }
+  const ctx = $('prog-canvas').getContext('2d');
+  progChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{ labels:{ color:'#c7d2e8', font:{size:11}, usePointStyle:true, boxWidth:8 } },
+        tooltip:{ callbacks:{ label:c=>c.dataset.label+': '+c.parsed.y+' kg (est. 1RM)' } } },
+      scales:{
+        x:{ ticks:{ color:'#6b7896', font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:8 }, grid:{ color:'rgba(255,255,255,0.04)' } },
+        y:{ ticks:{ color:'#6b7896', font:{size:10}, callback:v=>v+'kg' }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
 }
 
 // ── MESSAGES (two-way coach ⇄ client) ──
