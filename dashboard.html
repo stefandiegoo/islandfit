@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0e1a">
+<title>ÍslandFit · Coach Dashboard</title>
+<meta name="description" content="ÍslandFit coach dashboard — full overview of every client, connected live to the app.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0e1a; --bg-deep:#06080f; --surface:#10162a; --surface2:#1a2240; --surface3:#252e54;
+  --border:#1f2847; --border-bright:#2d3a6b;
+  --aurora-1:#00ffa3; --aurora-2:#22d3ee; --aurora-3:#a78bfa;
+  --lava-1:#ff4d6d; --lava-2:#ff8c42; --amber:#f5a623;
+  --text:#ffffff; --text-soft:#c7d2e8; --muted:#6b7896; --muted2:#3d4a6b;
+  --accent:var(--aurora-1);
+}
+html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:'Inter',sans-serif;border:none;background:none;color:inherit}
+input,select,textarea{font-family:'Inter',sans-serif}
+.gradient{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2),var(--aurora-3));-webkit-background-clip:text;background-clip:text;color:transparent}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at 12% 0%,rgba(0,255,163,0.08),transparent 45%),radial-gradient(ellipse at 88% 5%,rgba(167,139,250,0.06),transparent 45%)}
+.hidden{display:none!important}
+
+/* ── LOGIN ── */
+.login-wrap{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:40px 32px;width:100%;max-width:420px}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:42px;text-align:center;line-height:0.95;text-transform:uppercase;margin-bottom:6px}
+.login-badge{text-align:center;margin-bottom:24px}
+.login-badge span{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);background:rgba(0,255,163,0.1);border:1px solid rgba(0,255,163,0.3);padding:6px 14px;border-radius:100px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:6px}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:11px;font-size:15px}
+.field input:focus{outline:none;border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:11px;font-weight:800;font-size:14px;padding:13px 20px;transition:transform .15s,box-shadow .15s,background .15s}
+.btn-primary{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#000}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,255,163,0.25)}
+.btn-primary:disabled{opacity:0.6;transform:none;cursor:default}
+.btn-ghost{background:var(--surface2);border:1px solid var(--border-bright);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent)}
+.btn-block{width:100%}
+.err{color:var(--lava-1);font-size:13px;font-weight:600;margin-bottom:12px;min-height:0}
+.notice{background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.3);color:var(--amber);border-radius:12px;padding:14px 16px;font-size:14px;font-weight:600;line-height:1.5}
+
+/* ── APP SHELL ── */
+.shell{position:relative;z-index:1}
+.topbar{position:sticky;top:0;z-index:30;backdrop-filter:blur(16px);background:rgba(10,14,26,0.8);border-bottom:1px solid var(--border)}
+.topbar-inner{max-width:1400px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.tb-logo{font-family:'Bebas Neue',sans-serif;font-size:26px;text-transform:uppercase;line-height:1}
+.tb-right{display:flex;align-items:center;gap:12px}
+.tb-name{font-size:14px;font-weight:700;color:var(--text-soft)}
+.tb-btn{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:9px 15px;border-radius:10px;background:var(--surface2);border:1px solid var(--border-bright);transition:border-color .15s}
+.tb-btn:hover{border-color:var(--accent)}
+.tb-btn.accent{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#000;border:none}
+main{max-width:1400px;margin:0 auto;padding:28px}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 24px}
+.stat-num{font-family:'Bebas Neue',sans-serif;font-size:46px;line-height:0.9;margin-bottom:6px}
+.stat-lbl{font-size:12px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:700}
+
+/* ── REQUESTS ── */
+.req-banner{background:linear-gradient(135deg,rgba(0,255,163,0.08),rgba(34,211,238,0.05));border:1px solid var(--border-bright);border-radius:16px;padding:16px 20px;margin-bottom:24px}
+.req-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0}
+.req-row+.req-row{border-top:1px solid var(--border)}
+
+/* ── LAYOUT ── */
+.grid{display:grid;grid-template-columns:minmax(340px,420px) 1fr;gap:24px;align-items:start}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:22px}
+.panel-title{font-size:13px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);font-weight:800;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+
+/* ── CLIENT LIST ── */
+.client-row{display:flex;align-items:center;gap:13px;padding:13px;border-radius:13px;cursor:pointer;transition:background .15s;border:1px solid transparent}
+.client-row:hover{background:var(--surface2)}
+.client-row.active{background:var(--surface2);border-color:var(--border-bright)}
+.avatar{width:42px;height:42px;border-radius:12px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:var(--accent);flex-shrink:0}
+.client-info{flex:1;min-width:0}
+.client-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.pill{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;border-radius:100px}
+.pill-green{background:rgba(0,255,163,0.14);color:var(--accent)}
+.pill-amber{background:rgba(245,166,35,0.14);color:var(--amber)}
+.pill-red{background:rgba(255,77,109,0.14);color:var(--lava-1)}
+.pill-pending{background:rgba(167,139,250,0.14);color:var(--aurora-3)}
+
+/* ── DETAIL ── */
+.detail-empty{text-align:center;color:var(--muted);padding:80px 20px;font-size:15px}
+.dstat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:20px}
+.dstat{background:var(--surface2);border-radius:12px;padding:14px 10px;text-align:center}
+.dstat-num{font-size:20px;font-weight:800;line-height:1}
+.dstat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-top:5px}
+.section-lbl{font-size:12px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);font-weight:800;margin:22px 0 10px}
+.wk{background:var(--surface2);border-radius:12px;padding:13px 15px;margin-bottom:9px}
+.wk-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.wk-name{font-size:14px;font-weight:700}
+.wk-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.note-display{margin-top:9px;font-size:12px;color:var(--text-soft);font-style:italic;border-left:2px solid var(--accent);padding-left:9px}
+.mini-btn{background:var(--surface3);border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--text-soft);font-size:11px;font-weight:700}
+.mini-btn:hover{border-color:var(--accent);color:var(--accent)}
+.txta{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:11px;font-size:13px;resize:vertical}
+.txta:focus{outline:none;border-color:var(--accent)}
+.pr-table{background:var(--surface2);border-radius:12px;overflow:hidden}
+.pr-row{display:flex;justify-content:space-between;align-items:center;padding:11px 15px;font-size:13px}
+.pr-row+.pr-row{border-top:1px solid var(--border)}
+.sel{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px}
+.row-gap{display:flex;gap:9px}
+
+/* ── MODAL ── */
+.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:24px}
+.modal{background:var(--surface);border:1px solid var(--border-bright);border-radius:20px;padding:24px;width:100%;max-width:640px;max-height:85vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-title{font-size:18px;font-weight:800}
+.ai-day{background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:10px}
+.ai-day-title{font-size:14px;font-weight:800;margin-bottom:4px}
+.ai-day-focus{font-size:11px;color:var(--muted);margin-bottom:10px}
+.ai-ex{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;color:var(--text-soft)}
+.ai-ex+.ai-ex{border-top:1px solid var(--border)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface3);border:1px solid var(--border-bright);color:var(--text);padding:13px 22px;border-radius:12px;font-size:14px;font-weight:600;z-index:200;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.spin{animation:spin 0.8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="view-login" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo"><span class="gradient">ÍSLAND</span>FIT</div>
+    <div class="login-badge"><span><i class="ti ti-whistle"></i> Coach Dashboard</span></div>
+    <div id="login-err" class="err"></div>
+    <div id="login-form">
+      <div class="field"><label>Email</label><input type="email" id="email" placeholder="you@email.com" autocomplete="username"></div>
+      <div class="field"><label>Password</label><input type="password" id="pw" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-block" id="btn-login" onclick="doLogin()" style="margin-top:6px">Sign In</button>
+      <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--muted)">Not a coach yet? <a href="islandfit.html?coach" style="color:var(--accent);font-weight:700">Apply in the app →</a></div>
+    </div>
+    <div id="login-gate" class="hidden">
+      <div class="notice" id="gate-msg"></div>
+      <a href="islandfit.html?coach" class="btn btn-primary btn-block" style="margin-top:16px"><i class="ti ti-external-link"></i> Open the app</a>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div id="view-dash" class="shell hidden">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="tb-logo"><span class="gradient">ÍSLAND</span>FIT <span style="color:var(--muted);font-size:14px;font-family:'Inter';font-weight:600;letter-spacing:0">Coach</span></div>
+      <div class="tb-right">
+        <span class="tb-name" id="tb-name"></span>
+        <a href="islandfit.html?coach" class="tb-btn accent"><i class="ti ti-device-mobile"></i> Open App</a>
+        <button class="tb-btn" onclick="doLogout()"><i class="ti ti-logout"></i> Sign out</button>
+      </div>
+    </div>
+  </div>
+  <main>
+    <!-- Stats -->
+    <div class="stats" id="stats"></div>
+    <!-- Pending requests -->
+    <div id="requests"></div>
+    <!-- Grid -->
+    <div class="grid">
+      <!-- Left: clients + invite -->
+      <div style="display:flex;flex-direction:column;gap:24px">
+        <div class="panel">
+          <div class="panel-title">My Clients <span id="client-count" style="color:var(--muted);font-weight:700"></span></div>
+          <div id="client-list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Connect a Client</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Invite code</div>
+          <div class="row-gap" style="margin-bottom:8px">
+            <div id="invite-code" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Bebas Neue';font-size:22px;letter-spacing:0.12em;text-align:center">—</div>
+            <button class="mini-btn" style="padding:0 14px" onclick="copyInvite()"><i class="ti ti-copy"></i></button>
+            <button class="mini-btn" style="padding:0 14px" onclick="newInvite()"><i class="ti ti-refresh"></i></button>
+          </div>
+          <div id="invite-expire" style="font-size:11px;color:var(--muted);margin-bottom:16px"></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Or add by email</div>
+          <div class="row-gap">
+            <input type="email" id="add-email" placeholder="client@email.com" class="sel" style="flex:1">
+            <button class="btn btn-primary" style="padding:12px 18px" onclick="addByEmail()">Send</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Custom Programs</div>
+          <div id="programs-list"></div>
+          <a href="islandfit.html?coach" class="btn btn-ghost btn-block" style="margin-top:10px;border-style:dashed"><i class="ti ti-plus"></i> Build in app (drag &amp; drop)</a>
+        </div>
+      </div>
+      <!-- Right: client detail -->
+      <div class="panel" id="detail">
+        <div class="detail-empty"><i class="ti ti-arrow-left" style="font-size:28px;opacity:0.5"></i><div style="margin-top:10px">Select a client to see their full overview</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- AI modal -->
+<div id="ai-modal" class="modal-bg hidden" onclick="if(event.target===this)closeAiModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title"><i class="ti ti-sparkles" style="color:var(--accent)"></i> AI Program Suggestion</div>
+      <button class="mini-btn" onclick="closeAiModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="ai-modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── SUPABASE (same project as the app — direct, live connection) ──
+const SUPA_URL = 'https://dlizuycilevrekjvltlq.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsaXp1eWNpbGV2cmVranZsdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjY4NDgsImV4cCI6MjA5NDk0Mjg0OH0.FoZzZt12hVCkFr_j0kTVfmgwAbRiONoSh0hSXKf35m4';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+const AI_URL = SUPA_URL + '/functions/v1/ai';
+const AI_APIKEY = 'sb_publishable_d0nvL0hqYcdJuLhLCPqqVA_TSbxTnsL';
+
+let me_ = null, profile_ = null, clients = [], selected = null, lang_ = 'en';
+
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600); }
+function show(view){ ['view-login','view-dash'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); }
+
+async function aiCall(action, payload){
+  let token = AI_APIKEY;
+  try{ const {data:{session}} = await sb.auth.getSession(); if(session?.access_token) token = session.access_token; }catch(e){}
+  const r = await fetch(AI_URL, { method:'POST', headers:{'content-type':'application/json','Authorization':'Bearer '+token,'apikey':AI_APIKEY}, body: JSON.stringify(Object.assign({action, lang:lang_}, payload)) });
+  let j={}; try{ j = await r.json(); }catch(e){}
+  if(!r.ok || j.error) throw new Error(j.error || ('AI request failed ('+r.status+')'));
+  return j;
+}
+
+// ── AUTH ──
+async function doLogin(){
+  const email = $('email').value.trim(), pw = $('pw').value;
+  if(!email||!pw){ $('login-err').textContent='Enter email and password.'; return; }
+  const btn=$('btn-login'); btn.disabled=true; btn.textContent='Signing in...';
+  const {data,error} = await sb.auth.signInWithPassword({email, password:pw});
+  btn.disabled=false; btn.textContent='Sign In';
+  if(error){ $('login-err').textContent = /invalid login/i.test(error.message)?'Wrong email or password.':error.message; return; }
+  await afterLogin(data.user);
+}
+async function doLogout(){ await sb.auth.signOut(); me_=null; profile_=null; clients=[]; selected=null; show('view-login'); $('login-form').classList.remove('hidden'); $('login-gate').classList.add('hidden'); $('pw').value=''; }
+
+async function afterLogin(user){
+  me_ = user;
+  $('login-err').textContent='';
+  const {data:p} = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  profile_ = p || {};
+  lang_ = profile_.language === 'is' ? 'is' : 'en';
+  if(profile_.coach_status !== 'approved'){
+    // Logged in but not an approved coach → gate
+    $('login-form').classList.add('hidden');
+    const g = $('login-gate'); g.classList.remove('hidden');
+    const st = profile_.coach_status;
+    $('gate-msg').innerHTML = st==='pending'
+      ? '<b>Application pending.</b> Your coach application is under review. You\'ll get access here once it\'s approved.'
+      : 'This dashboard is for approved coaches. Apply as a coach in the app to get access.';
+    show('view-login');
+    return;
+  }
+  show('view-dash');
+  $('tb-name').textContent = profile_.name ? 'Coach ' + profile_.name : 'Coach';
+  await loadAll();
+}
+
+// ── LOAD EVERYTHING (one batched pass) ──
+async function loadAll(){
+  $('client-list').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Loading...</div>';
+  // Invite code
+  loadInvite();
+  // Links + profiles
+  const {data:links} = await sb.from('coach_clients').select('client_id,status,source,created_at').eq('coach_id', me_.id).order('created_at',{ascending:false});
+  const ids = (links||[]).map(l=>l.client_id);
+  let profiles = [];
+  if(ids.length){
+    const {data:pf} = await sb.from('profiles').select('id,name,sport,program_id,age,primary_goal,equipment,days_available,bodyweight_kg,experience_level,current_day,coach_notes,injuries').in('id', ids);
+    profiles = pf||[];
+  }
+  // Bulk fetch workouts, rpe sets, PRs, notes for all clients at once
+  const fourWk = new Date(Date.now()-28*864e5).toISOString();
+  const sevenDays = Date.now()-7*864e5;
+  let workouts=[], sets=[], prs=[], notes=[];
+  if(ids.length){
+    const [w,s,r,n] = await Promise.all([
+      sb.from('workouts').select('id,title,sport,duration_min,completed_at,user_id').in('user_id',ids).order('completed_at',{ascending:false}),
+      sb.from('workout_sets').select('user_id,rpe').in('user_id',ids).not('rpe','is',null).gte('logged_at',fourWk),
+      sb.from('personal_records').select('user_id,exercise_name,weight_kg,reps').in('user_id',ids).order('weight_kg',{ascending:false}),
+      sb.from('coach_workout_notes').select('workout_id,note').eq('coach_id',me_.id)
+    ]);
+    workouts=w.data||[]; sets=s.data||[]; prs=r.data||[]; notes=n.data||[];
+  }
+  const noteMap = Object.fromEntries(notes.map(x=>[x.workout_id,x.note]));
+  // Assemble per-client
+  clients = (links||[]).map(l=>{
+    const pr = profiles.find(x=>x.id===l.client_id) || {name:'—',sport:'—'};
+    const cw = workouts.filter(x=>x.user_id===l.client_id);
+    const cs = sets.filter(x=>x.user_id===l.client_id);
+    const cp = prs.filter(x=>x.user_id===l.client_id);
+    const joined = new Date(l.created_at);
+    const weeks = Math.max(1,(Date.now()-joined)/(7*864e5));
+    const expected = Math.max(1, Math.round(weeks*(pr.days_available||3)));
+    const adherence = Math.min(100, Math.round((cw.length/expected)*100));
+    const avgRpe = cs.length ? (cs.reduce((a,b)=>a+(+b.rpe),0)/cs.length) : null;
+    return { ...l, profile:pr, workouts:cw, prs:cp, adherence, avgRpe, noteMap, sevenDays };
+  });
+  renderStats();
+  renderRequests();
+  renderClientList();
+  renderPrograms();
+  if(selected){ const still=clients.find(c=>c.client_id===selected.client_id); if(still){ selected=still; renderDetail(); } }
+}
+
+async function loadInvite(){
+  const {data} = await sb.from('coach_invites').select('*').eq('coach_id',me_.id).eq('active',true).order('created_at',{ascending:false}).limit(1);
+  if(data && data.length){
+    $('invite-code').textContent = data[0].code;
+    const exp = data[0].expires_at ? new Date(data[0].expires_at) : null;
+    $('invite-expire').textContent = (exp?'Expires '+exp.toLocaleDateString()+' · ':'') + 'Used '+data[0].used_count+'/'+data[0].max_uses;
+  } else { $('invite-code').textContent='—'; $('invite-expire').textContent='Generate a code to share'; }
+}
+
+// ── RENDER: STATS ──
+function renderStats(){
+  const active = clients.filter(c=>c.status==='active');
+  const pending = clients.filter(c=>c.status==='pending');
+  const sessions7 = clients.reduce((a,c)=>a + c.workouts.filter(w=>new Date(w.completed_at).getTime()>=c.sevenDays).length, 0);
+  const adh = active.filter(c=>c.workouts.length>=0);
+  const avgAdh = adh.length ? Math.round(adh.reduce((a,c)=>a+c.adherence,0)/adh.length) : 0;
+  const col = avgAdh>=80?'var(--accent)':avgAdh>=50?'var(--amber)':'var(--lava-1)';
+  $('stats').innerHTML = `
+    <div class="stat"><div class="stat-num gradient">${active.length}</div><div class="stat-lbl">Active clients</div></div>
+    <div class="stat"><div class="stat-num" style="color:${pending.length?'var(--aurora-3)':'var(--text)'}">${pending.length}</div><div class="stat-lbl">Pending requests</div></div>
+    <div class="stat"><div class="stat-num">${sessions7}</div><div class="stat-lbl">Sessions · last 7d</div></div>
+    <div class="stat"><div class="stat-num" style="color:${col}">${avgAdh}%</div><div class="stat-lbl">Avg adherence</div></div>`;
+}
+
+// ── RENDER: REQUESTS ──
+function renderRequests(){
+  const pending = clients.filter(c=>c.status==='pending' && c.source!=='coach'); // requests awaiting coach? show all pending
+  const allPending = clients.filter(c=>c.status==='pending');
+  if(!allPending.length){ $('requests').innerHTML=''; return; }
+  $('requests').innerHTML = `<div class="req-banner"><div class="panel-title" style="margin-bottom:8px"><i class="ti ti-user-plus"></i> Pending connections (${allPending.length})</div>${allPending.map(c=>`
+    <div class="req-row">
+      <div style="display:flex;align-items:center;gap:11px"><div class="avatar">${esc((c.profile.name||'?')[0].toUpperCase())}</div><div><div class="client-name">${esc(c.profile.name||'—')}</div><div class="client-meta">${esc(c.profile.sport||'')} · ${c.source==='email'?'added by email':'invite'}</div></div></div>
+      <div class="client-meta">Awaiting client confirmation</div>
+    </div>`).join('')}</div>`;
+}
+
+// ── RENDER: CLIENT LIST ──
+function renderClientList(){
+  const active = clients.filter(c=>c.status==='active');
+  $('client-count').textContent = '('+active.length+')';
+  if(!clients.length){ $('client-list').innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No clients yet — share your invite code.</div>'; return; }
+  $('client-list').innerHTML = clients.map(c=>{
+    const pend = c.status==='pending';
+    const col = c.adherence>=80?'pill-green':c.adherence>=50?'pill-amber':'pill-red';
+    const last = c.workouts.length ? relDate(c.workouts[0].completed_at) : 'no workouts';
+    return `<div class="client-row ${selected&&selected.client_id===c.client_id?'active':''}" onclick="selectClient('${c.client_id}')">
+      <div class="avatar">${esc((c.profile.name||'?')[0].toUpperCase())}</div>
+      <div class="client-info">
+        <div class="client-name">${esc(c.profile.name||'—')}</div>
+        <div class="client-meta">${esc(c.profile.sport||'—')} · ${last}</div>
+      </div>
+      ${pend?'<span class="pill pill-pending">Pending</span>':`<span class="pill ${col}">${c.adherence}%</span>`}
+    </div>`;
+  }).join('');
+}
+
+function relDate(d){
+  const days = Math.floor((Date.now()-new Date(d))/864e5);
+  return days===0?'today':days===1?'yesterday':days+'d ago';
+}
+
+// ── RENDER: PROGRAMS ──
+async function renderPrograms(){
+  const {data:progs} = await sb.from('programs').select('id,name,sport,level,days_per_week').eq('created_by',me_.id).eq('is_custom',true).order('created_at',{ascending:false});
+  if(!progs || !progs.length){ $('programs-list').innerHTML='<div style="color:var(--muted);font-size:13px">No custom programs yet.</div>'; return; }
+  $('programs-list').innerHTML = progs.map(p=>`<div class="client-row" style="cursor:default"><div class="avatar"><i class="ti ti-barbell"></i></div><div class="client-info"><div class="client-name">${esc(p.name)}</div><div class="client-meta">${esc(p.sport||'')} · ${p.level} · ${p.days_per_week}d/wk</div></div></div>`).join('');
+}
+
+// ── SELECT CLIENT ──
+async function selectClient(id){
+  selected = clients.find(c=>c.client_id===id);
+  renderClientList();
+  renderDetail();
+}
+
+async function renderDetail(){
+  const c = selected; if(!c) return;
+  const p = c.profile;
+  const goalMap={lose_weight:'Lose Weight',build_muscle:'Build Muscle',improve_performance:'Improve Performance',general_fitness:'General Fitness',sport_specific:'Sport Specific'};
+  const adhCol = c.adherence>=80?'var(--accent)':c.adherence>=50?'var(--amber)':'var(--lava-1)';
+  const recent = c.workouts.slice(0,12);
+  const prs = c.prs.slice(0,8);
+  // Program dropdown
+  const {data:allProgs} = await sb.from('programs').select('id,name,is_custom').order('name');
+  const curProg = p.program_id ? (allProgs||[]).find(x=>x.id===p.program_id) : null;
+
+  $('detail').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <div class="avatar" style="width:54px;height:54px;font-size:22px">${esc((p.name||'?')[0].toUpperCase())}</div>
+      <div><div style="font-size:22px;font-weight:800">${esc(p.name||'Client')}</div><div style="font-size:13px;color:var(--muted)">${esc(p.sport||'—')}${p.primary_goal?' · '+(goalMap[p.primary_goal]||p.primary_goal):''}</div></div>
+      ${c.status==='pending'?'<span class="pill pill-pending" style="margin-left:auto">Pending</span>':''}
+    </div>
+
+    <div class="dstat-row">
+      <div class="dstat"><div class="dstat-num">${c.workouts.length}</div><div class="dstat-lbl">Workouts</div></div>
+      <div class="dstat"><div class="dstat-num" style="color:${adhCol}">${c.adherence}%</div><div class="dstat-lbl">Adherence</div></div>
+      <div class="dstat"><div class="dstat-num">${c.avgRpe!=null?c.avgRpe.toFixed(1):'—'}</div><div class="dstat-lbl">Avg RPE</div></div>
+      <div class="dstat"><div class="dstat-num">${c.prs.length}</div><div class="dstat-lbl">PRs</div></div>
+      ${p.age?`<div class="dstat"><div class="dstat-num">${p.age}</div><div class="dstat-lbl">Age</div></div>`:''}
+      ${p.days_available?`<div class="dstat"><div class="dstat-num">${p.days_available}</div><div class="dstat-lbl">Days/wk</div></div>`:''}
+    </div>
+
+    ${p.injuries?`<div style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);border-radius:11px;padding:11px 14px;font-size:13px;margin-bottom:8px"><b style="color:var(--lava-1)">⚠ Injuries/notes:</b> ${esc(p.injuries)}</div>`:''}
+
+    <div class="section-lbl">Assigned Program</div>
+    <div style="margin-bottom:8px">${curProg?`<span class="pill pill-green" style="font-size:12px;padding:6px 12px"><i class="ti ti-barbell"></i> ${esc(curProg.name)}</span>`:'<span style="color:var(--muted);font-size:13px">None assigned</span>'}</div>
+    <div class="row-gap" style="margin-bottom:8px">
+      <select class="sel" id="assign-sel" style="flex:1"><option value="">— Select a program —</option>${(allProgs||[]).map(x=>`<option value="${x.id}"${x.id===p.program_id?' selected':''}>${esc(x.name)}${x.is_custom?' (custom)':''}</option>`).join('')}</select>
+      <button class="btn btn-primary" style="padding:12px 18px" onclick="assignProgram()">Assign</button>
+    </div>
+    <button class="btn btn-ghost btn-block" style="border-style:dashed;border-color:var(--accent);color:var(--accent);margin-bottom:4px" onclick="aiSuggest()"><i class="ti ti-sparkles"></i> AI Program Suggestion</button>
+
+    <div class="section-lbl">Coach Notes <span style="text-transform:none;color:var(--muted2);font-weight:600">· visible to AI coach</span></div>
+    <textarea class="txta" id="coach-notes" rows="3" placeholder="Injuries, goals, things to keep in mind...">${esc(p.coach_notes||'')}</textarea>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="saveNotes()"><i class="ti ti-device-floppy"></i> Save notes</button>
+
+    <div class="section-lbl">Recent Workouts</div>
+    <div id="wk-list">${recent.length?recent.map(w=>wkHtml(w, c.noteMap[w.id]||'')).join(''):'<div style="color:var(--muted);font-size:13px">No workouts yet</div>'}</div>
+
+    <div class="section-lbl">Personal Records</div>
+    ${prs.length?`<div class="pr-table">${prs.map(pr=>`<div class="pr-row"><span style="font-weight:600">${esc(pr.exercise_name)}</span><span style="font-weight:800;color:var(--accent)">${(+pr.weight_kg)} kg × ${pr.reps}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">No PRs yet</div>'}
+  `;
+}
+
+function wkHtml(w, note){
+  return `<div class="wk">
+    <div class="wk-top">
+      <div><div class="wk-name">${esc(w.title||w.sport||'Workout')}</div><div class="wk-meta">${relDate(w.completed_at)} · ${new Date(w.completed_at).toLocaleDateString()}</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--accent);font-weight:700">${w.duration_min?w.duration_min+'m':'—'}</span><button class="mini-btn" onclick="toggleNote('${w.id}')">${note?'Edit note':'+ Note'}</button></div>
+    </div>
+    <div id="nd-${w.id}">${note?`<div class="note-display">${esc(note)}</div>`:''}</div>
+    <div id="ne-${w.id}" class="hidden" style="margin-top:9px">
+      <textarea class="txta" id="nt-${w.id}" rows="2" placeholder="Note for this session...">${esc(note)}</textarea>
+      <div class="row-gap" style="margin-top:6px"><button class="btn btn-primary" style="padding:7px 14px;font-size:12px" onclick="saveNote('${w.id}')">Save</button><button class="mini-btn" onclick="toggleNote('${w.id}')">Cancel</button></div>
+    </div>
+  </div>`;
+}
+function toggleNote(id){ $('ne-'+id).classList.toggle('hidden'); }
+
+// ── ACTIONS ──
+async function assignProgram(){
+  const pid = $('assign-sel').value;
+  if(!pid){ toast('Select a program first'); return; }
+  const {error} = await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Program assigned!');
+  selected.profile.program_id = pid;
+  renderDetail();
+}
+async function saveNotes(){
+  const notes = $('coach-notes').value;
+  const {error} = await sb.rpc('coach_set_client_notes',{p_client:selected.client_id, p_notes:notes});
+  if(error){ toast('Error: '+error.message); return; }
+  selected.profile.coach_notes = notes;
+  toast('Notes saved');
+}
+async function saveNote(wid){
+  const note = $('nt-'+wid).value.trim();
+  const {error} = await sb.from('coach_workout_notes').upsert({coach_id:me_.id, workout_id:wid, note, updated_at:new Date().toISOString()},{onConflict:'coach_id,workout_id'});
+  if(error){ toast('Error: '+error.message); return; }
+  selected.noteMap[wid] = note;
+  $('nd-'+wid).innerHTML = note?`<div class="note-display">${esc(note)}</div>`:'';
+  toggleNote(wid);
+  toast('Note saved');
+}
+async function copyInvite(){ const code=$('invite-code').textContent; if(code==='—')return; try{await navigator.clipboard.writeText(code); toast('Code copied!');}catch(e){toast(code);} }
+async function newInvite(){
+  $('invite-code').textContent='...';
+  const {data,error} = await sb.rpc('create_coach_invite');
+  if(error){ $('invite-code').textContent='—'; toast('Error: '+error.message); return; }
+  $('invite-code').textContent = data; $('invite-expire').textContent='Expires in 30 days'; toast('New invite code ready');
+}
+async function addByEmail(){
+  const email=$('add-email').value.trim(); if(!email)return;
+  const {data,error} = await sb.rpc('coach_add_client_by_email',{p_email:email});
+  if(error){ toast('Error: '+error.message); return; }
+  $('add-email').value=''; toast('Request sent to '+(data||email)); loadAll();
+}
+
+// ── AI SUGGESTION ──
+let aiResult = null;
+async function aiSuggest(){
+  const c = selected, p = c.profile;
+  const modal=$('ai-modal'); modal.classList.remove('hidden');
+  $('ai-modal-body').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)"><span class="spin"><i class="ti ti-loader-2" style="font-size:28px"></i></span><div style="margin-top:12px">Generating a program for '+esc(p.name||'this client')+'...</div></div>';
+  try{
+    const profile = { name:p.name, sport:p.sport, experience_level:p.experience_level||'intermediate', primary_goal:p.primary_goal, equipment:p.equipment, days_per_week:p.days_available||4, injuries:p.injuries||'', age:p.age, bodyweight_kg:p.bodyweight_kg, coach_notes:p.coach_notes||'' };
+    const known = c.prs.map(x=>x.exercise_name);
+    const res = await aiCall('program',{profile, exercises:known});
+    aiResult = res.data;
+    if(!aiResult || !aiResult.days) throw new Error('Unexpected AI format');
+    renderAiPreview();
+  }catch(e){ $('ai-modal-body').innerHTML = '<div class="err" style="text-align:center;padding:20px">AI error: '+esc(e.message)+'</div>'; }
+}
+function renderAiPreview(){
+  const prog = aiResult;
+  $('ai-modal-body').innerHTML = `
+    <div style="margin-bottom:14px"><div style="font-size:17px;font-weight:800">${esc(prog.name||'AI Program')}</div><div style="font-size:13px;color:var(--muted)">${prog.days_per_week||prog.days.length} days/week · ${prog.weeks||8} weeks</div></div>
+    ${prog.days.map(d=>`<div class="ai-day"><div class="ai-day-title">${esc(d.title||'Day')}</div>${d.focus?`<div class="ai-day-focus">${esc(d.focus)}</div>`:''}${(d.exercises||[]).map(e=>`<div class="ai-ex"><span>${esc(e.name)}</span><span style="color:var(--muted)">${e.sets}×${esc(e.reps)}${e.target_weight&&e.target_weight!=='-'?' · '+esc(e.target_weight)+'kg':''}</span></div>`).join('')}</div>`).join('')}
+    <div style="font-size:12px;color:var(--muted);margin:14px 0">Save it as a custom program, then assign it or open the app to fine-tune with drag &amp; drop.</div>
+    <div class="row-gap">
+      <button class="btn btn-primary" style="flex:1" id="ai-save-btn" onclick="saveAiProgram(false)"><i class="ti ti-device-floppy"></i> Save program</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveAiProgram(true)"><i class="ti ti-checkbox"></i> Save &amp; assign</button>
+    </div>
+    <a href="islandfit.html?coach" class="btn btn-ghost btn-block" style="margin-top:10px"><i class="ti ti-external-link"></i> Open app to edit (drag &amp; drop)</a>`;
+}
+async function saveAiProgram(assign){
+  const prog = aiResult, p = selected.profile;
+  const btn=$('ai-save-btn'); if(btn){btn.disabled=true;}
+  try{
+    const {data:created, error:pe} = await sb.from('programs').insert({name:prog.name||((p.name||'')+"'s Program"), sport:p.sport||'General', level:p.experience_level||'intermediate', days_per_week:prog.days_per_week||p.days_available||4, duration_weeks:prog.weeks||8, is_custom:true, created_by:me_.id, icon:'ti-barbell'}).select('id').single();
+    if(pe) throw pe;
+    const pid = created.id;
+    for(let i=0;i<prog.days.length;i++){
+      const d = prog.days[i];
+      const {data:wk, error:we} = await sb.from('program_workouts').insert({program_id:pid, day_number:i+1, title:d.title||('Day '+(i+1)), focus:d.focus||null, estimated_min:60}).select('id').single();
+      if(we) throw we;
+      const exs = (d.exercises||[]).map((e,idx)=>({workout_id:wk.id, order_idx:idx+1, exercise_name:e.name, sets:e.sets||3, reps:String(e.reps||'8'), target_weight:e.target_weight||'—', rest_seconds:e.rest_seconds||90, icon:'ti-barbell'}));
+      if(exs.length){ const {error:ee}=await sb.from('program_exercises').insert(exs); if(ee) throw ee; }
+    }
+    if(assign){
+      const {error:ae} = await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid});
+      if(ae) throw ae;
+      selected.profile.program_id = pid;
+    }
+    closeAiModal();
+    toast(assign?'Program saved & assigned!':'Program saved!');
+    renderPrograms();
+    if(assign) renderDetail();
+  }catch(e){ toast('Error: '+e.message); if(btn) btn.disabled=false; }
+}
+function closeAiModal(){ $('ai-modal').classList.add('hidden'); aiResult=null; }
+
+// ── BOOT ──
+$('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+(async()=>{
+  const {data:{session}} = await sb.auth.getSession();
+  if(session?.user) await afterLogin(session.user);
+  else show('view-login');
+})();
+</script>
+</body>
+</html>
