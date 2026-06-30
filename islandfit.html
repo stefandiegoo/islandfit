@@ -530,6 +530,12 @@ body::before{
 .ci-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .ci-metric{font-size:11px;background:var(--surface2);border-radius:8px;padding:4px 9px;color:var(--text-soft)}
 .ci-metric b{color:var(--text)}
+/* body metrics */
+.bm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.bm-field{display:flex;flex-direction:column;gap:3px}
+.bm-field span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+.bm-field input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px;width:100%}
+.bm-photo-thumb{width:100%;border-radius:8px;background:#000;object-fit:cover;aspect-ratio:3/4}
 </style>
 </head>
 <body>
@@ -1277,6 +1283,10 @@ body::before{
     <div class="section-label">Form Checks <span id="coach-fc-count" style="color:var(--amber)"></span></div>
     <div id="coach-client-formchecks"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <!-- Body metrics & photos -->
+    <div class="section-label">Body & Photos <span id="coach-body-count" style="color:var(--aurora-2)"></span></div>
+    <div id="coach-client-body"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <!-- Strength progress -->
     <div class="section-label">Strength Progress · est. 1RM over time</div>
     <div id="coach-client-progress"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
@@ -1455,6 +1465,7 @@ function epley1RM(weightKg,reps){
 // ── PERIODIZATION (4-week wave) + %1RM PRESCRIPTION ──
 let prMaxes={}; // exercise_name → estimated 1RM (kg), from personal_records
 let latestCheckin=null; // most recent weekly_checkins row for the AI coach context
+let bodyMetricsRecent=[]; // last two body_metrics rows for the AI coach context
 // NSCA Training Load Chart — %1RM for a given rep target (public reference data, nsca.com)
 function nscaPct(reps){
   const r=parseInt(reps)||8;
@@ -2133,6 +2144,7 @@ function aiSummaryPayload(){
     readiness_recent: rd.slice(0,7),
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
     weekly_checkin: aiCheckinContext(),
+    body_trend: aiBodyContext(),
     last_4_weeks: series, top_lift_e1RM_trend: liftTrend
   };
 }
@@ -2159,6 +2171,7 @@ function aiChatContext(){
     todays_readiness: readiness,
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
     weekly_checkin: aiCheckinContext(),
+    body_trend: aiBodyContext(),
     today_workout:(typeof todayWorkout!=='undefined'&&todayWorkout)?todayWorkout.title:null,
     current_exercise: ex?{name:ex.exercise_name, target_weight:String(ex.target_weight), reps:ex.reps, sets:ex.sets}:null,
     top_estimated_1RM: Object.entries(prMaxes).map(([n,e])=>({lift:n, est_1RM_kg:Math.round(e)})).sort((a,b)=>b.est_1RM_kg-a.est_1RM_kg).slice(0,6)
@@ -3232,6 +3245,26 @@ async function loadProgress(){
     const {data:ci}=await sb.from('weekly_checkins').select('*').eq('client_id',currentUser.id).order('week_date',{ascending:false}).limit(1);
     latestCheckin=(ci&&ci.length)?ci[0]:null;
   }catch(e){ latestCheckin=null; }
+  // last two body measurements feed the AI coach (weight/waist trend for a body-comp goal)
+  try{
+    const {data:bm}=await sb.from('body_metrics').select('measured_on,weight_kg,waist_cm,body_fat_pct').eq('client_id',currentUser.id).order('measured_on',{ascending:false}).limit(2);
+    bodyMetricsRecent=bm||[];
+  }catch(e){ bodyMetricsRecent=[]; }
+}
+
+// Body-composition trend for AI payloads (latest + change vs the prior measurement)
+function aiBodyContext(){
+  if(!bodyMetricsRecent||!bodyMetricsRecent.length) return null;
+  const latest=bodyMetricsRecent[0];
+  const ageDays=Math.floor((Date.now()-new Date(latest.measured_on+'T00:00:00'))/864e5);
+  if(ageDays>45) return null; // stale
+  const prev=bodyMetricsRecent[1];
+  const ctx={ measured_on:latest.measured_on, weight_kg:latest.weight_kg||null, waist_cm:latest.waist_cm||null, body_fat_pct:latest.body_fat_pct||null };
+  if(prev){
+    if(latest.weight_kg!=null&&prev.weight_kg!=null) ctx.weight_change_kg=Math.round((latest.weight_kg-prev.weight_kg)*10)/10;
+    if(latest.waist_cm!=null&&prev.waist_cm!=null) ctx.waist_change_cm=Math.round((latest.waist_cm-prev.waist_cm)*10)/10;
+  }
+  return ctx;
 }
 
 // Compact check-in summary for AI payloads (null if none in the last ~2 weeks)
@@ -3691,6 +3724,58 @@ async function openClientDetail(clientId){
   renderCoachClientProgress(clientId);
   renderCoachFormChecks(clientId);
   renderCoachCheckins(clientId);
+  renderCoachBody(clientId);
+}
+
+// ── COACH: client body metrics + progress photos ──
+async function renderCoachBody(clientId){
+  const wrap=document.getElementById('coach-client-body'); if(!wrap) return;
+  const countEl=document.getElementById('coach-body-count');
+  const [{data:metrics},{data:photos}]=await Promise.all([
+    sb.from('body_metrics').select('*').eq('client_id',clientId).order('measured_on',{ascending:false}).limit(12),
+    sb.from('progress_photos').select('*').eq('client_id',clientId).order('taken_on',{ascending:false}).limit(12)
+  ]);
+  if((!metrics||!metrics.length)&&(!photos||!photos.length)){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No measurements or photos yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  if(countEl) countEl.textContent='';
+  const fmtL=v=>v!=null?lenIn(v)+lenUnit():'—';
+  const fmtW=v=>v!=null?(units==='imperial'?Math.round(v*2.20462)+' lbs':v+' kg'):'—';
+  let html='';
+  // trend: compare latest vs oldest in the window for weight + waist
+  if(metrics&&metrics.length){
+    const chron=[...metrics].reverse();
+    const first=chron[0], last=chron[chron.length-1];
+    const delta=(a,b,fmt)=>{ if(a==null||b==null) return ''; const d=b-a; const s=d>0?'+':''; return ` <span style="color:${d===0?'var(--muted)':(d<0?'var(--aurora-1)':'var(--lava-2)')};font-size:11px">(${s}${Math.round(d*10)/10})</span>`; };
+    if(metrics.length>=2){
+      html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;font-size:12px;color:var(--text-soft)">
+        <b style="color:var(--text)">Since ${new Date(first.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}:</b>
+        ${first.weight_kg!=null&&last.weight_kg!=null?` Weight ${fmtW(last.weight_kg)}${delta(first.weight_kg,last.weight_kg)}`:''}
+        ${first.waist_cm!=null&&last.waist_cm!=null?` · Waist ${fmtL(last.waist_cm)}${delta(lenIn(first.waist_cm),lenIn(last.waist_cm))}`:''}
+      </div>`;
+    }
+    html+=metrics.map(m=>`<div class="ci-card">
+      <div class="ci-card-date">${new Date(m.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div class="ci-metrics">
+        ${m.weight_kg!=null?`<span class="ci-metric"><b>Wt</b> ${fmtW(m.weight_kg)}</span>`:''}
+        ${m.body_fat_pct!=null?`<span class="ci-metric"><b>BF</b> ${m.body_fat_pct}%</span>`:''}
+        ${m.chest_cm!=null?`<span class="ci-metric"><b>Chest</b> ${fmtL(m.chest_cm)}</span>`:''}
+        ${m.waist_cm!=null?`<span class="ci-metric"><b>Waist</b> ${fmtL(m.waist_cm)}</span>`:''}
+        ${m.hip_cm!=null?`<span class="ci-metric"><b>Hips</b> ${fmtL(m.hip_cm)}</span>`:''}
+        ${m.arm_cm!=null?`<span class="ci-metric"><b>Arm</b> ${fmtL(m.arm_cm)}</span>`:''}
+        ${m.thigh_cm!=null?`<span class="ci-metric"><b>Thigh</b> ${fmtL(m.thigh_cm)}</span>`:''}
+        ${m.neck_cm!=null?`<span class="ci-metric"><b>Neck</b> ${fmtL(m.neck_cm)}</span>`:''}
+      </div></div>`).join('');
+  }
+  if(photos&&photos.length){
+    const paths=photos.map(p=>p.photo_path);
+    const {data:signed}=await sb.storage.from('progress-photos').createSignedUrls(paths,3600);
+    const urlMap={}; (signed||[]).forEach((s,i)=>{ if(s&&s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:12px 0 6px">Progress photos</div>';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+photos.map(p=>{
+      const url=urlMap[p.photo_path];
+      return `<div style="position:relative">${url?`<img class="bm-photo-thumb" src="${url}">`:'<div class="bm-photo-thumb"></div>'}<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;text-transform:capitalize">${p.pose}</div><div style="font-size:9px;color:var(--muted);text-align:center;margin-top:2px">${new Date(p.taken_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>`;
+    }).join('')+'</div>';
+  }
+  wrap.innerHTML=html;
 }
 
 // ── COACH: client weekly check-ins ──
@@ -3878,6 +3963,7 @@ async function loadMyCoachSection(){
           <button onclick="toggleCoachChat('${a.coach_id}')" id="chat-toggle-${a.coach_id}" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-message"></i> Message</button>
           <button onclick="toggleFormCheck('${a.coach_id}')" id="fc-toggle-${a.coach_id}" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-video"></i> Form check</button>
           <button onclick="toggleCheckin('${a.coach_id}')" style="font-size:11px;color:var(--lava-2);padding:6px 10px;border:1px solid var(--lava-2);border-radius:8px"><i class="ti ti-clipboard-check"></i> Check-in</button>
+          <button onclick="toggleBody('${a.coach_id}')" style="font-size:11px;color:var(--aurora-2);padding:6px 10px;border:1px solid var(--aurora-2);border-radius:8px"><i class="ti ti-ruler-2"></i> Body</button>
           <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
         </div>
       </div>
@@ -3910,6 +3996,34 @@ async function loadMyCoachSection(){
           <button class="btn btn-primary" style="width:100%" id="ci-send-${a.coach_id}" onclick="submitCheckin('${a.coach_id}')"><i class="ti ti-clipboard-check"></i> Submit check-in</button>
         </div>
         <div id="ci-history-${a.coach_id}"></div>
+      </div>
+      <div id="body-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Log measurements and progress photos — your coach sees your trend over time.</div>
+        <div class="ci-wrap">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Measurements (${units==='imperial'?'in / lbs':'cm / kg'})</div>
+          <div class="bm-grid">
+            <label class="bm-field"><span>Weight</span><input id="bm-weight-${a.coach_id}" type="number" step="0.1" placeholder="${units==='imperial'?'lbs':'kg'}"></label>
+            <label class="bm-field"><span>Body fat %</span><input id="bm-bf-${a.coach_id}" type="number" step="0.1" placeholder="%"></label>
+            <label class="bm-field"><span>Neck</span><input id="bm-neck-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Chest</span><input id="bm-chest-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Waist</span><input id="bm-waist-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Hips</span><input id="bm-hip-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Arm</span><input id="bm-arm-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Thigh</span><input id="bm-thigh-${a.coach_id}" type="number" step="0.1"></label>
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:4px" id="bm-send-${a.coach_id}" onclick="submitBodyMetrics('${a.coach_id}')"><i class="ti ti-device-floppy"></i> Save measurements</button>
+        </div>
+        <div class="ci-wrap" style="margin-top:10px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Progress photo</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <select id="pp-pose-${a.coach_id}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:10px;font-size:14px">
+              <option value="front">Front</option><option value="side">Side</option><option value="back">Back</option>
+            </select>
+            <input type="file" id="pp-file-${a.coach_id}" accept="image/*" style="flex:1;font-size:12px;color:var(--text-soft)">
+          </div>
+          <button class="btn btn-primary" style="width:100%" id="pp-send-${a.coach_id}" onclick="submitProgressPhoto('${a.coach_id}')"><i class="ti ti-camera"></i> Upload photo</button>
+        </div>
+        <div id="body-history-${a.coach_id}"></div>
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
@@ -4091,6 +4205,102 @@ async function loadCheckinHistory(coachId){
       </div>
       ${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}
     </div>`).join('');
+}
+
+// ── BODY MEASUREMENTS + PROGRESS PHOTOS (client side) ──
+function toggleBody(coachId){
+  const box = document.getElementById('body-box-'+coachId);
+  if(!box) return;
+  const open = box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadBodyHistory(coachId);
+}
+// length units: stored in cm. imperial shows inches.
+const cmToIn=cm=>cm/2.54, inToCm=v=>v*2.54;
+function lenIn(v){ return units==='imperial'?Math.round(cmToIn(v)*10)/10:v; }
+function lenStore(raw){ const v=parseFloat(raw); if(isNaN(v)) return null; return units==='imperial'?Math.round(inToCm(v)*10)/10:v; }
+function lenUnit(){ return units==='imperial'?'in':'cm'; }
+
+async function submitBodyMetrics(coachId){
+  const g=f=>document.getElementById('bm-'+f+'-'+coachId).value;
+  const weightRaw=g('weight');
+  let weight_kg=null;
+  if(weightRaw){ const w=parseFloat(weightRaw); weight_kg=units==='imperial'?Math.round(w/2.20462*10)/10:w; }
+  const bf=g('bf')?parseFloat(g('bf')):null;
+  const row={
+    client_id:currentUser.id, measured_on:new Date().toISOString().slice(0,10),
+    weight_kg, body_fat_pct:bf,
+    neck_cm:lenStore(g('neck')), chest_cm:lenStore(g('chest')), waist_cm:lenStore(g('waist')),
+    hip_cm:lenStore(g('hip')), arm_cm:lenStore(g('arm')), thigh_cm:lenStore(g('thigh'))
+  };
+  const hasAny=['weight_kg','body_fat_pct','neck_cm','chest_cm','waist_cm','hip_cm','arm_cm','thigh_cm'].some(k=>row[k]!=null);
+  if(!hasAny){ showToast('Fill in at least one measurement'); return; }
+  const btn=document.getElementById('bm-send-'+coachId); btn.disabled=true; btn.textContent='Saving...';
+  const {error}=await sb.from('body_metrics').upsert(row,{onConflict:'client_id,measured_on'});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i> Save measurements';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Measurements saved');
+  ['weight','bf','neck','chest','waist','hip','arm','thigh'].forEach(f=>{const el=document.getElementById('bm-'+f+'-'+coachId); if(el) el.value='';});
+  loadBodyHistory(coachId);
+}
+
+async function submitProgressPhoto(coachId){
+  const pose=document.getElementById('pp-pose-'+coachId).value;
+  const fileEl=document.getElementById('pp-file-'+coachId);
+  const file=fileEl.files&&fileEl.files[0];
+  if(!file){ showToast('Pick a photo first'); return; }
+  if(file.size>20971520){ showToast('Photo too big (max 20MB)'); return; }
+  const btn=document.getElementById('pp-send-'+coachId); btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Uploading...';
+  try{
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+    const path=currentUser.id+'/'+(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2))+'.'+ext;
+    const {error:upErr}=await sb.storage.from('progress-photos').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});
+    if(upErr) throw upErr;
+    const {error:insErr}=await sb.from('progress_photos').insert({client_id:currentUser.id, taken_on:new Date().toISOString().slice(0,10), pose, photo_path:path});
+    if(insErr) throw insErr;
+    fileEl.value='';
+    showToast('Photo uploaded 📸');
+    loadBodyHistory(coachId);
+  }catch(e){ showToast('Error: '+e.message); }
+  finally{ btn.disabled=false; btn.innerHTML='<i class="ti ti-camera"></i> Upload photo'; }
+}
+
+async function loadBodyHistory(coachId){
+  const wrap=document.getElementById('body-history-'+coachId); if(!wrap) return;
+  const [{data:metrics},{data:photos}]=await Promise.all([
+    sb.from('body_metrics').select('*').eq('client_id',currentUser.id).order('measured_on',{ascending:false}).limit(8),
+    sb.from('progress_photos').select('*').eq('client_id',currentUser.id).order('taken_on',{ascending:false}).limit(9)
+  ]);
+  let html='';
+  if(metrics&&metrics.length){
+    const fmtL=v=>v!=null?lenIn(v)+lenUnit():'—';
+    const fmtW=v=>v!=null?(units==='imperial'?Math.round(v*2.20462)+' lbs':v+' kg'):'—';
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Measurement history</div>';
+    html+=metrics.map(m=>`<div class="ci-card">
+      <div class="ci-card-date">${new Date(m.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div class="ci-metrics">
+        ${m.weight_kg!=null?`<span class="ci-metric"><b>Wt</b> ${fmtW(m.weight_kg)}</span>`:''}
+        ${m.body_fat_pct!=null?`<span class="ci-metric"><b>BF</b> ${m.body_fat_pct}%</span>`:''}
+        ${m.chest_cm!=null?`<span class="ci-metric"><b>Chest</b> ${fmtL(m.chest_cm)}</span>`:''}
+        ${m.waist_cm!=null?`<span class="ci-metric"><b>Waist</b> ${fmtL(m.waist_cm)}</span>`:''}
+        ${m.hip_cm!=null?`<span class="ci-metric"><b>Hips</b> ${fmtL(m.hip_cm)}</span>`:''}
+        ${m.arm_cm!=null?`<span class="ci-metric"><b>Arm</b> ${fmtL(m.arm_cm)}</span>`:''}
+        ${m.thigh_cm!=null?`<span class="ci-metric"><b>Thigh</b> ${fmtL(m.thigh_cm)}</span>`:''}
+        ${m.neck_cm!=null?`<span class="ci-metric"><b>Neck</b> ${fmtL(m.neck_cm)}</span>`:''}
+      </div></div>`).join('');
+  }
+  if(photos&&photos.length){
+    const paths=photos.map(p=>p.photo_path);
+    const {data:signed}=await sb.storage.from('progress-photos').createSignedUrls(paths,3600);
+    const urlMap={}; (signed||[]).forEach((s,i)=>{ if(s&&s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:12px 0 6px">Progress photos</div>';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+photos.map(p=>{
+      const url=urlMap[p.photo_path];
+      return `<div style="position:relative">${url?`<img class="bm-photo-thumb" src="${url}">`:'<div class="bm-photo-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">n/a</div>'}<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;text-transform:capitalize">${p.pose}</div><div style="font-size:9px;color:var(--muted);text-align:center;margin-top:2px">${new Date(p.taken_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>`;
+    }).join('')+'</div>';
+  }
+  wrap.innerHTML=html;
 }
 
 async function redeemInviteCode(){

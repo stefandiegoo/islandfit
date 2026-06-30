@@ -577,6 +577,9 @@ async function renderDetail(){
     <div class="section-lbl">Form Checks <span id="fc-count" style="text-transform:none;color:var(--amber);font-weight:700"></span></div>
     <div id="fc-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <div class="section-lbl">Body & Photos <span id="body-count" style="text-transform:none;color:var(--muted2);font-weight:600"></span></div>
+    <div id="body-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
     <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
@@ -590,6 +593,56 @@ async function renderDetail(){
   renderProgress();
   renderFormChecks();
   renderCheckins();
+  renderBody();
+}
+
+// ── BODY METRICS + PROGRESS PHOTOS (coach reads) ──
+async function renderBody(){
+  const c = selected; if(!c) return;
+  const wrap = $('body-wrap'); if(!wrap) return;
+  const [{data:metrics},{data:photos}] = await Promise.all([
+    sb.from('body_metrics').select('*').eq('client_id',c.client_id).order('measured_on',{ascending:false}).limit(12),
+    sb.from('progress_photos').select('*').eq('client_id',c.client_id).order('taken_on',{ascending:false}).limit(12)
+  ]);
+  if((!metrics||!metrics.length)&&(!photos||!photos.length)){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No measurements or photos yet.</div>'; return; }
+  const L=v=>v!=null?v+' cm':'—';
+  const W=v=>v!=null?v+' kg':'—';
+  let html='';
+  if(metrics&&metrics.length){
+    const chron=[...metrics].reverse();
+    const first=chron[0], last=chron[chron.length-1];
+    const delta=(a,b)=>{ if(a==null||b==null) return ''; const d=Math.round((b-a)*10)/10; const s=d>0?'+':''; return ` <span style="color:${d===0?'var(--muted)':(d<0?'var(--accent)':'#f5a623')};font-size:11px">(${s}${d})</span>`; };
+    if(metrics.length>=2){
+      html+=`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;font-size:12px;color:var(--text-soft)">
+        <b style="color:var(--text)">Since ${new Date(first.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}:</b>
+        ${first.weight_kg!=null&&last.weight_kg!=null?` Weight ${W(last.weight_kg)}${delta(first.weight_kg,last.weight_kg)}`:''}
+        ${first.waist_cm!=null&&last.waist_cm!=null?` · Waist ${L(last.waist_cm)}${delta(first.waist_cm,last.waist_cm)}`:''}
+      </div>`;
+    }
+    html+=metrics.map(m=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">${new Date(m.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        ${m.weight_kg!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Wt</b> ${W(m.weight_kg)}</span>`:''}
+        ${m.body_fat_pct!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>BF</b> ${m.body_fat_pct}%</span>`:''}
+        ${m.chest_cm!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Chest</b> ${L(m.chest_cm)}</span>`:''}
+        ${m.waist_cm!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Waist</b> ${L(m.waist_cm)}</span>`:''}
+        ${m.hip_cm!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Hips</b> ${L(m.hip_cm)}</span>`:''}
+        ${m.arm_cm!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Arm</b> ${L(m.arm_cm)}</span>`:''}
+        ${m.thigh_cm!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Thigh</b> ${L(m.thigh_cm)}</span>`:''}
+        ${m.neck_cm!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>Neck</b> ${L(m.neck_cm)}</span>`:''}
+      </div></div>`).join('');
+  }
+  if(photos&&photos.length){
+    const paths=photos.map(p=>p.photo_path);
+    const {data:signed}=await sb.storage.from('progress-photos').createSignedUrls(paths,3600);
+    const urlMap={}; (signed||[]).forEach((s,i)=>{ if(s&&s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+    html+='<div style="font-size:12px;color:var(--muted);font-weight:700;margin:12px 0 6px">Progress photos</div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'+photos.map(p=>{
+      const url=urlMap[p.photo_path];
+      return `<div style="position:relative">${url?`<img src="${url}" style="width:100%;border-radius:8px;background:#000;object-fit:cover;aspect-ratio:3/4">`:'<div style="width:100%;aspect-ratio:3/4;border-radius:8px;background:var(--surface2)"></div>'}<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;text-transform:capitalize">${p.pose}</div><div style="font-size:9px;color:var(--muted);text-align:center;margin-top:2px">${new Date(p.taken_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>`;
+    }).join('')+'</div>';
+  }
+  wrap.innerHTML=html;
 }
 
 // ── WEEKLY CHECK-INS (coach reads client check-ins) ──
