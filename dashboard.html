@@ -121,6 +121,12 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .pr-table{background:var(--surface2);border-radius:12px;overflow:hidden}
 .pr-row{display:flex;justify-content:space-between;align-items:center;padding:11px 15px;font-size:13px}
 .pr-row+.pr-row{border-top:1px solid var(--border)}
+.roster-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.roster-tbl th{text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;cursor:pointer;white-space:nowrap;border-bottom:1px solid var(--border);user-select:none}
+.roster-tbl th:hover{color:var(--text-soft)}
+.roster-tbl td{padding:11px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.roster-tbl tbody tr{cursor:pointer;transition:background 0.15s}
+.roster-tbl tbody tr:hover{background:var(--surface2)}
 .sel{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px}
 .row-gap{display:flex;gap:9px}
 
@@ -220,6 +226,8 @@ main{max-width:1400px;margin:0 auto;padding:28px}
     <div id="alerts"></div>
     <!-- Pending requests -->
     <div id="requests"></div>
+    <!-- Whole-roster overview -->
+    <div id="roster"></div>
     <!-- Grid -->
     <div class="grid">
       <!-- Left: clients + invite -->
@@ -418,6 +426,7 @@ async function loadAll(){
   renderStats();
   renderAlerts();
   renderRequests();
+  renderRoster();
   renderClientList();
   renderPrograms();
   loadExerciseDemos();
@@ -501,6 +510,59 @@ function renderAlerts(){
       <div style="flex:1;min-width:0"><div class="client-name">${esc(a.c.profile.name||'—')}</div><div class="client-meta">${esc(a.msg)}</div></div>
       <span class="alert-tag ${a.level==='red'?'alert-red':'alert-amber'}">${a.tag}</span>
     </div>`).join('')}
+  </div>`;
+}
+
+// ── RENDER: WHOLE-ROSTER OVERVIEW (sortable summary of every active client) ──
+let rosterSort={key:'attention',dir:-1};
+function setRosterSort(k){ if(rosterSort.key===k) rosterSort.dir*=-1; else { rosterSort={key:k,dir:1}; } renderRoster(); }
+function renderRoster(){
+  const wrap=$('roster'); if(!wrap) return;
+  const active=clients.filter(c=>c.status==='active');
+  if(active.length<2){ wrap.innerHTML=''; return; }
+  const rows=active.map(c=>{
+    const last=c.workouts.length?c.workouts[0].completed_at:null;
+    const since=daysSince(last);
+    // a simple "needs attention" score so the default sort floats problems up
+    let attn=0;
+    if(c.pendingFc>0) attn+=5;
+    if(since>=10) attn+=4; else if(since>=6) attn+=2;
+    if(c.workouts.length>=2 && c.adherence<50) attn+=2;
+    if(c.avgRpe!=null && c.avgRpe>=9) attn+=1;
+    if(!c.checkedInThisWeek) attn+=1;
+    return {c, name:c.profile.name||'—', since, adherence:c.adherence, avgRpe:c.avgRpe, checkin:c.checkedInThisWeek?1:0, pendingFc:c.pendingFc||0, attention:attn};
+  });
+  const k=rosterSort.key, dir=rosterSort.dir;
+  rows.sort((a,b)=>{
+    let av=a[k], bv=b[k];
+    if(k==='name'){ return dir*String(av).localeCompare(String(bv)); }
+    if(av==null) av=-Infinity; if(bv==null) bv=-Infinity;
+    return dir*(av-bv);
+  });
+  const arrow=key=>rosterSort.key===key?(rosterSort.dir>0?' ▲':' ▼'):'';
+  const adhCol=v=>v>=80?'var(--accent)':v>=50?'var(--amber)':'var(--lava-1)';
+  const sinceCol=s=>s>=10?'var(--lava-1)':s>=6?'var(--amber)':'var(--text-soft)';
+  wrap.innerHTML=`<div class="panel" style="margin-bottom:24px">
+    <div class="panel-title"><span><i class="ti ti-layout-grid"></i> Roster overview (${active.length})</span></div>
+    <div style="overflow-x:auto">
+    <table class="roster-tbl">
+      <thead><tr>
+        <th onclick="setRosterSort('name')">Client${arrow('name')}</th>
+        <th onclick="setRosterSort('since')">Last workout${arrow('since')}</th>
+        <th onclick="setRosterSort('adherence')">Adherence${arrow('adherence')}</th>
+        <th onclick="setRosterSort('avgRpe')">Avg RPE${arrow('avgRpe')}</th>
+        <th onclick="setRosterSort('checkin')">Check-in${arrow('checkin')}</th>
+        <th onclick="setRosterSort('pendingFc')">Form${arrow('pendingFc')}</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>`<tr onclick="selectClient('${r.c.client_id}')">
+        <td style="font-weight:600">${esc(r.name)}</td>
+        <td style="color:${sinceCol(r.since)}">${r.since===Infinity?'never':r.since===0?'today':r.since+'d ago'}</td>
+        <td><span style="font-weight:700;color:${adhCol(r.adherence)}">${r.adherence}%</span></td>
+        <td>${r.avgRpe!=null?r.avgRpe.toFixed(1):'—'}</td>
+        <td>${r.checkin?'<span style="color:var(--accent)">✓</span>':'<span style="color:var(--muted)">—</span>'}</td>
+        <td>${r.pendingFc?`<span style="color:var(--amber);font-weight:700">${r.pendingFc}</span>`:'<span style="color:var(--muted)">0</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
   </div>`;
 }
 
