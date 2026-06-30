@@ -1301,6 +1301,10 @@ body::before{
     <div class="section-label">Nutrition <span style="text-transform:none;color:var(--muted2);font-weight:600">· set targets & track intake</span></div>
     <div id="coach-client-nutrition"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <!-- Habits & cardio -->
+    <div class="section-label">Habits & Cardio</div>
+    <div id="coach-client-lifestyle"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <!-- Strength progress -->
     <div class="section-label">Strength Progress · est. 1RM over time</div>
     <div id="coach-client-progress"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
@@ -3845,6 +3849,36 @@ async function openClientDetail(clientId){
   renderCoachCheckins(clientId);
   renderCoachBody(clientId);
   renderCoachNutrition(clientId);
+  renderCoachLifestyle(clientId);
+}
+
+// ── COACH: client habits + cardio ──
+async function renderCoachLifestyle(clientId){
+  const wrap=document.getElementById('coach-client-lifestyle'); if(!wrap) return;
+  const [{data:habits},{data:cardio}]=await Promise.all([
+    sb.from('daily_habits').select('*').eq('client_id',clientId).order('log_date',{ascending:false}).limit(7),
+    sb.from('cardio_sessions').select('*').eq('client_id',clientId).order('performed_on',{ascending:false}).limit(8)
+  ]);
+  let html='';
+  if(habits&&habits.length){
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:2px 0 6px">Daily habits</div>';
+    html+=habits.map(r=>`<div class="ci-card"><div class="ci-card-date">${new Date(r.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+      <div class="ci-metrics">
+        ${r.steps!=null?`<span class="ci-metric"><b>${r.steps.toLocaleString()}</b> steps</span>`:''}
+        ${r.water_ml!=null?`<span class="ci-metric"><b>${(r.water_ml/1000).toFixed(1)}</b> L</span>`:''}
+        ${r.sleep_hours!=null?`<span class="ci-metric"><b>${r.sleep_hours}</b> h sleep</span>`:''}
+      </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}</div>`).join('');
+  }
+  if(cardio&&cardio.length){
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:12px 0 6px">Cardio sessions</div>';
+    html+=cardio.map(r=>`<div class="ci-card"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:700;text-transform:capitalize">${escapeHtml(r.modality)}</div><div class="ci-card-date" style="margin-bottom:0">${new Date(r.performed_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>
+      <div class="ci-metrics" style="margin-top:6px">
+        ${r.duration_min!=null?`<span class="ci-metric"><b>${r.duration_min}</b> min</span>`:''}
+        ${r.distance_km!=null?`<span class="ci-metric"><b>${r.distance_km}</b> km</span>`:''}
+        ${r.avg_hr!=null?`<span class="ci-metric"><b>${r.avg_hr}</b> bpm</span>`:''}
+      </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}</div>`).join('');
+  }
+  wrap.innerHTML = html || '<div style="color:var(--muted);font-size:13px;padding:4px 0">No habits or cardio logged yet.</div>';
 }
 
 // ── COACH: client nutrition (set macro targets + view adherence) ──
@@ -4132,6 +4166,8 @@ async function loadMyCoachSection(){
           <button onclick="toggleCheckin('${a.coach_id}')" style="font-size:11px;color:var(--lava-2);padding:6px 10px;border:1px solid var(--lava-2);border-radius:8px"><i class="ti ti-clipboard-check"></i> Check-in</button>
           <button onclick="toggleBody('${a.coach_id}')" style="font-size:11px;color:var(--aurora-2);padding:6px 10px;border:1px solid var(--aurora-2);border-radius:8px"><i class="ti ti-ruler-2"></i> Body</button>
           <button onclick="toggleNutrition('${a.coach_id}')" style="font-size:11px;color:var(--aurora-1);padding:6px 10px;border:1px solid var(--aurora-1);border-radius:8px"><i class="ti ti-salad"></i> Nutrition</button>
+          <button onclick="toggleHabits('${a.coach_id}')" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-heartbeat"></i> Habits</button>
+          <button onclick="toggleCardio('${a.coach_id}')" style="font-size:11px;color:var(--lava-1);padding:6px 10px;border:1px solid var(--lava-1);border-radius:8px"><i class="ti ti-run"></i> Cardio</button>
           <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
         </div>
       </div>
@@ -4207,6 +4243,33 @@ async function loadMyCoachSection(){
           <button class="btn btn-primary" style="width:100%" id="nl-send-${a.coach_id}" onclick="submitNutrition('${a.coach_id}')"><i class="ti ti-device-floppy"></i> Save today</button>
         </div>
         <div id="nutr-history-${a.coach_id}"></div>
+      </div>
+      <div id="habit-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div class="ci-wrap">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Today's habits</div>
+          <div class="bm-grid">
+            <label class="bm-field"><span>Steps</span><input id="hb-steps-${a.coach_id}" type="number" step="1" placeholder="e.g. 8000"></label>
+            <label class="bm-field"><span>Water (ml)</span><input id="hb-water-${a.coach_id}" type="number" step="1" placeholder="e.g. 2500"></label>
+            <label class="bm-field"><span>Sleep (hrs)</span><input id="hb-sleep-${a.coach_id}" type="number" step="0.1" placeholder="e.g. 7.5"></label>
+          </div>
+          <textarea id="hb-notes-${a.coach_id}" rows="2" placeholder="Notes (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px;resize:vertical"></textarea>
+          <button class="btn btn-primary" style="width:100%" id="hb-send-${a.coach_id}" onclick="submitHabits('${a.coach_id}')"><i class="ti ti-device-floppy"></i> Save today</button>
+        </div>
+        <div id="habit-history-${a.coach_id}"></div>
+      </div>
+      <div id="cardio-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div class="ci-wrap">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Log a cardio session</div>
+          <input id="cd-modality-${a.coach_id}" placeholder="Type (run, bike, row, swim...)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px">
+          <div class="bm-grid">
+            <label class="bm-field"><span>Duration (min)</span><input id="cd-dur-${a.coach_id}" type="number" step="1"></label>
+            <label class="bm-field"><span>Distance (km)</span><input id="cd-dist-${a.coach_id}" type="number" step="0.01"></label>
+            <label class="bm-field"><span>Avg HR</span><input id="cd-hr-${a.coach_id}" type="number" step="1"></label>
+          </div>
+          <textarea id="cd-notes-${a.coach_id}" rows="2" placeholder="How did it feel? (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px;resize:vertical"></textarea>
+          <button class="btn btn-primary" style="width:100%" id="cd-send-${a.coach_id}" onclick="submitCardio('${a.coach_id}')"><i class="ti ti-run"></i> Log session</button>
+        </div>
+        <div id="cardio-history-${a.coach_id}"></div>
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
@@ -4559,6 +4622,80 @@ async function submitNutrition(coachId){
   if(error){ showToast('Error: '+error.message); return; }
   showToast('Nutrition logged');
   loadNutrition(coachId);
+}
+
+// ── DAILY HABITS (client side) ──
+function toggleHabits(coachId){
+  const box=document.getElementById('habit-box-'+coachId); if(!box) return;
+  const open=box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block'; loadHabits(coachId);
+}
+async function loadHabits(coachId){
+  const today=new Date().toISOString().slice(0,10);
+  const {data:rows}=await sb.from('daily_habits').select('*').eq('client_id',currentUser.id).order('log_date',{ascending:false}).limit(7);
+  const todayRow=(rows||[]).find(r=>r.log_date===today);
+  if(todayRow){
+    const set=(id,v)=>{const el=document.getElementById(id+coachId); if(el&&v!=null) el.value=v;};
+    set('hb-steps-',todayRow.steps); set('hb-water-',todayRow.water_ml); set('hb-sleep-',todayRow.sleep_hours);
+    const nt=document.getElementById('hb-notes-'+coachId); if(nt&&todayRow.notes) nt.value=todayRow.notes;
+  }
+  const wrap=document.getElementById('habit-history-'+coachId); if(!wrap) return;
+  if(!rows||!rows.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Recent days</div>'+rows.map(r=>`
+    <div class="ci-card"><div class="ci-card-date">${new Date(r.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+    <div class="ci-metrics">
+      ${r.steps!=null?`<span class="ci-metric"><b>${r.steps.toLocaleString()}</b> steps</span>`:''}
+      ${r.water_ml!=null?`<span class="ci-metric"><b>${(r.water_ml/1000).toFixed(1)}</b> L</span>`:''}
+      ${r.sleep_hours!=null?`<span class="ci-metric"><b>${r.sleep_hours}</b> h sleep</span>`:''}
+    </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}</div>`).join('');
+}
+async function submitHabits(coachId){
+  const g=id=>{const v=document.getElementById(id+coachId).value; return v===''?null:parseFloat(v);};
+  const notes=document.getElementById('hb-notes-'+coachId).value.trim()||null;
+  const row={client_id:currentUser.id, log_date:new Date().toISOString().slice(0,10), steps:g('hb-steps-')!=null?Math.round(g('hb-steps-')):null, water_ml:g('hb-water-')!=null?Math.round(g('hb-water-')):null, sleep_hours:g('hb-sleep-'), notes, updated_at:new Date().toISOString()};
+  if(row.steps==null&&row.water_ml==null&&row.sleep_hours==null){ showToast('Enter at least one habit'); return; }
+  const btn=document.getElementById('hb-send-'+coachId); btn.disabled=true; btn.textContent='Saving...';
+  const {error}=await sb.from('daily_habits').upsert(row,{onConflict:'client_id,log_date'});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i> Save today';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Habits saved'); loadHabits(coachId);
+}
+
+// ── CARDIO / ENDURANCE (client side) ──
+function toggleCardio(coachId){
+  const box=document.getElementById('cardio-box-'+coachId); if(!box) return;
+  const open=box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block'; loadCardio(coachId);
+}
+async function loadCardio(coachId){
+  const wrap=document.getElementById('cardio-history-'+coachId); if(!wrap) return;
+  const {data:rows}=await sb.from('cardio_sessions').select('*').eq('client_id',currentUser.id).order('performed_on',{ascending:false}).limit(8);
+  if(!rows||!rows.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Recent sessions</div>'+rows.map(r=>`
+    <div class="ci-card"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:700;text-transform:capitalize">${escapeHtml(r.modality)}</div><div class="ci-card-date" style="margin-bottom:0">${new Date(r.performed_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>
+    <div class="ci-metrics" style="margin-top:6px">
+      ${r.duration_min!=null?`<span class="ci-metric"><b>${r.duration_min}</b> min</span>`:''}
+      ${r.distance_km!=null?`<span class="ci-metric"><b>${r.distance_km}</b> km</span>`:''}
+      ${r.avg_hr!=null?`<span class="ci-metric"><b>${r.avg_hr}</b> bpm</span>`:''}
+    </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}</div>`).join('');
+}
+async function submitCardio(coachId){
+  const modality=document.getElementById('cd-modality-'+coachId).value.trim();
+  if(!modality){ showToast('What type of cardio?'); return; }
+  const g=id=>{const v=document.getElementById(id+coachId).value; return v===''?null:parseFloat(v);};
+  const notes=document.getElementById('cd-notes-'+coachId).value.trim()||null;
+  const row={client_id:currentUser.id, performed_on:new Date().toISOString().slice(0,10), modality, duration_min:g('cd-dur-')!=null?Math.round(g('cd-dur-')):null, distance_km:g('cd-dist-'), avg_hr:g('cd-hr-')!=null?Math.round(g('cd-hr-')):null, notes};
+  const btn=document.getElementById('cd-send-'+coachId); btn.disabled=true; btn.textContent='Saving...';
+  const {error}=await sb.from('cardio_sessions').insert(row);
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-run"></i> Log session';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Cardio logged');
+  document.getElementById('cd-modality-'+coachId).value='';
+  ['cd-dur-','cd-dist-','cd-hr-'].forEach(p=>{const el=document.getElementById(p+coachId); if(el) el.value='';});
+  document.getElementById('cd-notes-'+coachId).value='';
+  loadCardio(coachId);
 }
 
 async function redeemInviteCode(){

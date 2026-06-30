@@ -692,6 +692,9 @@ async function renderDetail(){
     <div class="section-lbl">Nutrition <span style="text-transform:none;color:var(--muted2);font-weight:600">· targets &amp; intake</span></div>
     <div id="nutr-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <div class="section-lbl">Habits &amp; Cardio</div>
+    <div id="lifestyle-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
     <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
@@ -707,6 +710,39 @@ async function renderDetail(){
   renderCheckins();
   renderBody();
   renderNutrition();
+  renderLifestyle();
+}
+
+// ── HABITS & CARDIO (coach reads) ──
+async function renderLifestyle(){
+  const c=selected; if(!c) return;
+  const wrap=$('lifestyle-wrap'); if(!wrap) return;
+  const [{data:habits},{data:cardio}]=await Promise.all([
+    sb.from('daily_habits').select('*').eq('client_id',c.client_id).order('log_date',{ascending:false}).limit(7),
+    sb.from('cardio_sessions').select('*').eq('client_id',c.client_id).order('performed_on',{ascending:false}).limit(8)
+  ]);
+  let html='';
+  if(habits&&habits.length){
+    html+='<div style="font-size:12px;color:var(--muted);font-weight:700;margin:2px 0 6px">Daily habits</div>';
+    html+=habits.map(r=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">${new Date(r.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        ${r.steps!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.steps.toLocaleString()}</b> steps</span>`:''}
+        ${r.water_ml!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${(r.water_ml/1000).toFixed(1)}</b> L</span>`:''}
+        ${r.sleep_hours!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.sleep_hours}</b> h sleep</span>`:''}
+      </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:6px">${esc(r.notes)}</div>`:''}</div>`).join('');
+  }
+  if(cardio&&cardio.length){
+    html+='<div style="font-size:12px;color:var(--muted);font-weight:700;margin:10px 0 6px">Cardio sessions</div>';
+    html+=cardio.map(r=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700;text-transform:capitalize">${esc(r.modality)}</span><span style="font-size:11px;color:var(--muted);font-weight:700">${new Date(r.performed_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        ${r.duration_min!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.duration_min}</b> min</span>`:''}
+        ${r.distance_km!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.distance_km}</b> km</span>`:''}
+        ${r.avg_hr!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.avg_hr}</b> bpm</span>`:''}
+      </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:6px">${esc(r.notes)}</div>`:''}</div>`).join('');
+  }
+  wrap.innerHTML = html || '<div style="color:var(--muted);font-size:13px">No habits or cardio logged yet.</div>';
 }
 
 // ── NUTRITION (coach sets macro targets + views intake) ──
