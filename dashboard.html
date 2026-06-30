@@ -580,6 +580,9 @@ async function renderDetail(){
     <div class="section-lbl">Body & Photos <span id="body-count" style="text-transform:none;color:var(--muted2);font-weight:600"></span></div>
     <div id="body-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <div class="section-lbl">Nutrition <span style="text-transform:none;color:var(--muted2);font-weight:600">· targets &amp; intake</span></div>
+    <div id="nutr-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
     <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
@@ -594,6 +597,57 @@ async function renderDetail(){
   renderFormChecks();
   renderCheckins();
   renderBody();
+  renderNutrition();
+}
+
+// ── NUTRITION (coach sets macro targets + views intake) ──
+async function renderNutrition(){
+  const c = selected; if(!c) return;
+  const wrap = $('nutr-wrap'); if(!wrap) return;
+  const [{data:targets},{data:logs}] = await Promise.all([
+    sb.from('nutrition_targets').select('*').eq('client_id',c.client_id).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1),
+    sb.from('nutrition_logs').select('*').eq('client_id',c.client_id).order('log_date',{ascending:false}).limit(10)
+  ]);
+  const t=(targets&&targets.length)?targets[0]:{};
+  let html=`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Macro target</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Calories</span><input id="nt-cal" type="number" value="${t.calories??''}" class="sel" style="padding:9px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Protein</span><input id="nt-pro" type="number" value="${t.protein_g??''}" class="sel" style="padding:9px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Carbs</span><input id="nt-carb" type="number" value="${t.carbs_g??''}" class="sel" style="padding:9px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Fat</span><input id="nt-fat" type="number" value="${t.fat_g??''}" class="sel" style="padding:9px"></label>
+    </div>
+    <button class="btn btn-primary" style="padding:10px 16px;font-size:13px" onclick="saveNutritionTarget()"><i class="ti ti-target"></i> ${targets&&targets.length?'Update target':'Set target'}</button>
+  </div>`;
+  if(logs&&logs.length){
+    html+='<div style="font-size:12px;color:var(--muted);font-weight:700;margin:10px 0 6px">Recent intake</div>';
+    html+=logs.map(l=>{
+      const adh=(t.calories&&l.calories)?Math.round(l.calories/t.calories*100):null;
+      const adhCol=adh==null?'var(--muted)':(adh>=90&&adh<=110?'var(--accent)':(adh<90?'#22d3ee':'#f5a623'));
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted);font-weight:700">${new Date(l.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</span>${adh!=null?`<span style="font-size:11px;font-weight:700;color:${adhCol}">${adh}% of kcal</span>`:''}</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          ${l.calories!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${l.calories}</b> kcal</span>`:''}
+          ${l.protein_g!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>P</b> ${l.protein_g}g</span>`:''}
+          ${l.carbs_g!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>C</b> ${l.carbs_g}g</span>`:''}
+          ${l.fat_g!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>F</b> ${l.fat_g}g</span>`:''}
+        </div>${l.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:6px">${esc(l.notes)}</div>`:''}</div>`;
+    }).join('');
+  } else {
+    html+='<div style="color:var(--muted);font-size:13px">No intake logged yet.</div>';
+  }
+  wrap.innerHTML=html;
+}
+
+async function saveNutritionTarget(){
+  const c=selected; if(!c) return;
+  const g=id=>{const v=$(id).value; return v===''?null:parseInt(v);};
+  const row={client_id:c.client_id, set_by:me_.id, calories:g('nt-cal'), protein_g:g('nt-pro'), carbs_g:g('nt-carb'), fat_g:g('nt-fat'), effective_from:new Date().toISOString().slice(0,10)};
+  if(row.calories==null&&row.protein_g==null&&row.carbs_g==null&&row.fat_g==null){ toast('Enter at least one number'); return; }
+  const {error}=await sb.from('nutrition_targets').insert(row);
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Macro target saved');
+  renderNutrition();
 }
 
 // ── BODY METRICS + PROGRESS PHOTOS (coach reads) ──

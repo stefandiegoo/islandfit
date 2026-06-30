@@ -1287,6 +1287,10 @@ body::before{
     <div class="section-label">Body & Photos <span id="coach-body-count" style="color:var(--aurora-2)"></span></div>
     <div id="coach-client-body"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <!-- Nutrition / macros -->
+    <div class="section-label">Nutrition <span style="text-transform:none;color:var(--muted2);font-weight:600">· set targets & track intake</span></div>
+    <div id="coach-client-nutrition"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <!-- Strength progress -->
     <div class="section-label">Strength Progress · est. 1RM over time</div>
     <div id="coach-client-progress"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
@@ -1466,6 +1470,7 @@ function epley1RM(weightKg,reps){
 let prMaxes={}; // exercise_name → estimated 1RM (kg), from personal_records
 let latestCheckin=null; // most recent weekly_checkins row for the AI coach context
 let bodyMetricsRecent=[]; // last two body_metrics rows for the AI coach context
+let nutritionTarget=null, nutritionRecent=[]; // macro target + recent intake for the AI coach context
 // NSCA Training Load Chart — %1RM for a given rep target (public reference data, nsca.com)
 function nscaPct(reps){
   const r=parseInt(reps)||8;
@@ -2145,6 +2150,7 @@ function aiSummaryPayload(){
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
     weekly_checkin: aiCheckinContext(),
     body_trend: aiBodyContext(),
+    nutrition: aiNutritionContext(),
     last_4_weeks: series, top_lift_e1RM_trend: liftTrend
   };
 }
@@ -2172,6 +2178,7 @@ function aiChatContext(){
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
     weekly_checkin: aiCheckinContext(),
     body_trend: aiBodyContext(),
+    nutrition: aiNutritionContext(),
     today_workout:(typeof todayWorkout!=='undefined'&&todayWorkout)?todayWorkout.title:null,
     current_exercise: ex?{name:ex.exercise_name, target_weight:String(ex.target_weight), reps:ex.reps, sets:ex.sets}:null,
     top_estimated_1RM: Object.entries(prMaxes).map(([n,e])=>({lift:n, est_1RM_kg:Math.round(e)})).sort((a,b)=>b.est_1RM_kg-a.est_1RM_kg).slice(0,6)
@@ -3250,6 +3257,28 @@ async function loadProgress(){
     const {data:bm}=await sb.from('body_metrics').select('measured_on,weight_kg,waist_cm,body_fat_pct').eq('client_id',currentUser.id).order('measured_on',{ascending:false}).limit(2);
     bodyMetricsRecent=bm||[];
   }catch(e){ bodyMetricsRecent=[]; }
+  // macro target + last 7 days of intake feed the AI coach (adherence to nutrition plan)
+  try{
+    const [{data:nt},{data:nl}]=await Promise.all([
+      sb.from('nutrition_targets').select('calories,protein_g,carbs_g,fat_g').eq('client_id',currentUser.id).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1),
+      sb.from('nutrition_logs').select('log_date,calories,protein_g,carbs_g,fat_g').eq('client_id',currentUser.id).order('log_date',{ascending:false}).limit(7)
+    ]);
+    nutritionTarget=(nt&&nt.length)?nt[0]:null;
+    nutritionRecent=nl||[];
+  }catch(e){ nutritionTarget=null; nutritionRecent=[]; }
+}
+
+// Nutrition adherence for AI payloads (target + 7-day average intake)
+function aiNutritionContext(){
+  if(!nutritionTarget && (!nutritionRecent||!nutritionRecent.length)) return null;
+  const ctx={};
+  if(nutritionTarget) ctx.target={calories:nutritionTarget.calories||null, protein_g:nutritionTarget.protein_g||null, carbs_g:nutritionTarget.carbs_g||null, fat_g:nutritionTarget.fat_g||null};
+  if(nutritionRecent&&nutritionRecent.length){
+    const avg=k=>{ const vals=nutritionRecent.map(r=>r[k]).filter(v=>v!=null); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null; };
+    ctx.avg_last_7d={calories:avg('calories'), protein_g:avg('protein_g'), carbs_g:avg('carbs_g'), fat_g:avg('fat_g')};
+    ctx.days_logged_last_7d=nutritionRecent.length;
+  }
+  return ctx;
 }
 
 // Body-composition trend for AI payloads (latest + change vs the prior measurement)
@@ -3725,6 +3754,54 @@ async function openClientDetail(clientId){
   renderCoachFormChecks(clientId);
   renderCoachCheckins(clientId);
   renderCoachBody(clientId);
+  renderCoachNutrition(clientId);
+}
+
+// ── COACH: client nutrition (set macro targets + view adherence) ──
+async function renderCoachNutrition(clientId){
+  const wrap=document.getElementById('coach-client-nutrition'); if(!wrap) return;
+  const [{data:targets},{data:logs}]=await Promise.all([
+    sb.from('nutrition_targets').select('*').eq('client_id',clientId).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1),
+    sb.from('nutrition_logs').select('*').eq('client_id',clientId).order('log_date',{ascending:false}).limit(10)
+  ]);
+  const t=(targets&&targets.length)?targets[0]:{};
+  let html=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Macro target</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Calories</span><input id="nt-cal" type="number" value="${t.calories??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Protein (g)</span><input id="nt-pro" type="number" value="${t.protein_g??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Carbs (g)</span><input id="nt-carb" type="number" value="${t.carbs_g??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Fat (g)</span><input id="nt-fat" type="number" value="${t.fat_g??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveClientNutritionTarget('${clientId}')"><i class="ti ti-target"></i> ${targets&&targets.length?'Update target':'Set target'}</button>
+  </div>`;
+  if(logs&&logs.length){
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Recent intake</div>';
+    html+=logs.map(l=>{
+      const adh=(t.calories&&l.calories)?Math.round(l.calories/t.calories*100):null;
+      const adhCol=adh==null?'var(--muted)':(adh>=90&&adh<=110?'var(--accent)':(adh<90?'var(--aurora-2)':'var(--lava-2)'));
+      return `<div class="ci-card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="ci-card-date" style="margin-bottom:0">${new Date(l.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>${adh!=null?`<span style="font-size:11px;font-weight:700;color:${adhCol}">${adh}% of kcal</span>`:''}</div>
+        <div class="ci-metrics" style="margin-top:6px">
+          ${l.calories!=null?`<span class="ci-metric"><b>${l.calories}</b> kcal</span>`:''}
+          ${l.protein_g!=null?`<span class="ci-metric"><b>P</b> ${l.protein_g}g</span>`:''}
+          ${l.carbs_g!=null?`<span class="ci-metric"><b>C</b> ${l.carbs_g}g</span>`:''}
+          ${l.fat_g!=null?`<span class="ci-metric"><b>F</b> ${l.fat_g}g</span>`:''}
+        </div>${l.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(l.notes)}</div>`:''}</div>`;
+    }).join('');
+  } else {
+    html+='<div style="color:var(--muted);font-size:13px;padding:4px 0">No intake logged yet.</div>';
+  }
+  wrap.innerHTML=html;
+}
+
+async function saveClientNutritionTarget(clientId){
+  const g=id=>{const v=document.getElementById(id).value; return v===''?null:parseInt(v);};
+  const row={client_id:clientId, set_by:currentUser.id, calories:g('nt-cal'), protein_g:g('nt-pro'), carbs_g:g('nt-carb'), fat_g:g('nt-fat'), effective_from:new Date().toISOString().slice(0,10)};
+  if(row.calories==null&&row.protein_g==null&&row.carbs_g==null&&row.fat_g==null){ showToast('Enter at least one number'); return; }
+  const {error}=await sb.from('nutrition_targets').insert(row);
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Macro target saved');
+  renderCoachNutrition(clientId);
 }
 
 // ── COACH: client body metrics + progress photos ──
@@ -3964,6 +4041,7 @@ async function loadMyCoachSection(){
           <button onclick="toggleFormCheck('${a.coach_id}')" id="fc-toggle-${a.coach_id}" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-video"></i> Form check</button>
           <button onclick="toggleCheckin('${a.coach_id}')" style="font-size:11px;color:var(--lava-2);padding:6px 10px;border:1px solid var(--lava-2);border-radius:8px"><i class="ti ti-clipboard-check"></i> Check-in</button>
           <button onclick="toggleBody('${a.coach_id}')" style="font-size:11px;color:var(--aurora-2);padding:6px 10px;border:1px solid var(--aurora-2);border-radius:8px"><i class="ti ti-ruler-2"></i> Body</button>
+          <button onclick="toggleNutrition('${a.coach_id}')" style="font-size:11px;color:var(--aurora-1);padding:6px 10px;border:1px solid var(--aurora-1);border-radius:8px"><i class="ti ti-salad"></i> Nutrition</button>
           <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
         </div>
       </div>
@@ -4024,6 +4102,21 @@ async function loadMyCoachSection(){
           <button class="btn btn-primary" style="width:100%" id="pp-send-${a.coach_id}" onclick="submitProgressPhoto('${a.coach_id}')"><i class="ti ti-camera"></i> Upload photo</button>
         </div>
         <div id="body-history-${a.coach_id}"></div>
+      </div>
+      <div id="nutr-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div id="nutr-target-${a.coach_id}" style="margin-bottom:10px"></div>
+        <div class="ci-wrap">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Log today's intake</div>
+          <div class="bm-grid">
+            <label class="bm-field"><span>Calories</span><input id="nl-cal-${a.coach_id}" type="number" step="1" placeholder="kcal"></label>
+            <label class="bm-field"><span>Protein (g)</span><input id="nl-pro-${a.coach_id}" type="number" step="1"></label>
+            <label class="bm-field"><span>Carbs (g)</span><input id="nl-carb-${a.coach_id}" type="number" step="1"></label>
+            <label class="bm-field"><span>Fat (g)</span><input id="nl-fat-${a.coach_id}" type="number" step="1"></label>
+          </div>
+          <textarea id="nl-notes-${a.coach_id}" rows="2" placeholder="Notes (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px;resize:vertical"></textarea>
+          <button class="btn btn-primary" style="width:100%" id="nl-send-${a.coach_id}" onclick="submitNutrition('${a.coach_id}')"><i class="ti ti-device-floppy"></i> Save today</button>
+        </div>
+        <div id="nutr-history-${a.coach_id}"></div>
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
@@ -4301,6 +4394,81 @@ async function loadBodyHistory(coachId){
     }).join('')+'</div>';
   }
   wrap.innerHTML=html;
+}
+
+// ── NUTRITION / MACROS (client side) ──
+function toggleNutrition(coachId){
+  const box=document.getElementById('nutr-box-'+coachId); if(!box) return;
+  const open=box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadNutrition(coachId);
+}
+
+function macroBar(label,actual,target,unit){
+  if(!target) return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-soft);padding:2px 0"><span>${label}</span><span><b>${actual??0}</b>${unit}</span></div>`;
+  const pct=Math.min(100,Math.round((actual||0)/target*100));
+  const over=(actual||0)>target*1.1;
+  const col=over?'var(--lava-2)':(pct>=85?'var(--aurora-1)':'var(--aurora-2)');
+  return `<div style="margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-soft);margin-bottom:3px"><span>${label}</span><span><b style="color:${col}">${actual||0}</b> / ${target}${unit}</span></div>
+    <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div></div>
+  </div>`;
+}
+
+async function loadNutrition(coachId){
+  // active target = latest effective row
+  const {data:targets}=await sb.from('nutrition_targets').select('*').eq('client_id',currentUser.id).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1);
+  const target=(targets&&targets.length)?targets[0]:null;
+  const today=new Date().toISOString().slice(0,10);
+  const {data:logs}=await sb.from('nutrition_logs').select('*').eq('client_id',currentUser.id).order('log_date',{ascending:false}).limit(7);
+  const todayLog=(logs||[]).find(l=>l.log_date===today);
+  // pre-fill inputs with today's log
+  if(todayLog){
+    const set=(id,v)=>{const el=document.getElementById(id+coachId); if(el&&v!=null) el.value=v;};
+    set('nl-cal-',todayLog.calories); set('nl-pro-',todayLog.protein_g); set('nl-carb-',todayLog.carbs_g); set('nl-fat-',todayLog.fat_g);
+    const nt=document.getElementById('nl-notes-'+coachId); if(nt&&todayLog.notes) nt.value=todayLog.notes;
+  }
+  // target panel
+  const tEl=document.getElementById('nutr-target-'+coachId);
+  if(tEl){
+    if(target){
+      tEl.innerHTML=`<div class="ci-wrap"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Today vs target</div>
+        ${macroBar('Calories',todayLog?.calories,target.calories,' kcal')}
+        ${macroBar('Protein',todayLog?.protein_g,target.protein_g,' g')}
+        ${macroBar('Carbs',todayLog?.carbs_g,target.carbs_g,' g')}
+        ${macroBar('Fat',todayLog?.fat_g,target.fat_g,' g')}</div>`;
+    } else {
+      tEl.innerHTML=`<div style="font-size:12px;color:var(--muted);background:var(--surface);border:1px dashed var(--border);border-radius:10px;padding:10px">No macro target set yet — your coach can set one, or just log your intake below.</div>`;
+    }
+  }
+  // history
+  const wrap=document.getElementById('nutr-history-'+coachId);
+  if(wrap){
+    if(logs&&logs.length){
+      wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Recent days</div>'+logs.map(l=>`
+        <div class="ci-card"><div class="ci-card-date">${new Date(l.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+        <div class="ci-metrics">
+          ${l.calories!=null?`<span class="ci-metric"><b>${l.calories}</b> kcal</span>`:''}
+          ${l.protein_g!=null?`<span class="ci-metric"><b>P</b> ${l.protein_g}g</span>`:''}
+          ${l.carbs_g!=null?`<span class="ci-metric"><b>C</b> ${l.carbs_g}g</span>`:''}
+          ${l.fat_g!=null?`<span class="ci-metric"><b>F</b> ${l.fat_g}g</span>`:''}
+        </div>${l.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(l.notes)}</div>`:''}</div>`).join('');
+    } else wrap.innerHTML='';
+  }
+}
+
+async function submitNutrition(coachId){
+  const g=id=>{const v=document.getElementById(id+coachId).value; return v===''?null:parseInt(v);};
+  const notes=document.getElementById('nl-notes-'+coachId).value.trim()||null;
+  const row={client_id:currentUser.id, log_date:new Date().toISOString().slice(0,10), calories:g('nl-cal-'), protein_g:g('nl-pro-'), carbs_g:g('nl-carb-'), fat_g:g('nl-fat-'), notes, updated_at:new Date().toISOString()};
+  if(row.calories==null&&row.protein_g==null&&row.carbs_g==null&&row.fat_g==null){ showToast('Enter at least one number'); return; }
+  const btn=document.getElementById('nl-send-'+coachId); btn.disabled=true; btn.textContent='Saving...';
+  const {error}=await sb.from('nutrition_logs').upsert(row,{onConflict:'client_id,log_date'});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i> Save today';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Nutrition logged');
+  loadNutrition(coachId);
 }
 
 async function redeemInviteCode(){
