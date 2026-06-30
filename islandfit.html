@@ -970,6 +970,7 @@ body::before{
 <div class="mt-overlay" id="demo-ov">
   <div class="mt-card">
     <div class="mt-title" id="demo-title">Exercise</div>
+    <div id="demo-coach"></div>
     <div class="demo-video" id="demo-media"><img id="demo-img" class="demo-img" alt="" style="display:none"><i class="ti ti-barbell ex-demo-icon" id="ex-demo-icon"></i><span class="demo-vlabel" id="demo-vlabel">Demo</span></div>
     <div class="demo-meta" id="demo-meta"></div>
     <div class="demo-how"><div class="demo-label">How to perform</div><div class="cues-text" id="ex-cues">—</div></div>
@@ -1239,6 +1240,15 @@ body::before{
     <div class="section-label">My Custom Programs</div>
     <div id="coach-programs-list" style="margin-bottom:12px"></div>
     <button class="btn btn-ghost" style="width:100%;padding:14px;border:1px dashed var(--border-bright)" onclick="showS('s-coach-program');initProgramBuilder()"><i class="ti ti-plus"></i> Create New Program</button>
+
+    <!-- Exercise library -->
+    <div class="section-label">Exercise Library</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Attach a video link (YouTube, Vimeo, or a direct .mp4/.gif) + cues to any exercise — your clients see it in the demo screen.</div>
+    <input id="ced-name" placeholder="Exercise name (e.g. Back Squat)" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:6px">
+    <input id="ced-url" placeholder="Video URL" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:6px">
+    <textarea id="ced-cues" rows="2" placeholder="Coaching cues (optional)" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:6px;resize:vertical"></textarea>
+    <button class="btn btn-primary" style="width:100%" onclick="saveCoachExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
+    <div id="ced-list" style="margin-top:10px"></div>
   </div>
 </div>
 
@@ -2742,16 +2752,53 @@ function closeRpe(){ document.getElementById('rpe-ov').classList.remove('show');
 
 // ── DEMO / HISTORY / REPLACE (per-exercise) ──
 let demoTimer=null;
+// ── COACH EXERCISE DEMOS (video link + cues authored by the client's coach) ──
+let coachDemos=null; // {exercise_key: {video_url, cues, ...}}
+async function loadCoachDemos(){
+  if(coachDemos) return coachDemos;
+  coachDemos={};
+  if(!currentUser) return coachDemos;
+  try{
+    const {data}=await sb.from('exercise_demos').select('exercise_key,video_url,cues');
+    (data||[]).forEach(d=>{ coachDemos[d.exercise_key]=d; });
+  }catch(e){}
+  return coachDemos;
+}
+// Render a coach demo URL into an embed: YouTube/Vimeo → iframe, video file → <video>,
+// image/gif → <img>, anything else → a button link.
+function demoEmbedHtml(url){
+  if(!url) return '';
+  const u=url.trim();
+  let yt=u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/);
+  if(yt) return `<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/${yt[1]}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>`;
+  let vm=u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if(vm) return `<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#000"><iframe src="https://player.vimeo.com/video/${vm[1]}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen></iframe></div>`;
+  if(/\.(mp4|webm|mov|m4v)(\?|$)/i.test(u)) return `<video src="${u}" controls preload="metadata" style="width:100%;border-radius:12px;background:#000;max-height:300px"></video>`;
+  if(/\.(gif|jpg|jpeg|png|webp)(\?|$)/i.test(u)) return `<img src="${u}" style="width:100%;border-radius:12px;background:#fff;max-height:300px;object-fit:contain">`;
+  return `<a href="${u}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none"><i class="ti ti-player-play"></i> Watch coach's demo</a>`;
+}
+
 async function openDemo(){
   const ex=todayExercises[curEx]; if(!ex) return;
   document.getElementById('demo-title').textContent=ex.exercise_name;
   document.getElementById('demo-ov').classList.add('show');
   const img=document.getElementById('demo-img'), icon=document.getElementById('ex-demo-icon'),
         vlab=document.getElementById('demo-vlabel'), meta=document.getElementById('demo-meta'),
-        cues=document.getElementById('ex-cues');
+        cues=document.getElementById('ex-cues'), coachEl=document.getElementById('demo-coach');
   if(demoTimer){ clearInterval(demoTimer); demoTimer=null; }
   img.style.display='none'; icon.style.display=''; vlab.style.display=''; meta.innerHTML='';
   cues.textContent=ex.cues||'Focus on good form';
+  if(coachEl) coachEl.innerHTML='';
+  // coach's own demo for this exercise takes priority
+  await loadCoachDemos();
+  const cd=coachDemos[String(ex.exercise_name||'').toLowerCase().trim()];
+  if(cd && coachEl){
+    coachEl.innerHTML=`<div style="background:rgba(0,255,163,0.06);border:1px solid rgba(0,255,163,0.25);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px"><i class="ti ti-whistle"></i> Your coach's demo</div>
+      ${demoEmbedHtml(cd.video_url)}
+      ${cd.cues?`<div style="font-size:13px;color:var(--text);line-height:1.5;margin-top:10px">${escapeHtml(cd.cues)}</div>`:''}
+    </div>`;
+  }
   await loadExerciseDB();
   const x=dbFor(ex.exercise_name);
   if(x){
@@ -3582,6 +3629,7 @@ async function loadCoachScreen(){
     document.getElementById('coach-invite-display').textContent = '—';
     document.getElementById('coach-invite-expire').textContent = 'Generate a code to share with clients';
   }
+  loadCoachExerciseDemos();
   // Load clients (joined with profiles)
   const {data:links} = await sb.from('coach_clients').select('client_id, status, source, created_at').eq('coach_id', currentUser.id).order('created_at',{ascending:false});
   if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
@@ -3598,6 +3646,48 @@ async function loadCoachScreen(){
   const progList = document.getElementById('coach-programs-list');
   if(!progs || !progs.length){ progList.innerHTML='<div style="color:var(--muted);font-size:13px;margin-bottom:4px">No custom programs yet.</div>'; return; }
   progList.innerHTML = progs.map(p=>`<div class="client-card" onclick="editCustomProgram('${p.id}')"><div class="client-avatar" style="font-size:20px;background:var(--surface3)"><i class="ti ti-barbell"></i></div><div class="client-info"><div class="client-name">${escapeHtml(p.name)}</div><div class="client-meta">${escapeHtml(p.sport)} · ${p.level} · ${p.days_per_week}d/wk</div></div><i class="ti ti-chevron-right" style="color:var(--muted)"></i></div>`).join('');
+}
+
+// ── COACH EXERCISE LIBRARY (app side) ──
+async function loadCoachExerciseDemos(){
+  const wrap=document.getElementById('ced-list'); if(!wrap) return;
+  const {data}=await sb.from('exercise_demos').select('*').eq('coach_id',currentUser.id).order('exercise_name');
+  if(!data||!data.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No demos yet.</div>'; return; }
+  wrap.innerHTML=data.map(d=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="min-width:0"><div style="font-size:13px;font-weight:700">${escapeHtml(d.exercise_name)}</div>${d.video_url?`<div style="font-size:11px;color:var(--accent);word-break:break-all">${escapeHtml(d.video_url)}</div>`:'<span style="font-size:11px;color:var(--muted)">no link</span>'}</div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick='editCoachExerciseDemo(${JSON.stringify(JSON.stringify(d))})' style="color:var(--accent);padding:6px 8px;border:1px solid var(--border);border-radius:8px"><i class="ti ti-pencil"></i></button>
+        <button onclick="deleteCoachExerciseDemo('${d.id}')" style="color:var(--lava-1);padding:6px 8px;border:1px solid var(--border);border-radius:8px"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>${d.cues?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px">${escapeHtml(d.cues)}</div>`:''}</div>`).join('');
+}
+function editCoachExerciseDemo(json){
+  const d=JSON.parse(json);
+  document.getElementById('ced-name').value=d.exercise_name||'';
+  document.getElementById('ced-url').value=d.video_url||'';
+  document.getElementById('ced-cues').value=d.cues||'';
+  document.getElementById('ced-name').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveCoachExerciseDemo(){
+  const name=document.getElementById('ced-name').value.trim();
+  const url=document.getElementById('ced-url').value.trim();
+  const cues=document.getElementById('ced-cues').value.trim();
+  if(!name){ showToast('Enter an exercise name'); return; }
+  if(!url&&!cues){ showToast('Add a video URL or cues'); return; }
+  const {error}=await sb.from('exercise_demos').upsert(
+    {coach_id:currentUser.id, exercise_name:name, video_url:url||null, cues:cues||null, updated_at:new Date().toISOString()},
+    {onConflict:'coach_id,exercise_key'});
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Demo saved');
+  document.getElementById('ced-name').value=''; document.getElementById('ced-url').value=''; document.getElementById('ced-cues').value='';
+  loadCoachExerciseDemos();
+}
+async function deleteCoachExerciseDemo(id){
+  if(!confirm('Delete this demo?')) return;
+  const {error}=await sb.from('exercise_demos').delete().eq('id',id);
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Deleted'); loadCoachExerciseDemos();
 }
 
 function renderCoachClientList(){

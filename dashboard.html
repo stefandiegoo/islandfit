@@ -248,6 +248,15 @@ main{max-width:1400px;margin:0 auto;padding:28px}
           <div id="programs-list"></div>
           <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="openProgramBuilder(null)"><i class="ti ti-plus"></i> Create Program</button>
         </div>
+        <div class="panel">
+          <div class="panel-title">Exercise Library <span style="text-transform:none;color:var(--muted2);font-weight:600">· demo videos &amp; cues</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Attach a video link (YouTube, Vimeo, or a direct .mp4/.gif) and cues to any exercise. Your clients see it in the exercise demo screen.</div>
+          <div class="row-gap" style="margin-bottom:6px"><input id="ed-name" class="sel" style="flex:1" placeholder="Exercise name (e.g. Back Squat)"></div>
+          <div class="row-gap" style="margin-bottom:6px"><input id="ed-url" class="sel" style="flex:1" placeholder="Video URL"></div>
+          <textarea id="ed-cues" class="txta" rows="2" placeholder="Coaching cues (optional)" style="margin-bottom:6px"></textarea>
+          <button class="btn btn-primary btn-block" onclick="saveExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
+          <div id="ed-list" style="margin-top:10px"></div>
+        </div>
       </div>
       <!-- Right: client detail -->
       <div class="panel" id="detail">
@@ -411,7 +420,45 @@ async function loadAll(){
   renderRequests();
   renderClientList();
   renderPrograms();
+  loadExerciseDemos();
   if(selected){ const still=clients.find(c=>c.client_id===selected.client_id); if(still){ selected=still; renderDetail(); } }
+}
+
+// ── EXERCISE LIBRARY (coach demo videos + cues) ──
+async function loadExerciseDemos(){
+  const wrap=$('ed-list'); if(!wrap) return;
+  const {data}=await sb.from('exercise_demos').select('*').eq('coach_id',me_.id).order('exercise_name');
+  if(!data||!data.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No demos yet.</div>'; return; }
+  wrap.innerHTML=data.map(d=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="min-width:0"><div style="font-size:13px;font-weight:700">${esc(d.exercise_name)}</div>${d.video_url?`<a href="${esc(d.video_url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);word-break:break-all">${esc(d.video_url)}</a>`:'<span style="font-size:11px;color:var(--muted)">no link</span>'}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="mini-btn" title="Edit" onclick='editExerciseDemo(${JSON.stringify(JSON.stringify(d))})'><i class="ti ti-pencil"></i></button>
+        <button class="mini-btn" title="Delete" onclick="deleteExerciseDemo('${d.id}')"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>${d.cues?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px">${esc(d.cues)}</div>`:''}</div>`).join('');
+}
+function editExerciseDemo(json){
+  const d=JSON.parse(json);
+  $('ed-name').value=d.exercise_name||''; $('ed-url').value=d.video_url||''; $('ed-cues').value=d.cues||'';
+  $('ed-name').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveExerciseDemo(){
+  const name=$('ed-name').value.trim(), url=$('ed-url').value.trim(), cues=$('ed-cues').value.trim();
+  if(!name){ toast('Enter an exercise name'); return; }
+  if(!url&&!cues){ toast('Add a video URL or cues'); return; }
+  const {error}=await sb.from('exercise_demos').upsert(
+    {coach_id:me_.id, exercise_name:name, video_url:url||null, cues:cues||null, updated_at:new Date().toISOString()},
+    {onConflict:'coach_id,exercise_key'});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Demo saved'); $('ed-name').value=''; $('ed-url').value=''; $('ed-cues').value='';
+  loadExerciseDemos();
+}
+async function deleteExerciseDemo(id){
+  if(!confirm('Delete this demo?')) return;
+  const {error}=await sb.from('exercise_demos').delete().eq('id',id);
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Deleted'); loadExerciseDemos();
 }
 
 async function loadInvite(){
