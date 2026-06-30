@@ -1454,6 +1454,7 @@ function epley1RM(weightKg,reps){
 
 // ── PERIODIZATION (4-week wave) + %1RM PRESCRIPTION ──
 let prMaxes={}; // exercise_name → estimated 1RM (kg), from personal_records
+let latestCheckin=null; // most recent weekly_checkins row for the AI coach context
 // NSCA Training Load Chart — %1RM for a given rep target (public reference data, nsca.com)
 function nscaPct(reps){
   const r=parseInt(reps)||8;
@@ -2131,6 +2132,7 @@ function aiSummaryPayload(){
     weeks_to_competition: wtp,
     readiness_recent: rd.slice(0,7),
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
+    weekly_checkin: aiCheckinContext(),
     last_4_weeks: series, top_lift_e1RM_trend: liftTrend
   };
 }
@@ -2156,6 +2158,7 @@ function aiChatContext(){
     program_week:cp.current_week||1, program_day:cp.current_day||1, weeks_to_competition:wtp,
     todays_readiness: readiness,
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
+    weekly_checkin: aiCheckinContext(),
     today_workout:(typeof todayWorkout!=='undefined'&&todayWorkout)?todayWorkout.title:null,
     current_exercise: ex?{name:ex.exercise_name, target_weight:String(ex.target_weight), reps:ex.reps, sets:ex.sets}:null,
     top_estimated_1RM: Object.entries(prMaxes).map(([n,e])=>({lift:n, est_1RM_kg:Math.round(e)})).sort((a,b)=>b.est_1RM_kg-a.est_1RM_kg).slice(0,6)
@@ -3224,6 +3227,26 @@ async function loadProgress(){
   renderFreqChart(allWorkouts||[]);
   renderStrengthChart(allSets||[]);
   renderAiSummary(allSets||[], allWorkouts||[]);
+  // latest weekly check-in feeds the AI coach (how the athlete is actually feeling)
+  try{
+    const {data:ci}=await sb.from('weekly_checkins').select('*').eq('client_id',currentUser.id).order('week_date',{ascending:false}).limit(1);
+    latestCheckin=(ci&&ci.length)?ci[0]:null;
+  }catch(e){ latestCheckin=null; }
+}
+
+// Compact check-in summary for AI payloads (null if none in the last ~2 weeks)
+function aiCheckinContext(){
+  if(!latestCheckin) return null;
+  const ageDays=Math.floor((Date.now()-new Date(latestCheckin.week_date+'T00:00:00'))/864e5);
+  if(ageDays>16) return null; // stale — don't mislead the coach
+  return {
+    week_of: latestCheckin.week_date,
+    energy_1to5: latestCheckin.energy,
+    sleep_1to5: latestCheckin.sleep,
+    stress_1to5: latestCheckin.stress,
+    bodyweight_kg: latestCheckin.weight_kg||null,
+    athlete_notes: latestCheckin.notes||''
+  };
 }
 
 function renderWeeklyChart(sets){
