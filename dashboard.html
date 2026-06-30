@@ -265,6 +265,11 @@ main{max-width:1400px;margin:0 auto;padding:28px}
           <button class="btn btn-primary btn-block" onclick="saveExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
           <div id="ed-list" style="margin-top:10px"></div>
         </div>
+        <div class="panel">
+          <div class="panel-title">Groups <span style="text-transform:none;color:var(--muted2);font-weight:600">· bulk-assign, leaderboard, chat</span></div>
+          <div class="row-gap" style="margin-bottom:10px"><input id="grp-name" class="sel" style="flex:1" placeholder="New group (e.g. Competition squad)"><button class="btn btn-primary" style="padding:12px 16px" onclick="createGroup()"><i class="ti ti-plus"></i></button></div>
+          <div id="groups-list"></div>
+        </div>
       </div>
       <!-- Right: client detail -->
       <div class="panel" id="detail">
@@ -309,6 +314,14 @@ main{max-width:1400px;margin:0 auto;padding:28px}
       <button class="btn btn-ghost" onclick="savePbProgram(false)" style="font-size:13px"><i class="ti ti-device-floppy"></i> Save</button>
       <button class="btn btn-primary" onclick="savePbAndAssign()" style="font-size:13px"><i class="ti ti-checkbox"></i> Save &amp; Assign</button>
     </div>
+  </div>
+</div>
+
+<!-- Group manager -->
+<div id="grp-modal-bg" class="modal-bg hidden" onclick="if(event.target===this)$('grp-modal-bg').classList.add('hidden')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head"><div class="modal-title"><i class="ti ti-users" style="color:var(--accent)"></i> <span id="grp-modal-title">Group</span></div><button class="mini-btn" onclick="$('grp-modal-bg').classList.add('hidden')"><i class="ti ti-x"></i></button></div>
+    <div id="grp-modal-body"></div>
   </div>
 </div>
 
@@ -443,7 +456,106 @@ async function loadAll(){
   renderClientList();
   renderPrograms();
   loadExerciseDemos();
+  loadGroups();
   if(selected){ const still=clients.find(c=>c.client_id===selected.client_id); if(still){ selected=still; renderDetail(); } }
+}
+
+// ── GROUPS (bulk assignment · leaderboard · group chat) ──
+let groupsCache=[], grpOpenId=null;
+async function loadGroups(){
+  const wrap=$('groups-list'); if(!wrap) return;
+  const {data:groups}=await sb.from('coach_groups').select('*').eq('coach_id',me_.id).order('created_at');
+  groupsCache=groups||[];
+  if(!groupsCache.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No groups yet — create one to bulk-assign programs and run a leaderboard.</div>'; return; }
+  const {data:mem}=await sb.from('group_members').select('group_id');
+  const counts={}; (mem||[]).forEach(m=>{counts[m.group_id]=(counts[m.group_id]||0)+1;});
+  wrap.innerHTML=groupsCache.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="openGroup('${g.id}')">
+    <div><div style="font-size:13px;font-weight:700">${esc(g.name)}</div><div style="font-size:11px;color:var(--muted)">${counts[g.id]||0} member${(counts[g.id]||0)===1?'':'s'}</div></div>
+    <i class="ti ti-chevron-right" style="color:var(--muted)"></i>
+  </div>`).join('');
+}
+async function createGroup(){
+  const name=$('grp-name').value.trim(); if(!name){ toast('Name the group'); return; }
+  const {error}=await sb.from('coach_groups').insert({coach_id:me_.id, name});
+  if(error){ toast('Error: '+error.message); return; }
+  $('grp-name').value=''; toast('Group created'); loadGroups();
+}
+async function openGroup(id){
+  grpOpenId=id;
+  const g=groupsCache.find(x=>x.id===id)||{};
+  $('grp-modal-title').textContent=g.name||'Group';
+  $('grp-modal-bg').classList.remove('hidden');
+  renderGroupModal();
+}
+async function renderGroupModal(){
+  const id=grpOpenId; const body=$('grp-modal-body');
+  body.innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">Loading...</div>';
+  const [{data:members},{data:allProgs},{data:lb}]=await Promise.all([
+    sb.from('group_members').select('client_id').eq('group_id',id),
+    sb.from('programs').select('id,name,is_custom').order('name'),
+    sb.rpc('group_leaderboard',{g:id,days:7})
+  ]);
+  const memIds=new Set((members||[]).map(m=>m.client_id));
+  const active=clients.filter(c=>c.status==='active');
+  const memberRows=active.filter(c=>memIds.has(c.client_id));
+  const nonMembers=active.filter(c=>!memIds.has(c.client_id));
+  body.innerHTML=`
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Members (${memberRows.length})</div>
+    <div style="margin-bottom:6px">${memberRows.length?memberRows.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:5px 10px;margin:0 6px 6px 0;font-size:12px">${esc(c.profile.name||'—')} <button class="mini-btn" style="padding:2px 5px" onclick="removeGroupMember('${c.client_id}')"><i class="ti ti-x"></i></button></span>`).join(''):'<span style="color:var(--muted);font-size:12px">No members yet.</span>'}</div>
+    ${nonMembers.length?`<div class="row-gap" style="margin-bottom:16px"><select id="grp-add-sel" class="sel" style="flex:1"><option value="">— Add a client —</option>${nonMembers.map(c=>`<option value="${c.client_id}">${esc(c.profile.name||'—')}</option>`).join('')}</select><button class="btn btn-ghost" style="padding:12px 16px" onclick="addGroupMember()">Add</button></div>`:'<div style="margin-bottom:16px"></div>'}
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Bulk-assign a program</div>
+    <div class="row-gap" style="margin-bottom:16px"><select id="grp-prog-sel" class="sel" style="flex:1"><option value="">— Select a program —</option>${(allProgs||[]).map(x=>`<option value="${x.id}">${esc(x.name)}${x.is_custom?' (custom)':''}</option>`).join('')}</select><button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="assignProgramToGroup()">Assign to all</button></div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Leaderboard · workouts (7d)</div>
+    <div style="margin-bottom:16px">${(lb&&lb.length)?`<div class="pr-table">${lb.map((r,i)=>`<div class="pr-row"><span style="font-weight:600">${i+1}. ${esc(r.name||'—')}</span><span style="font-weight:800;color:var(--accent)">${r.workouts}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:12px">No members yet.</div>'}</div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Group chat</div>
+    <div id="grp-thread" class="msg-thread" style="max-height:200px"></div>
+    <div class="row-gap" style="margin-top:8px"><input id="grp-msg" class="sel" style="flex:1" placeholder="Message the group..." onkeydown="if(event.key==='Enter')sendGroupMessage()"><button class="btn btn-primary" style="padding:12px 16px" onclick="sendGroupMessage()"><i class="ti ti-send"></i></button></div>
+    <div style="margin-top:14px;text-align:right"><button class="btn btn-ghost" style="color:var(--lava-1);font-size:12px;padding:8px 14px" onclick="deleteGroup()"><i class="ti ti-trash"></i> Delete group</button></div>
+  `;
+  loadGroupMessages();
+}
+async function addGroupMember(){
+  const cid=$('grp-add-sel').value; if(!cid) return;
+  const {error}=await sb.from('group_members').insert({group_id:grpOpenId, client_id:cid});
+  if(error){ toast('Error: '+error.message); return; }
+  renderGroupModal(); loadGroups();
+}
+async function removeGroupMember(cid){
+  await sb.from('group_members').delete().eq('group_id',grpOpenId).eq('client_id',cid);
+  renderGroupModal(); loadGroups();
+}
+async function assignProgramToGroup(){
+  const pid=$('grp-prog-sel').value; if(!pid){ toast('Pick a program'); return; }
+  const {data:members}=await sb.from('group_members').select('client_id').eq('group_id',grpOpenId);
+  if(!members||!members.length){ toast('Add members first'); return; }
+  let ok=0;
+  for(const m of members){ const {error}=await sb.rpc('coach_assign_program',{p_client:m.client_id, p_program:pid}); if(!ok && !error) {} if(!error) ok++; }
+  toast('Assigned to '+ok+' client'+(ok===1?'':'s'));
+  loadAll();
+}
+async function deleteGroup(){
+  if(!confirm('Delete this group? Members keep their programs.')) return;
+  await sb.from('coach_groups').delete().eq('id',grpOpenId);
+  $('grp-modal-bg').classList.add('hidden'); toast('Group deleted'); loadGroups();
+}
+async function loadGroupMessages(){
+  const box=$('grp-thread'); if(!box) return;
+  const {data:msgs}=await sb.from('group_messages').select('*').eq('group_id',grpOpenId).order('created_at',{ascending:true}).limit(100);
+  if(!msgs||!msgs.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No messages yet.</div>'; return; }
+  // map sender ids to names (members + me)
+  const names={}; clients.forEach(c=>{names[c.client_id]=c.profile.name||'Client';}); names[me_.id]='You';
+  box.innerHTML=msgs.map(m=>{ const mine=m.sender_id===me_.id; return `<div class="msg ${mine?'msg-me':'msg-them'}">${mine?'':`<div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:2px">${esc(names[m.sender_id]||'Member')}</div>`}${esc(m.body)}</div>`; }).join('');
+  box.scrollTop=box.scrollHeight;
+}
+async function sendGroupMessage(){
+  const inp=$('grp-msg'); const body=inp.value.trim(); if(!body) return;
+  inp.value='';
+  const {error}=await sb.from('group_messages').insert({group_id:grpOpenId, sender_id:me_.id, body});
+  if(error){ toast('Error: '+error.message); inp.value=body; return; }
+  loadGroupMessages();
 }
 
 // ── EXERCISE LIBRARY (coach demo videos + cues) ──
