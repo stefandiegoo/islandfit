@@ -121,6 +121,12 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .pr-table{background:var(--surface2);border-radius:12px;overflow:hidden}
 .pr-row{display:flex;justify-content:space-between;align-items:center;padding:11px 15px;font-size:13px}
 .pr-row+.pr-row{border-top:1px solid var(--border)}
+.roster-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.roster-tbl th{text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;cursor:pointer;white-space:nowrap;border-bottom:1px solid var(--border);user-select:none}
+.roster-tbl th:hover{color:var(--text-soft)}
+.roster-tbl td{padding:11px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.roster-tbl tbody tr{cursor:pointer;transition:background 0.15s}
+.roster-tbl tbody tr:hover{background:var(--surface2)}
 .sel{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px}
 .row-gap{display:flex;gap:9px}
 
@@ -220,6 +226,8 @@ main{max-width:1400px;margin:0 auto;padding:28px}
     <div id="alerts"></div>
     <!-- Pending requests -->
     <div id="requests"></div>
+    <!-- Whole-roster overview -->
+    <div id="roster"></div>
     <!-- Grid -->
     <div class="grid">
       <!-- Left: clients + invite -->
@@ -418,6 +426,7 @@ async function loadAll(){
   renderStats();
   renderAlerts();
   renderRequests();
+  renderRoster();
   renderClientList();
   renderPrograms();
   loadExerciseDemos();
@@ -504,6 +513,59 @@ function renderAlerts(){
   </div>`;
 }
 
+// ── RENDER: WHOLE-ROSTER OVERVIEW (sortable summary of every active client) ──
+let rosterSort={key:'attention',dir:-1};
+function setRosterSort(k){ if(rosterSort.key===k) rosterSort.dir*=-1; else { rosterSort={key:k,dir:1}; } renderRoster(); }
+function renderRoster(){
+  const wrap=$('roster'); if(!wrap) return;
+  const active=clients.filter(c=>c.status==='active');
+  if(active.length<2){ wrap.innerHTML=''; return; }
+  const rows=active.map(c=>{
+    const last=c.workouts.length?c.workouts[0].completed_at:null;
+    const since=daysSince(last);
+    // a simple "needs attention" score so the default sort floats problems up
+    let attn=0;
+    if(c.pendingFc>0) attn+=5;
+    if(since>=10) attn+=4; else if(since>=6) attn+=2;
+    if(c.workouts.length>=2 && c.adherence<50) attn+=2;
+    if(c.avgRpe!=null && c.avgRpe>=9) attn+=1;
+    if(!c.checkedInThisWeek) attn+=1;
+    return {c, name:c.profile.name||'—', since, adherence:c.adherence, avgRpe:c.avgRpe, checkin:c.checkedInThisWeek?1:0, pendingFc:c.pendingFc||0, attention:attn};
+  });
+  const k=rosterSort.key, dir=rosterSort.dir;
+  rows.sort((a,b)=>{
+    let av=a[k], bv=b[k];
+    if(k==='name'){ return dir*String(av).localeCompare(String(bv)); }
+    if(av==null) av=-Infinity; if(bv==null) bv=-Infinity;
+    return dir*(av-bv);
+  });
+  const arrow=key=>rosterSort.key===key?(rosterSort.dir>0?' ▲':' ▼'):'';
+  const adhCol=v=>v>=80?'var(--accent)':v>=50?'var(--amber)':'var(--lava-1)';
+  const sinceCol=s=>s>=10?'var(--lava-1)':s>=6?'var(--amber)':'var(--text-soft)';
+  wrap.innerHTML=`<div class="panel" style="margin-bottom:24px">
+    <div class="panel-title"><span><i class="ti ti-layout-grid"></i> Roster overview (${active.length})</span></div>
+    <div style="overflow-x:auto">
+    <table class="roster-tbl">
+      <thead><tr>
+        <th onclick="setRosterSort('name')">Client${arrow('name')}</th>
+        <th onclick="setRosterSort('since')">Last workout${arrow('since')}</th>
+        <th onclick="setRosterSort('adherence')">Adherence${arrow('adherence')}</th>
+        <th onclick="setRosterSort('avgRpe')">Avg RPE${arrow('avgRpe')}</th>
+        <th onclick="setRosterSort('checkin')">Check-in${arrow('checkin')}</th>
+        <th onclick="setRosterSort('pendingFc')">Form${arrow('pendingFc')}</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>`<tr onclick="selectClient('${r.c.client_id}')">
+        <td style="font-weight:600">${esc(r.name)}</td>
+        <td style="color:${sinceCol(r.since)}">${r.since===Infinity?'never':r.since===0?'today':r.since+'d ago'}</td>
+        <td><span style="font-weight:700;color:${adhCol(r.adherence)}">${r.adherence}%</span></td>
+        <td>${r.avgRpe!=null?r.avgRpe.toFixed(1):'—'}</td>
+        <td>${r.checkin?'<span style="color:var(--accent)">✓</span>':'<span style="color:var(--muted)">—</span>'}</td>
+        <td>${r.pendingFc?`<span style="color:var(--amber);font-weight:700">${r.pendingFc}</span>`:'<span style="color:var(--muted)">0</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </div>`;
+}
+
 // ── RENDER: STATS ──
 function renderStats(){
   const active = clients.filter(c=>c.status==='active');
@@ -579,7 +641,10 @@ async function renderDetail(){
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
       <div class="avatar" style="width:54px;height:54px;font-size:22px">${esc((p.name||'?')[0].toUpperCase())}</div>
       <div><div style="font-size:22px;font-weight:800">${esc(p.name||'Client')}</div><div style="font-size:13px;color:var(--muted)">${esc(p.sport||'—')}${p.primary_goal?' · '+(goalMap[p.primary_goal]||p.primary_goal):''}</div></div>
-      ${c.status==='pending'?'<span class="pill pill-pending" style="margin-left:auto">Pending</span>':''}
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        ${c.status==='pending'?'<span class="pill pill-pending">Pending</span>':''}
+        <button class="btn btn-ghost" style="padding:10px 14px;font-size:12px;white-space:nowrap" onclick="generateClientReport()"><i class="ti ti-file-text"></i> Report</button>
+      </div>
     </div>
 
     <div class="dstat-row">
@@ -630,6 +695,9 @@ async function renderDetail(){
     <div class="section-lbl">Nutrition <span style="text-transform:none;color:var(--muted2);font-weight:600">· targets &amp; intake</span></div>
     <div id="nutr-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
+    <div class="section-lbl">Habits &amp; Cardio</div>
+    <div id="lifestyle-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
     <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
     <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
@@ -645,6 +713,122 @@ async function renderDetail(){
   renderCheckins();
   renderBody();
   renderNutrition();
+  renderLifestyle();
+}
+
+// ── CLIENT PROGRESS REPORT (printable / shareable summary) ──
+async function generateClientReport(){
+  const c=selected; if(!c) return;
+  const p=c.profile;
+  const since=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+  const [bm,ci,nl,nt,cardio,habits]=await Promise.all([
+    sb.from('body_metrics').select('*').eq('client_id',c.client_id).gte('measured_on',since).order('measured_on'),
+    sb.from('weekly_checkins').select('*').eq('client_id',c.client_id).gte('week_date',since).order('week_date'),
+    sb.from('nutrition_logs').select('*').eq('client_id',c.client_id).gte('log_date',since),
+    sb.from('nutrition_targets').select('*').eq('client_id',c.client_id).order('effective_from',{ascending:false}).limit(1),
+    sb.from('cardio_sessions').select('*').eq('client_id',c.client_id).gte('performed_on',since),
+    sb.from('daily_habits').select('*').eq('client_id',c.client_id).gte('log_date',since)
+  ]);
+  const metrics=bm.data||[], checkins=ci.data||[], logs=nl.data||[], target=(nt.data&&nt.data.length)?nt.data[0]:null, cards=cardio.data||[], hbs=habits.data||[];
+  const num=(a,k)=>{const v=a.map(x=>x[k]).filter(x=>x!=null); return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+  const firstM=metrics[0], lastM=metrics[metrics.length-1];
+  const wDelta=(firstM&&lastM&&firstM.weight_kg!=null&&lastM.weight_kg!=null)?(lastM.weight_kg-firstM.weight_kg):null;
+  const waistDelta=(firstM&&lastM&&firstM.waist_cm!=null&&lastM.waist_cm!=null)?(lastM.waist_cm-firstM.waist_cm):null;
+  const avgCal=Math.round(num(logs,'calories')||0);
+  const calAdh=(target&&target.calories&&avgCal)?Math.round(avgCal/target.calories*100):null;
+  const prs=c.prs.slice(0,10);
+  const esc2=s=>String(s==null?'':s).replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+  const row=(l,v)=>`<tr><td>${l}</td><td><b>${v}</b></td></tr>`;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc2(p.name||'Client')} — Progress Report</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    body{background:#fff;color:#11151f;padding:40px;max-width:820px;margin:0 auto;line-height:1.5}
+    h1{font-size:28px;margin-bottom:2px} .sub{color:#667;margin-bottom:24px;font-size:14px}
+    h2{font-size:15px;text-transform:uppercase;letter-spacing:0.06em;color:#0a7;margin:26px 0 10px;border-bottom:2px solid #eee;padding-bottom:6px}
+    table{width:100%;border-collapse:collapse;margin-bottom:6px}
+    td{padding:7px 4px;border-bottom:1px solid #eee;font-size:14px}
+    td:last-child{text-align:right}
+    .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px}
+    .kpi{background:#f6f8fb;border-radius:10px;padding:14px;text-align:center}
+    .kpi .n{font-size:22px;font-weight:800} .kpi .l{font-size:11px;color:#778;text-transform:uppercase;letter-spacing:0.05em}
+    .muted{color:#889;font-size:13px} .foot{margin-top:30px;color:#aab;font-size:11px;text-align:center}
+    @media print{body{padding:0}.noprint{display:none}}
+    .pbtn{position:fixed;top:16px;right:16px;background:#0a7;color:#fff;border:0;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+  </style></head><body>
+  <button class="pbtn noprint" onclick="window.print()">Print / Save PDF</button>
+  <h1>${esc2(p.name||'Client')}</h1>
+  <div class="sub">Progress report · last 90 days · generated ${new Date().toLocaleDateString()}</div>
+  <div class="grid">
+    <div class="kpi"><div class="n">${c.workouts.length}</div><div class="l">Workouts logged</div></div>
+    <div class="kpi"><div class="n">${c.adherence}%</div><div class="l">Adherence</div></div>
+    <div class="kpi"><div class="n">${c.avgRpe!=null?c.avgRpe.toFixed(1):'—'}</div><div class="l">Avg RPE</div></div>
+  </div>
+  <h2>Body composition</h2>
+  ${metrics.length?`<table>
+    ${firstM&&lastM?row('Weight',`${lastM.weight_kg??'—'} kg${wDelta!=null?` (${wDelta>0?'+':''}${Math.round(wDelta*10)/10} kg)`:''}`):''}
+    ${waistDelta!=null?row('Waist',`${lastM.waist_cm} cm (${waistDelta>0?'+':''}${Math.round(waistDelta*10)/10} cm)`):''}
+    ${lastM&&lastM.body_fat_pct!=null?row('Body fat',`${lastM.body_fat_pct}%`):''}
+    <tr><td class="muted">Measurements recorded</td><td>${metrics.length}</td></tr>
+  </table>`:'<div class="muted">No measurements recorded.</div>'}
+  <h2>Nutrition</h2>
+  ${target||logs.length?`<table>
+    ${target&&target.calories?row('Calorie target',`${target.calories} kcal`):''}
+    ${avgCal?row('Avg intake',`${avgCal} kcal${calAdh!=null?` (${calAdh}% of target)`:''}`):''}
+    <tr><td class="muted">Days logged</td><td>${logs.length}</td></tr>
+  </table>`:'<div class="muted">No nutrition logged.</div>'}
+  <h2>Cardio & habits</h2>
+  <table>
+    <tr><td>Cardio sessions</td><td><b>${cards.length}</b></td></tr>
+    ${num(cards,'duration_min')?row('Avg cardio duration',`${Math.round(num(cards,'duration_min'))} min`):''}
+    ${num(hbs,'steps')?row('Avg daily steps',`${Math.round(num(hbs,'steps')).toLocaleString()}`):''}
+    ${num(hbs,'sleep_hours')?row('Avg sleep',`${(Math.round(num(hbs,'sleep_hours')*10)/10)} h`):''}
+  </table>
+  <h2>Wellbeing check-ins</h2>
+  ${checkins.length?`<table>
+    ${row('Avg energy',`${(Math.round((num(checkins,'energy')||0)*10)/10)} / 5`)}
+    ${row('Avg sleep rating',`${(Math.round((num(checkins,'sleep')||0)*10)/10)} / 5`)}
+    ${row('Avg stress',`${(Math.round((num(checkins,'stress')||0)*10)/10)} / 5`)}
+    <tr><td class="muted">Check-ins submitted</td><td>${checkins.length}</td></tr>
+  </table>`:'<div class="muted">No check-ins submitted.</div>'}
+  <h2>Top lifts (est. 1RM)</h2>
+  ${prs.length?`<table>${prs.map(pr=>`<tr><td>${esc2(pr.exercise_name)}</td><td><b>${(+pr.weight_kg)} kg × ${pr.reps}</b></td></tr>`).join('')}</table>`:'<div class="muted">No PRs recorded.</div>'}
+  <div class="foot">ÍslandFit · ${esc2(p.name||'')} · ${new Date().toLocaleString()}</div>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){ toast('Allow pop-ups to open the report'); return; }
+  w.document.write(html); w.document.close();
+}
+
+// ── HABITS & CARDIO (coach reads) ──
+async function renderLifestyle(){
+  const c=selected; if(!c) return;
+  const wrap=$('lifestyle-wrap'); if(!wrap) return;
+  const [{data:habits},{data:cardio}]=await Promise.all([
+    sb.from('daily_habits').select('*').eq('client_id',c.client_id).order('log_date',{ascending:false}).limit(7),
+    sb.from('cardio_sessions').select('*').eq('client_id',c.client_id).order('performed_on',{ascending:false}).limit(8)
+  ]);
+  let html='';
+  if(habits&&habits.length){
+    html+='<div style="font-size:12px;color:var(--muted);font-weight:700;margin:2px 0 6px">Daily habits</div>';
+    html+=habits.map(r=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">${new Date(r.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        ${r.steps!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.steps.toLocaleString()}</b> steps</span>`:''}
+        ${r.water_ml!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${(r.water_ml/1000).toFixed(1)}</b> L</span>`:''}
+        ${r.sleep_hours!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.sleep_hours}</b> h sleep</span>`:''}
+      </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:6px">${esc(r.notes)}</div>`:''}</div>`).join('');
+  }
+  if(cardio&&cardio.length){
+    html+='<div style="font-size:12px;color:var(--muted);font-weight:700;margin:10px 0 6px">Cardio sessions</div>';
+    html+=cardio.map(r=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700;text-transform:capitalize">${esc(r.modality)}</span><span style="font-size:11px;color:var(--muted);font-weight:700">${new Date(r.performed_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        ${r.duration_min!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.duration_min}</b> min</span>`:''}
+        ${r.distance_km!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.distance_km}</b> km</span>`:''}
+        ${r.avg_hr!=null?`<span style="font-size:11px;background:var(--surface);border-radius:8px;padding:4px 9px"><b>${r.avg_hr}</b> bpm</span>`:''}
+      </div>${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic;margin-top:6px">${esc(r.notes)}</div>`:''}</div>`).join('');
+  }
+  wrap.innerHTML = html || '<div style="color:var(--muted);font-size:13px">No habits or cardio logged yet.</div>';
 }
 
 // ── NUTRITION (coach sets macro targets + views intake) ──
