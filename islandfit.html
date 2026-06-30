@@ -779,6 +779,8 @@ body::before{
     <div class="program-card-meta" id="home-prog-meta">Week 1 of 12</div>
   </div>
 
+  <div id="home-phases" style="margin:0 18px 4px"></div>
+
   <div class="today-section">
     <div id="nudge-banner" class="nudge-banner" style="display:none"></div>
     <div class="section-header">
@@ -1175,6 +1177,7 @@ body::before{
     <h3>My Coach</h3>
     <div id="set-coach-requests"></div>
     <div id="set-active-coaches"></div>
+    <div id="set-groups"></div>
     <div class="field" style="margin-top:10px"><label>Enter coach invite code</label><input type="text" id="set-invite-code" placeholder="ISLAND-XXXXX" style="text-transform:uppercase;letter-spacing:2px"></div>
     <button class="btn btn-primary" onclick="redeemInviteCode()" style="margin-top:6px">Connect to Coach</button>
   </div>
@@ -2395,6 +2398,32 @@ async function loadProgramAndToday(){
     const {data:exercises}=await sb.from('program_exercises').select('*').eq('workout_id',workout.id).order('order_idx');
     todayExercises=applyCoachSwaps(exercises||[]);
   } else {todayExercises=[]}
+  renderHomePhases();
+}
+
+// Coach-defined training blocks/phases (periodization stig A) — timeline + current phase
+async function renderHomePhases(){
+  const el=document.getElementById('home-phases'); if(!el) return;
+  el.innerHTML='';
+  if(!currentProfile?.program_id) return;
+  const {data:blocks}=await sb.from('program_blocks').select('*').eq('program_id',currentProfile.program_id).order('sort_order');
+  if(!blocks||!blocks.length) return;
+  const week=(currentProfile.current_week||1);
+  // figure out which block the current week falls into (cumulative weeks)
+  let cum=0, curIdx=-1;
+  const ranges=blocks.map((b,i)=>{ const start=cum+1; cum+=(b.weeks||0); return {start,end:cum,b,i}; });
+  for(const r of ranges){ if(week>=r.start && week<=r.end){ curIdx=r.i; break; } }
+  if(curIdx<0 && week>cum) curIdx=blocks.length-1; // past the end → last block
+  const cur=curIdx>=0?ranges[curIdx]:null;
+  el.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px"><i class="ti ti-timeline"></i> Training plan</div>
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+      ${ranges.map(r=>`<div title="${escapeHtml(r.b.name)} · ${r.b.weeks} wk" style="flex:${r.b.weeks||1};height:7px;border-radius:4px;background:${r.i===curIdx?'linear-gradient(90deg,var(--aurora-1),var(--aurora-2))':'var(--surface3)'}"></div>`).join('')}
+    </div>
+    ${cur?`<div style="font-size:13px;color:var(--text)"><b>${escapeHtml(cur.b.name)}</b>${cur.b.focus?` — <span style="color:var(--text-soft)">${escapeHtml(cur.b.focus)}</span>`:''}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Phase ${curIdx+1} of ${blocks.length} · week ${week-cur.start+1} of ${cur.b.weeks}</div>`:
+      `<div style="font-size:12px;color:var(--muted)">${blocks.length} phases · ${cum} weeks total</div>`}
+  </div>`;
 }
 
 // ── FLEXIBLE SCHEDULE: trained-today · rest day · ease back after a layoff (no calendar lock) ──
@@ -4273,6 +4302,61 @@ async function loadMyCoachSection(){
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
+  loadClientGroups();
+}
+
+// ── CLIENT: groups they belong to (leaderboard + group chat) ──
+async function loadClientGroups(){
+  const el=document.getElementById('set-groups'); if(!el) return;
+  const {data:groups}=await sb.from('coach_groups').select('*').order('created_at');
+  if(!groups||!groups.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:14px 0 8px">My Groups</div>'+groups.map(g=>`
+    <div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:14px;font-weight:700">${escapeHtml(g.name)}</div>
+        <button onclick="toggleClientGroup('${g.id}')" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-trophy"></i> Open</button>
+      </div>
+      <div id="cg-box-${g.id}" style="display:none;margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:6px">Leaderboard · workouts (7d)</div>
+        <div id="cg-lb-${g.id}" style="margin-bottom:12px"><div style="color:var(--muted);font-size:12px">Loading...</div></div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:6px">Group chat</div>
+        <div id="cg-thread-${g.id}" class="coach-chat-thread"><div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Loading...</div></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="cg-input-${g.id}" placeholder="Message the group..." style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px" onkeydown="if(event.key==='Enter')sendClientGroupMessage('${g.id}')">
+          <button class="btn btn-primary" style="padding:11px 16px" onclick="sendClientGroupMessage('${g.id}')"><i class="ti ti-send"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function toggleClientGroup(gid){
+  const box=document.getElementById('cg-box-'+gid); if(!box) return;
+  const open=box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block'; loadClientGroupLeaderboard(gid); loadClientGroupMessages(gid);
+}
+async function loadClientGroupLeaderboard(gid){
+  const el=document.getElementById('cg-lb-'+gid); if(!el) return;
+  const {data:lb}=await sb.rpc('group_leaderboard',{g:gid,days:7});
+  if(!lb||!lb.length){ el.innerHTML='<div style="color:var(--muted);font-size:12px">No members yet.</div>'; return; }
+  el.innerHTML='<div style="background:var(--surface2);border-radius:10px;overflow:hidden">'+lb.map((r,i)=>`<div style="display:flex;justify-content:space-between;padding:9px 13px;font-size:13px${i?';border-top:1px solid var(--border)':''}"><span style="font-weight:600">${i+1}. ${escapeHtml(r.name||'—')}${r.client_id===currentUser.id?' <span style="color:var(--accent)">(you)</span>':''}</span><span style="font-weight:800;color:var(--accent)">${r.workouts}</span></div>`).join('')+'</div>';
+}
+async function loadClientGroupMessages(gid){
+  const box=document.getElementById('cg-thread-'+gid); if(!box) return;
+  const {data:msgs}=await sb.from('group_messages').select('*').eq('group_id',gid).order('created_at',{ascending:true}).limit(100);
+  if(!msgs||!msgs.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No messages yet.</div>'; return; }
+  // resolve sender names
+  const ids=[...new Set(msgs.map(m=>m.sender_id))];
+  const {data:profs}=await sb.from('profiles').select('id,name').in('id',ids);
+  const names={}; (profs||[]).forEach(p=>{names[p.id]=p.name||'Member';});
+  box.innerHTML=msgs.map(m=>{ const mine=m.sender_id===currentUser.id; return `<div class="cc-msg ${mine?'cc-me':'cc-them'}">${mine?'':`<div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:2px">${escapeHtml(names[m.sender_id]||'Member')}</div>`}${escapeHtml(m.body)}</div>`; }).join('');
+  box.scrollTop=box.scrollHeight;
+}
+async function sendClientGroupMessage(gid){
+  const inp=document.getElementById('cg-input-'+gid); const body=inp.value.trim(); if(!body) return;
+  inp.value='';
+  const {error}=await sb.from('group_messages').insert({group_id:gid, sender_id:currentUser.id, body});
+  if(error){ showToast('Error: '+error.message); inp.value=body; return; }
+  loadClientGroupMessages(gid);
 }
 
 // ── CLIENT ⇄ COACH MESSAGES ──
