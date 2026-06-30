@@ -530,6 +530,12 @@ body::before{
 .ci-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .ci-metric{font-size:11px;background:var(--surface2);border-radius:8px;padding:4px 9px;color:var(--text-soft)}
 .ci-metric b{color:var(--text)}
+/* body metrics */
+.bm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.bm-field{display:flex;flex-direction:column;gap:3px}
+.bm-field span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+.bm-field input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px;width:100%}
+.bm-photo-thumb{width:100%;border-radius:8px;background:#000;object-fit:cover;aspect-ratio:3/4}
 </style>
 </head>
 <body>
@@ -964,6 +970,7 @@ body::before{
 <div class="mt-overlay" id="demo-ov">
   <div class="mt-card">
     <div class="mt-title" id="demo-title">Exercise</div>
+    <div id="demo-coach"></div>
     <div class="demo-video" id="demo-media"><img id="demo-img" class="demo-img" alt="" style="display:none"><i class="ti ti-barbell ex-demo-icon" id="ex-demo-icon"></i><span class="demo-vlabel" id="demo-vlabel">Demo</span></div>
     <div class="demo-meta" id="demo-meta"></div>
     <div class="demo-how"><div class="demo-label">How to perform</div><div class="cues-text" id="ex-cues">—</div></div>
@@ -1233,6 +1240,15 @@ body::before{
     <div class="section-label">My Custom Programs</div>
     <div id="coach-programs-list" style="margin-bottom:12px"></div>
     <button class="btn btn-ghost" style="width:100%;padding:14px;border:1px dashed var(--border-bright)" onclick="showS('s-coach-program');initProgramBuilder()"><i class="ti ti-plus"></i> Create New Program</button>
+
+    <!-- Exercise library -->
+    <div class="section-label">Exercise Library</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Attach a video link (YouTube, Vimeo, or a direct .mp4/.gif) + cues to any exercise — your clients see it in the demo screen.</div>
+    <input id="ced-name" placeholder="Exercise name (e.g. Back Squat)" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:6px">
+    <input id="ced-url" placeholder="Video URL" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:6px">
+    <textarea id="ced-cues" rows="2" placeholder="Coaching cues (optional)" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:6px;resize:vertical"></textarea>
+    <button class="btn btn-primary" style="width:100%" onclick="saveCoachExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
+    <div id="ced-list" style="margin-top:10px"></div>
   </div>
 </div>
 
@@ -1276,6 +1292,14 @@ body::before{
     <!-- Form checks -->
     <div class="section-label">Form Checks <span id="coach-fc-count" style="color:var(--amber)"></span></div>
     <div id="coach-client-formchecks"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
+    <!-- Body metrics & photos -->
+    <div class="section-label">Body & Photos <span id="coach-body-count" style="color:var(--aurora-2)"></span></div>
+    <div id="coach-client-body"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
+    <!-- Nutrition / macros -->
+    <div class="section-label">Nutrition <span style="text-transform:none;color:var(--muted2);font-weight:600">· set targets & track intake</span></div>
+    <div id="coach-client-nutrition"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
     <!-- Strength progress -->
     <div class="section-label">Strength Progress · est. 1RM over time</div>
@@ -1455,6 +1479,8 @@ function epley1RM(weightKg,reps){
 // ── PERIODIZATION (4-week wave) + %1RM PRESCRIPTION ──
 let prMaxes={}; // exercise_name → estimated 1RM (kg), from personal_records
 let latestCheckin=null; // most recent weekly_checkins row for the AI coach context
+let bodyMetricsRecent=[]; // last two body_metrics rows for the AI coach context
+let nutritionTarget=null, nutritionRecent=[]; // macro target + recent intake for the AI coach context
 // NSCA Training Load Chart — %1RM for a given rep target (public reference data, nsca.com)
 function nscaPct(reps){
   const r=parseInt(reps)||8;
@@ -2133,6 +2159,8 @@ function aiSummaryPayload(){
     readiness_recent: rd.slice(0,7),
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
     weekly_checkin: aiCheckinContext(),
+    body_trend: aiBodyContext(),
+    nutrition: aiNutritionContext(),
     last_4_weeks: series, top_lift_e1RM_trend: liftTrend
   };
 }
@@ -2159,6 +2187,8 @@ function aiChatContext(){
     todays_readiness: readiness,
     injuries: cp.injuries||'', coach_notes: cp.coach_notes||'',
     weekly_checkin: aiCheckinContext(),
+    body_trend: aiBodyContext(),
+    nutrition: aiNutritionContext(),
     today_workout:(typeof todayWorkout!=='undefined'&&todayWorkout)?todayWorkout.title:null,
     current_exercise: ex?{name:ex.exercise_name, target_weight:String(ex.target_weight), reps:ex.reps, sets:ex.sets}:null,
     top_estimated_1RM: Object.entries(prMaxes).map(([n,e])=>({lift:n, est_1RM_kg:Math.round(e)})).sort((a,b)=>b.est_1RM_kg-a.est_1RM_kg).slice(0,6)
@@ -2722,16 +2752,53 @@ function closeRpe(){ document.getElementById('rpe-ov').classList.remove('show');
 
 // ── DEMO / HISTORY / REPLACE (per-exercise) ──
 let demoTimer=null;
+// ── COACH EXERCISE DEMOS (video link + cues authored by the client's coach) ──
+let coachDemos=null; // {exercise_key: {video_url, cues, ...}}
+async function loadCoachDemos(){
+  if(coachDemos) return coachDemos;
+  coachDemos={};
+  if(!currentUser) return coachDemos;
+  try{
+    const {data}=await sb.from('exercise_demos').select('exercise_key,video_url,cues');
+    (data||[]).forEach(d=>{ coachDemos[d.exercise_key]=d; });
+  }catch(e){}
+  return coachDemos;
+}
+// Render a coach demo URL into an embed: YouTube/Vimeo → iframe, video file → <video>,
+// image/gif → <img>, anything else → a button link.
+function demoEmbedHtml(url){
+  if(!url) return '';
+  const u=url.trim();
+  let yt=u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/);
+  if(yt) return `<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/${yt[1]}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>`;
+  let vm=u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if(vm) return `<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#000"><iframe src="https://player.vimeo.com/video/${vm[1]}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen></iframe></div>`;
+  if(/\.(mp4|webm|mov|m4v)(\?|$)/i.test(u)) return `<video src="${u}" controls preload="metadata" style="width:100%;border-radius:12px;background:#000;max-height:300px"></video>`;
+  if(/\.(gif|jpg|jpeg|png|webp)(\?|$)/i.test(u)) return `<img src="${u}" style="width:100%;border-radius:12px;background:#fff;max-height:300px;object-fit:contain">`;
+  return `<a href="${u}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none"><i class="ti ti-player-play"></i> Watch coach's demo</a>`;
+}
+
 async function openDemo(){
   const ex=todayExercises[curEx]; if(!ex) return;
   document.getElementById('demo-title').textContent=ex.exercise_name;
   document.getElementById('demo-ov').classList.add('show');
   const img=document.getElementById('demo-img'), icon=document.getElementById('ex-demo-icon'),
         vlab=document.getElementById('demo-vlabel'), meta=document.getElementById('demo-meta'),
-        cues=document.getElementById('ex-cues');
+        cues=document.getElementById('ex-cues'), coachEl=document.getElementById('demo-coach');
   if(demoTimer){ clearInterval(demoTimer); demoTimer=null; }
   img.style.display='none'; icon.style.display=''; vlab.style.display=''; meta.innerHTML='';
   cues.textContent=ex.cues||'Focus on good form';
+  if(coachEl) coachEl.innerHTML='';
+  // coach's own demo for this exercise takes priority
+  await loadCoachDemos();
+  const cd=coachDemos[String(ex.exercise_name||'').toLowerCase().trim()];
+  if(cd && coachEl){
+    coachEl.innerHTML=`<div style="background:rgba(0,255,163,0.06);border:1px solid rgba(0,255,163,0.25);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px"><i class="ti ti-whistle"></i> Your coach's demo</div>
+      ${demoEmbedHtml(cd.video_url)}
+      ${cd.cues?`<div style="font-size:13px;color:var(--text);line-height:1.5;margin-top:10px">${escapeHtml(cd.cues)}</div>`:''}
+    </div>`;
+  }
   await loadExerciseDB();
   const x=dbFor(ex.exercise_name);
   if(x){
@@ -3232,6 +3299,48 @@ async function loadProgress(){
     const {data:ci}=await sb.from('weekly_checkins').select('*').eq('client_id',currentUser.id).order('week_date',{ascending:false}).limit(1);
     latestCheckin=(ci&&ci.length)?ci[0]:null;
   }catch(e){ latestCheckin=null; }
+  // last two body measurements feed the AI coach (weight/waist trend for a body-comp goal)
+  try{
+    const {data:bm}=await sb.from('body_metrics').select('measured_on,weight_kg,waist_cm,body_fat_pct').eq('client_id',currentUser.id).order('measured_on',{ascending:false}).limit(2);
+    bodyMetricsRecent=bm||[];
+  }catch(e){ bodyMetricsRecent=[]; }
+  // macro target + last 7 days of intake feed the AI coach (adherence to nutrition plan)
+  try{
+    const [{data:nt},{data:nl}]=await Promise.all([
+      sb.from('nutrition_targets').select('calories,protein_g,carbs_g,fat_g').eq('client_id',currentUser.id).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1),
+      sb.from('nutrition_logs').select('log_date,calories,protein_g,carbs_g,fat_g').eq('client_id',currentUser.id).order('log_date',{ascending:false}).limit(7)
+    ]);
+    nutritionTarget=(nt&&nt.length)?nt[0]:null;
+    nutritionRecent=nl||[];
+  }catch(e){ nutritionTarget=null; nutritionRecent=[]; }
+}
+
+// Nutrition adherence for AI payloads (target + 7-day average intake)
+function aiNutritionContext(){
+  if(!nutritionTarget && (!nutritionRecent||!nutritionRecent.length)) return null;
+  const ctx={};
+  if(nutritionTarget) ctx.target={calories:nutritionTarget.calories||null, protein_g:nutritionTarget.protein_g||null, carbs_g:nutritionTarget.carbs_g||null, fat_g:nutritionTarget.fat_g||null};
+  if(nutritionRecent&&nutritionRecent.length){
+    const avg=k=>{ const vals=nutritionRecent.map(r=>r[k]).filter(v=>v!=null); return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null; };
+    ctx.avg_last_7d={calories:avg('calories'), protein_g:avg('protein_g'), carbs_g:avg('carbs_g'), fat_g:avg('fat_g')};
+    ctx.days_logged_last_7d=nutritionRecent.length;
+  }
+  return ctx;
+}
+
+// Body-composition trend for AI payloads (latest + change vs the prior measurement)
+function aiBodyContext(){
+  if(!bodyMetricsRecent||!bodyMetricsRecent.length) return null;
+  const latest=bodyMetricsRecent[0];
+  const ageDays=Math.floor((Date.now()-new Date(latest.measured_on+'T00:00:00'))/864e5);
+  if(ageDays>45) return null; // stale
+  const prev=bodyMetricsRecent[1];
+  const ctx={ measured_on:latest.measured_on, weight_kg:latest.weight_kg||null, waist_cm:latest.waist_cm||null, body_fat_pct:latest.body_fat_pct||null };
+  if(prev){
+    if(latest.weight_kg!=null&&prev.weight_kg!=null) ctx.weight_change_kg=Math.round((latest.weight_kg-prev.weight_kg)*10)/10;
+    if(latest.waist_cm!=null&&prev.waist_cm!=null) ctx.waist_change_cm=Math.round((latest.waist_cm-prev.waist_cm)*10)/10;
+  }
+  return ctx;
 }
 
 // Compact check-in summary for AI payloads (null if none in the last ~2 weeks)
@@ -3520,6 +3629,7 @@ async function loadCoachScreen(){
     document.getElementById('coach-invite-display').textContent = '—';
     document.getElementById('coach-invite-expire').textContent = 'Generate a code to share with clients';
   }
+  loadCoachExerciseDemos();
   // Load clients (joined with profiles)
   const {data:links} = await sb.from('coach_clients').select('client_id, status, source, created_at').eq('coach_id', currentUser.id).order('created_at',{ascending:false});
   if(!links || !links.length){ document.getElementById('coach-clients-list').innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px 0">No clients yet — share your invite code or add by email.</div>'; coachClients=[]; document.getElementById('coach-client-count').textContent=''; return; }
@@ -3536,6 +3646,48 @@ async function loadCoachScreen(){
   const progList = document.getElementById('coach-programs-list');
   if(!progs || !progs.length){ progList.innerHTML='<div style="color:var(--muted);font-size:13px;margin-bottom:4px">No custom programs yet.</div>'; return; }
   progList.innerHTML = progs.map(p=>`<div class="client-card" onclick="editCustomProgram('${p.id}')"><div class="client-avatar" style="font-size:20px;background:var(--surface3)"><i class="ti ti-barbell"></i></div><div class="client-info"><div class="client-name">${escapeHtml(p.name)}</div><div class="client-meta">${escapeHtml(p.sport)} · ${p.level} · ${p.days_per_week}d/wk</div></div><i class="ti ti-chevron-right" style="color:var(--muted)"></i></div>`).join('');
+}
+
+// ── COACH EXERCISE LIBRARY (app side) ──
+async function loadCoachExerciseDemos(){
+  const wrap=document.getElementById('ced-list'); if(!wrap) return;
+  const {data}=await sb.from('exercise_demos').select('*').eq('coach_id',currentUser.id).order('exercise_name');
+  if(!data||!data.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No demos yet.</div>'; return; }
+  wrap.innerHTML=data.map(d=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="min-width:0"><div style="font-size:13px;font-weight:700">${escapeHtml(d.exercise_name)}</div>${d.video_url?`<div style="font-size:11px;color:var(--accent);word-break:break-all">${escapeHtml(d.video_url)}</div>`:'<span style="font-size:11px;color:var(--muted)">no link</span>'}</div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick='editCoachExerciseDemo(${JSON.stringify(JSON.stringify(d))})' style="color:var(--accent);padding:6px 8px;border:1px solid var(--border);border-radius:8px"><i class="ti ti-pencil"></i></button>
+        <button onclick="deleteCoachExerciseDemo('${d.id}')" style="color:var(--lava-1);padding:6px 8px;border:1px solid var(--border);border-radius:8px"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>${d.cues?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px">${escapeHtml(d.cues)}</div>`:''}</div>`).join('');
+}
+function editCoachExerciseDemo(json){
+  const d=JSON.parse(json);
+  document.getElementById('ced-name').value=d.exercise_name||'';
+  document.getElementById('ced-url').value=d.video_url||'';
+  document.getElementById('ced-cues').value=d.cues||'';
+  document.getElementById('ced-name').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveCoachExerciseDemo(){
+  const name=document.getElementById('ced-name').value.trim();
+  const url=document.getElementById('ced-url').value.trim();
+  const cues=document.getElementById('ced-cues').value.trim();
+  if(!name){ showToast('Enter an exercise name'); return; }
+  if(!url&&!cues){ showToast('Add a video URL or cues'); return; }
+  const {error}=await sb.from('exercise_demos').upsert(
+    {coach_id:currentUser.id, exercise_name:name, video_url:url||null, cues:cues||null, updated_at:new Date().toISOString()},
+    {onConflict:'coach_id,exercise_key'});
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Demo saved');
+  document.getElementById('ced-name').value=''; document.getElementById('ced-url').value=''; document.getElementById('ced-cues').value='';
+  loadCoachExerciseDemos();
+}
+async function deleteCoachExerciseDemo(id){
+  if(!confirm('Delete this demo?')) return;
+  const {error}=await sb.from('exercise_demos').delete().eq('id',id);
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Deleted'); loadCoachExerciseDemos();
 }
 
 function renderCoachClientList(){
@@ -3691,6 +3843,106 @@ async function openClientDetail(clientId){
   renderCoachClientProgress(clientId);
   renderCoachFormChecks(clientId);
   renderCoachCheckins(clientId);
+  renderCoachBody(clientId);
+  renderCoachNutrition(clientId);
+}
+
+// ── COACH: client nutrition (set macro targets + view adherence) ──
+async function renderCoachNutrition(clientId){
+  const wrap=document.getElementById('coach-client-nutrition'); if(!wrap) return;
+  const [{data:targets},{data:logs}]=await Promise.all([
+    sb.from('nutrition_targets').select('*').eq('client_id',clientId).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1),
+    sb.from('nutrition_logs').select('*').eq('client_id',clientId).order('log_date',{ascending:false}).limit(10)
+  ]);
+  const t=(targets&&targets.length)?targets[0]:{};
+  let html=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Macro target</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Calories</span><input id="nt-cal" type="number" value="${t.calories??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Protein (g)</span><input id="nt-pro" type="number" value="${t.protein_g??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Carbs (g)</span><input id="nt-carb" type="number" value="${t.carbs_g??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span style="font-size:10px;color:var(--muted)">Fat (g)</span><input id="nt-fat" type="number" value="${t.fat_g??''}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px"></label>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveClientNutritionTarget('${clientId}')"><i class="ti ti-target"></i> ${targets&&targets.length?'Update target':'Set target'}</button>
+  </div>`;
+  if(logs&&logs.length){
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Recent intake</div>';
+    html+=logs.map(l=>{
+      const adh=(t.calories&&l.calories)?Math.round(l.calories/t.calories*100):null;
+      const adhCol=adh==null?'var(--muted)':(adh>=90&&adh<=110?'var(--accent)':(adh<90?'var(--aurora-2)':'var(--lava-2)'));
+      return `<div class="ci-card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="ci-card-date" style="margin-bottom:0">${new Date(l.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>${adh!=null?`<span style="font-size:11px;font-weight:700;color:${adhCol}">${adh}% of kcal</span>`:''}</div>
+        <div class="ci-metrics" style="margin-top:6px">
+          ${l.calories!=null?`<span class="ci-metric"><b>${l.calories}</b> kcal</span>`:''}
+          ${l.protein_g!=null?`<span class="ci-metric"><b>P</b> ${l.protein_g}g</span>`:''}
+          ${l.carbs_g!=null?`<span class="ci-metric"><b>C</b> ${l.carbs_g}g</span>`:''}
+          ${l.fat_g!=null?`<span class="ci-metric"><b>F</b> ${l.fat_g}g</span>`:''}
+        </div>${l.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(l.notes)}</div>`:''}</div>`;
+    }).join('');
+  } else {
+    html+='<div style="color:var(--muted);font-size:13px;padding:4px 0">No intake logged yet.</div>';
+  }
+  wrap.innerHTML=html;
+}
+
+async function saveClientNutritionTarget(clientId){
+  const g=id=>{const v=document.getElementById(id).value; return v===''?null:parseInt(v);};
+  const row={client_id:clientId, set_by:currentUser.id, calories:g('nt-cal'), protein_g:g('nt-pro'), carbs_g:g('nt-carb'), fat_g:g('nt-fat'), effective_from:new Date().toISOString().slice(0,10)};
+  if(row.calories==null&&row.protein_g==null&&row.carbs_g==null&&row.fat_g==null){ showToast('Enter at least one number'); return; }
+  const {error}=await sb.from('nutrition_targets').insert(row);
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Macro target saved');
+  renderCoachNutrition(clientId);
+}
+
+// ── COACH: client body metrics + progress photos ──
+async function renderCoachBody(clientId){
+  const wrap=document.getElementById('coach-client-body'); if(!wrap) return;
+  const countEl=document.getElementById('coach-body-count');
+  const [{data:metrics},{data:photos}]=await Promise.all([
+    sb.from('body_metrics').select('*').eq('client_id',clientId).order('measured_on',{ascending:false}).limit(12),
+    sb.from('progress_photos').select('*').eq('client_id',clientId).order('taken_on',{ascending:false}).limit(12)
+  ]);
+  if((!metrics||!metrics.length)&&(!photos||!photos.length)){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No measurements or photos yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  if(countEl) countEl.textContent='';
+  const fmtL=v=>v!=null?lenIn(v)+lenUnit():'—';
+  const fmtW=v=>v!=null?(units==='imperial'?Math.round(v*2.20462)+' lbs':v+' kg'):'—';
+  let html='';
+  // trend: compare latest vs oldest in the window for weight + waist
+  if(metrics&&metrics.length){
+    const chron=[...metrics].reverse();
+    const first=chron[0], last=chron[chron.length-1];
+    const delta=(a,b,fmt)=>{ if(a==null||b==null) return ''; const d=b-a; const s=d>0?'+':''; return ` <span style="color:${d===0?'var(--muted)':(d<0?'var(--aurora-1)':'var(--lava-2)')};font-size:11px">(${s}${Math.round(d*10)/10})</span>`; };
+    if(metrics.length>=2){
+      html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;font-size:12px;color:var(--text-soft)">
+        <b style="color:var(--text)">Since ${new Date(first.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}:</b>
+        ${first.weight_kg!=null&&last.weight_kg!=null?` Weight ${fmtW(last.weight_kg)}${delta(first.weight_kg,last.weight_kg)}`:''}
+        ${first.waist_cm!=null&&last.waist_cm!=null?` · Waist ${fmtL(last.waist_cm)}${delta(lenIn(first.waist_cm),lenIn(last.waist_cm))}`:''}
+      </div>`;
+    }
+    html+=metrics.map(m=>`<div class="ci-card">
+      <div class="ci-card-date">${new Date(m.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div class="ci-metrics">
+        ${m.weight_kg!=null?`<span class="ci-metric"><b>Wt</b> ${fmtW(m.weight_kg)}</span>`:''}
+        ${m.body_fat_pct!=null?`<span class="ci-metric"><b>BF</b> ${m.body_fat_pct}%</span>`:''}
+        ${m.chest_cm!=null?`<span class="ci-metric"><b>Chest</b> ${fmtL(m.chest_cm)}</span>`:''}
+        ${m.waist_cm!=null?`<span class="ci-metric"><b>Waist</b> ${fmtL(m.waist_cm)}</span>`:''}
+        ${m.hip_cm!=null?`<span class="ci-metric"><b>Hips</b> ${fmtL(m.hip_cm)}</span>`:''}
+        ${m.arm_cm!=null?`<span class="ci-metric"><b>Arm</b> ${fmtL(m.arm_cm)}</span>`:''}
+        ${m.thigh_cm!=null?`<span class="ci-metric"><b>Thigh</b> ${fmtL(m.thigh_cm)}</span>`:''}
+        ${m.neck_cm!=null?`<span class="ci-metric"><b>Neck</b> ${fmtL(m.neck_cm)}</span>`:''}
+      </div></div>`).join('');
+  }
+  if(photos&&photos.length){
+    const paths=photos.map(p=>p.photo_path);
+    const {data:signed}=await sb.storage.from('progress-photos').createSignedUrls(paths,3600);
+    const urlMap={}; (signed||[]).forEach((s,i)=>{ if(s&&s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:12px 0 6px">Progress photos</div>';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+photos.map(p=>{
+      const url=urlMap[p.photo_path];
+      return `<div style="position:relative">${url?`<img class="bm-photo-thumb" src="${url}">`:'<div class="bm-photo-thumb"></div>'}<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;text-transform:capitalize">${p.pose}</div><div style="font-size:9px;color:var(--muted);text-align:center;margin-top:2px">${new Date(p.taken_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>`;
+    }).join('')+'</div>';
+  }
+  wrap.innerHTML=html;
 }
 
 // ── COACH: client weekly check-ins ──
@@ -3878,6 +4130,8 @@ async function loadMyCoachSection(){
           <button onclick="toggleCoachChat('${a.coach_id}')" id="chat-toggle-${a.coach_id}" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-message"></i> Message</button>
           <button onclick="toggleFormCheck('${a.coach_id}')" id="fc-toggle-${a.coach_id}" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-video"></i> Form check</button>
           <button onclick="toggleCheckin('${a.coach_id}')" style="font-size:11px;color:var(--lava-2);padding:6px 10px;border:1px solid var(--lava-2);border-radius:8px"><i class="ti ti-clipboard-check"></i> Check-in</button>
+          <button onclick="toggleBody('${a.coach_id}')" style="font-size:11px;color:var(--aurora-2);padding:6px 10px;border:1px solid var(--aurora-2);border-radius:8px"><i class="ti ti-ruler-2"></i> Body</button>
+          <button onclick="toggleNutrition('${a.coach_id}')" style="font-size:11px;color:var(--aurora-1);padding:6px 10px;border:1px solid var(--aurora-1);border-radius:8px"><i class="ti ti-salad"></i> Nutrition</button>
           <button onclick="disconnectCoach('${a.coach_id}')" style="font-size:11px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:8px">Disconnect</button>
         </div>
       </div>
@@ -3910,6 +4164,49 @@ async function loadMyCoachSection(){
           <button class="btn btn-primary" style="width:100%" id="ci-send-${a.coach_id}" onclick="submitCheckin('${a.coach_id}')"><i class="ti ti-clipboard-check"></i> Submit check-in</button>
         </div>
         <div id="ci-history-${a.coach_id}"></div>
+      </div>
+      <div id="body-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Log measurements and progress photos — your coach sees your trend over time.</div>
+        <div class="ci-wrap">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Measurements (${units==='imperial'?'in / lbs':'cm / kg'})</div>
+          <div class="bm-grid">
+            <label class="bm-field"><span>Weight</span><input id="bm-weight-${a.coach_id}" type="number" step="0.1" placeholder="${units==='imperial'?'lbs':'kg'}"></label>
+            <label class="bm-field"><span>Body fat %</span><input id="bm-bf-${a.coach_id}" type="number" step="0.1" placeholder="%"></label>
+            <label class="bm-field"><span>Neck</span><input id="bm-neck-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Chest</span><input id="bm-chest-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Waist</span><input id="bm-waist-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Hips</span><input id="bm-hip-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Arm</span><input id="bm-arm-${a.coach_id}" type="number" step="0.1"></label>
+            <label class="bm-field"><span>Thigh</span><input id="bm-thigh-${a.coach_id}" type="number" step="0.1"></label>
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:4px" id="bm-send-${a.coach_id}" onclick="submitBodyMetrics('${a.coach_id}')"><i class="ti ti-device-floppy"></i> Save measurements</button>
+        </div>
+        <div class="ci-wrap" style="margin-top:10px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Progress photo</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <select id="pp-pose-${a.coach_id}" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:10px;font-size:14px">
+              <option value="front">Front</option><option value="side">Side</option><option value="back">Back</option>
+            </select>
+            <input type="file" id="pp-file-${a.coach_id}" accept="image/*" style="flex:1;font-size:12px;color:var(--text-soft)">
+          </div>
+          <button class="btn btn-primary" style="width:100%" id="pp-send-${a.coach_id}" onclick="submitProgressPhoto('${a.coach_id}')"><i class="ti ti-camera"></i> Upload photo</button>
+        </div>
+        <div id="body-history-${a.coach_id}"></div>
+      </div>
+      <div id="nutr-box-${a.coach_id}" style="display:none;margin-top:12px">
+        <div id="nutr-target-${a.coach_id}" style="margin-bottom:10px"></div>
+        <div class="ci-wrap">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Log today's intake</div>
+          <div class="bm-grid">
+            <label class="bm-field"><span>Calories</span><input id="nl-cal-${a.coach_id}" type="number" step="1" placeholder="kcal"></label>
+            <label class="bm-field"><span>Protein (g)</span><input id="nl-pro-${a.coach_id}" type="number" step="1"></label>
+            <label class="bm-field"><span>Carbs (g)</span><input id="nl-carb-${a.coach_id}" type="number" step="1"></label>
+            <label class="bm-field"><span>Fat (g)</span><input id="nl-fat-${a.coach_id}" type="number" step="1"></label>
+          </div>
+          <textarea id="nl-notes-${a.coach_id}" rows="2" placeholder="Notes (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:8px;resize:vertical"></textarea>
+          <button class="btn btn-primary" style="width:100%" id="nl-send-${a.coach_id}" onclick="submitNutrition('${a.coach_id}')"><i class="ti ti-device-floppy"></i> Save today</button>
+        </div>
+        <div id="nutr-history-${a.coach_id}"></div>
       </div>
     </div>`; }).join('');
   } else { actEl.innerHTML=''; }
@@ -4091,6 +4388,177 @@ async function loadCheckinHistory(coachId){
       </div>
       ${r.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(r.notes)}</div>`:''}
     </div>`).join('');
+}
+
+// ── BODY MEASUREMENTS + PROGRESS PHOTOS (client side) ──
+function toggleBody(coachId){
+  const box = document.getElementById('body-box-'+coachId);
+  if(!box) return;
+  const open = box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadBodyHistory(coachId);
+}
+// length units: stored in cm. imperial shows inches.
+const cmToIn=cm=>cm/2.54, inToCm=v=>v*2.54;
+function lenIn(v){ return units==='imperial'?Math.round(cmToIn(v)*10)/10:v; }
+function lenStore(raw){ const v=parseFloat(raw); if(isNaN(v)) return null; return units==='imperial'?Math.round(inToCm(v)*10)/10:v; }
+function lenUnit(){ return units==='imperial'?'in':'cm'; }
+
+async function submitBodyMetrics(coachId){
+  const g=f=>document.getElementById('bm-'+f+'-'+coachId).value;
+  const weightRaw=g('weight');
+  let weight_kg=null;
+  if(weightRaw){ const w=parseFloat(weightRaw); weight_kg=units==='imperial'?Math.round(w/2.20462*10)/10:w; }
+  const bf=g('bf')?parseFloat(g('bf')):null;
+  const row={
+    client_id:currentUser.id, measured_on:new Date().toISOString().slice(0,10),
+    weight_kg, body_fat_pct:bf,
+    neck_cm:lenStore(g('neck')), chest_cm:lenStore(g('chest')), waist_cm:lenStore(g('waist')),
+    hip_cm:lenStore(g('hip')), arm_cm:lenStore(g('arm')), thigh_cm:lenStore(g('thigh'))
+  };
+  const hasAny=['weight_kg','body_fat_pct','neck_cm','chest_cm','waist_cm','hip_cm','arm_cm','thigh_cm'].some(k=>row[k]!=null);
+  if(!hasAny){ showToast('Fill in at least one measurement'); return; }
+  const btn=document.getElementById('bm-send-'+coachId); btn.disabled=true; btn.textContent='Saving...';
+  const {error}=await sb.from('body_metrics').upsert(row,{onConflict:'client_id,measured_on'});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i> Save measurements';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Measurements saved');
+  ['weight','bf','neck','chest','waist','hip','arm','thigh'].forEach(f=>{const el=document.getElementById('bm-'+f+'-'+coachId); if(el) el.value='';});
+  loadBodyHistory(coachId);
+}
+
+async function submitProgressPhoto(coachId){
+  const pose=document.getElementById('pp-pose-'+coachId).value;
+  const fileEl=document.getElementById('pp-file-'+coachId);
+  const file=fileEl.files&&fileEl.files[0];
+  if(!file){ showToast('Pick a photo first'); return; }
+  if(file.size>20971520){ showToast('Photo too big (max 20MB)'); return; }
+  const btn=document.getElementById('pp-send-'+coachId); btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> Uploading...';
+  try{
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+    const path=currentUser.id+'/'+(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2))+'.'+ext;
+    const {error:upErr}=await sb.storage.from('progress-photos').upload(path,file,{contentType:file.type||'image/jpeg',upsert:false});
+    if(upErr) throw upErr;
+    const {error:insErr}=await sb.from('progress_photos').insert({client_id:currentUser.id, taken_on:new Date().toISOString().slice(0,10), pose, photo_path:path});
+    if(insErr) throw insErr;
+    fileEl.value='';
+    showToast('Photo uploaded 📸');
+    loadBodyHistory(coachId);
+  }catch(e){ showToast('Error: '+e.message); }
+  finally{ btn.disabled=false; btn.innerHTML='<i class="ti ti-camera"></i> Upload photo'; }
+}
+
+async function loadBodyHistory(coachId){
+  const wrap=document.getElementById('body-history-'+coachId); if(!wrap) return;
+  const [{data:metrics},{data:photos}]=await Promise.all([
+    sb.from('body_metrics').select('*').eq('client_id',currentUser.id).order('measured_on',{ascending:false}).limit(8),
+    sb.from('progress_photos').select('*').eq('client_id',currentUser.id).order('taken_on',{ascending:false}).limit(9)
+  ]);
+  let html='';
+  if(metrics&&metrics.length){
+    const fmtL=v=>v!=null?lenIn(v)+lenUnit():'—';
+    const fmtW=v=>v!=null?(units==='imperial'?Math.round(v*2.20462)+' lbs':v+' kg'):'—';
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Measurement history</div>';
+    html+=metrics.map(m=>`<div class="ci-card">
+      <div class="ci-card-date">${new Date(m.measured_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</div>
+      <div class="ci-metrics">
+        ${m.weight_kg!=null?`<span class="ci-metric"><b>Wt</b> ${fmtW(m.weight_kg)}</span>`:''}
+        ${m.body_fat_pct!=null?`<span class="ci-metric"><b>BF</b> ${m.body_fat_pct}%</span>`:''}
+        ${m.chest_cm!=null?`<span class="ci-metric"><b>Chest</b> ${fmtL(m.chest_cm)}</span>`:''}
+        ${m.waist_cm!=null?`<span class="ci-metric"><b>Waist</b> ${fmtL(m.waist_cm)}</span>`:''}
+        ${m.hip_cm!=null?`<span class="ci-metric"><b>Hips</b> ${fmtL(m.hip_cm)}</span>`:''}
+        ${m.arm_cm!=null?`<span class="ci-metric"><b>Arm</b> ${fmtL(m.arm_cm)}</span>`:''}
+        ${m.thigh_cm!=null?`<span class="ci-metric"><b>Thigh</b> ${fmtL(m.thigh_cm)}</span>`:''}
+        ${m.neck_cm!=null?`<span class="ci-metric"><b>Neck</b> ${fmtL(m.neck_cm)}</span>`:''}
+      </div></div>`).join('');
+  }
+  if(photos&&photos.length){
+    const paths=photos.map(p=>p.photo_path);
+    const {data:signed}=await sb.storage.from('progress-photos').createSignedUrls(paths,3600);
+    const urlMap={}; (signed||[]).forEach((s,i)=>{ if(s&&s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
+    html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:12px 0 6px">Progress photos</div>';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+photos.map(p=>{
+      const url=urlMap[p.photo_path];
+      return `<div style="position:relative">${url?`<img class="bm-photo-thumb" src="${url}">`:'<div class="bm-photo-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">n/a</div>'}<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;text-transform:capitalize">${p.pose}</div><div style="font-size:9px;color:var(--muted);text-align:center;margin-top:2px">${new Date(p.taken_on+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>`;
+    }).join('')+'</div>';
+  }
+  wrap.innerHTML=html;
+}
+
+// ── NUTRITION / MACROS (client side) ──
+function toggleNutrition(coachId){
+  const box=document.getElementById('nutr-box-'+coachId); if(!box) return;
+  const open=box.style.display!=='none';
+  if(open){ box.style.display='none'; return; }
+  box.style.display='block';
+  loadNutrition(coachId);
+}
+
+function macroBar(label,actual,target,unit){
+  if(!target) return `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-soft);padding:2px 0"><span>${label}</span><span><b>${actual??0}</b>${unit}</span></div>`;
+  const pct=Math.min(100,Math.round((actual||0)/target*100));
+  const over=(actual||0)>target*1.1;
+  const col=over?'var(--lava-2)':(pct>=85?'var(--aurora-1)':'var(--aurora-2)');
+  return `<div style="margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-soft);margin-bottom:3px"><span>${label}</span><span><b style="color:${col}">${actual||0}</b> / ${target}${unit}</span></div>
+    <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div></div>
+  </div>`;
+}
+
+async function loadNutrition(coachId){
+  // active target = latest effective row
+  const {data:targets}=await sb.from('nutrition_targets').select('*').eq('client_id',currentUser.id).order('effective_from',{ascending:false}).order('created_at',{ascending:false}).limit(1);
+  const target=(targets&&targets.length)?targets[0]:null;
+  const today=new Date().toISOString().slice(0,10);
+  const {data:logs}=await sb.from('nutrition_logs').select('*').eq('client_id',currentUser.id).order('log_date',{ascending:false}).limit(7);
+  const todayLog=(logs||[]).find(l=>l.log_date===today);
+  // pre-fill inputs with today's log
+  if(todayLog){
+    const set=(id,v)=>{const el=document.getElementById(id+coachId); if(el&&v!=null) el.value=v;};
+    set('nl-cal-',todayLog.calories); set('nl-pro-',todayLog.protein_g); set('nl-carb-',todayLog.carbs_g); set('nl-fat-',todayLog.fat_g);
+    const nt=document.getElementById('nl-notes-'+coachId); if(nt&&todayLog.notes) nt.value=todayLog.notes;
+  }
+  // target panel
+  const tEl=document.getElementById('nutr-target-'+coachId);
+  if(tEl){
+    if(target){
+      tEl.innerHTML=`<div class="ci-wrap"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:8px">Today vs target</div>
+        ${macroBar('Calories',todayLog?.calories,target.calories,' kcal')}
+        ${macroBar('Protein',todayLog?.protein_g,target.protein_g,' g')}
+        ${macroBar('Carbs',todayLog?.carbs_g,target.carbs_g,' g')}
+        ${macroBar('Fat',todayLog?.fat_g,target.fat_g,' g')}</div>`;
+    } else {
+      tEl.innerHTML=`<div style="font-size:12px;color:var(--muted);background:var(--surface);border:1px dashed var(--border);border-radius:10px;padding:10px">No macro target set yet — your coach can set one, or just log your intake below.</div>`;
+    }
+  }
+  // history
+  const wrap=document.getElementById('nutr-history-'+coachId);
+  if(wrap){
+    if(logs&&logs.length){
+      wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin:10px 0 6px">Recent days</div>'+logs.map(l=>`
+        <div class="ci-card"><div class="ci-card-date">${new Date(l.log_date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+        <div class="ci-metrics">
+          ${l.calories!=null?`<span class="ci-metric"><b>${l.calories}</b> kcal</span>`:''}
+          ${l.protein_g!=null?`<span class="ci-metric"><b>P</b> ${l.protein_g}g</span>`:''}
+          ${l.carbs_g!=null?`<span class="ci-metric"><b>C</b> ${l.carbs_g}g</span>`:''}
+          ${l.fat_g!=null?`<span class="ci-metric"><b>F</b> ${l.fat_g}g</span>`:''}
+        </div>${l.notes?`<div style="font-size:12px;color:var(--text-soft);font-style:italic">${escapeHtml(l.notes)}</div>`:''}</div>`).join('');
+    } else wrap.innerHTML='';
+  }
+}
+
+async function submitNutrition(coachId){
+  const g=id=>{const v=document.getElementById(id+coachId).value; return v===''?null:parseInt(v);};
+  const notes=document.getElementById('nl-notes-'+coachId).value.trim()||null;
+  const row={client_id:currentUser.id, log_date:new Date().toISOString().slice(0,10), calories:g('nl-cal-'), protein_g:g('nl-pro-'), carbs_g:g('nl-carb-'), fat_g:g('nl-fat-'), notes, updated_at:new Date().toISOString()};
+  if(row.calories==null&&row.protein_g==null&&row.carbs_g==null&&row.fat_g==null){ showToast('Enter at least one number'); return; }
+  const btn=document.getElementById('nl-send-'+coachId); btn.disabled=true; btn.textContent='Saving...';
+  const {error}=await sb.from('nutrition_logs').upsert(row,{onConflict:'client_id,log_date'});
+  btn.disabled=false; btn.innerHTML='<i class="ti ti-device-floppy"></i> Save today';
+  if(error){ showToast('Error: '+error.message); return; }
+  showToast('Nutrition logged');
+  loadNutrition(coachId);
 }
 
 async function redeemInviteCode(){
