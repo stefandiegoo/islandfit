@@ -289,6 +289,19 @@ main{max-width:1400px;margin:0 auto;padding:28px}
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:5px">Level</div><select id="pb-level" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div>
       <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:5px">Days / week</div><input id="pb-days-wk" type="number" min="1" max="7" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px" placeholder="4" value="4"></div>
     </div>
+    <div style="padding:0 20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700">Training blocks / phases <span style="text-transform:none;color:var(--muted2)">· optional periodization</span></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <button class="mini-btn" style="font-size:11px;padding:5px 9px" onclick="pbAddBlock('Volume','Build work capacity',4)">+ Volume</button>
+          <button class="mini-btn" style="font-size:11px;padding:5px 9px" onclick="pbAddBlock('Intensity','Heavier loads, lower volume',3)">+ Intensity</button>
+          <button class="mini-btn" style="font-size:11px;padding:5px 9px" onclick="pbAddBlock('Peak','Sharpen for the date',2)">+ Peak</button>
+          <button class="mini-btn" style="font-size:11px;padding:5px 9px" onclick="pbAddBlock('Deload','Recover & adapt',1)">+ Deload</button>
+          <button class="mini-btn" style="font-size:11px;padding:5px 9px" onclick="pbAddBlock('','',4)"><i class="ti ti-plus"></i> Block</button>
+        </div>
+      </div>
+      <div id="pb-blocks"></div>
+    </div>
     <div class="pb-body" id="pb-body"></div>
     <div class="pb-foot">
       <button class="btn btn-ghost" onclick="pbAddDay()" style="font-size:13px"><i class="ti ti-plus"></i> Add Day</button>
@@ -1206,17 +1219,38 @@ async function saveAiProgram(assign){
 function closeAiModal(){ $('ai-modal').classList.add('hidden'); aiResult=null; }
 
 // ── PROGRAM BUILDER ──
-let pbDays = [], pbEditId = null, pbDragSrc = null;
+let pbDays = [], pbEditId = null, pbDragSrc = null, pbBlocks = [];
+
+// Training-block editor (periodization stig A)
+function pbAddBlock(name,focus,weeks){ pbBlocks.push({name:name||'',focus:focus||'',weeks:weeks||4}); renderPbBlocks(); }
+function pbRemoveBlock(i){ pbBlocks.splice(i,1); renderPbBlocks(); }
+function pbUpdateBlock(i,field,val){ if(pbBlocks[i]) pbBlocks[i][field]=field==='weeks'?(parseInt(val)||1):val; }
+function renderPbBlocks(){
+  const el=$('pb-blocks'); if(!el) return;
+  if(!pbBlocks.length){ el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:2px 0 10px">No blocks — the program runs as one phase. Add blocks above to structure it (e.g. Volume → Intensity → Peak → Deload).</div>'; return; }
+  const total=pbBlocks.reduce((a,b)=>a+(b.weeks||0),0);
+  el.innerHTML=pbBlocks.map((b,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+    <span style="font-size:11px;color:var(--muted);font-weight:800;width:18px;text-align:center">${i+1}</span>
+    <input value="${esc(b.name)}" placeholder="Block name" oninput="pbUpdateBlock(${i},'name',this.value)" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600">
+    <input value="${esc(b.focus)}" placeholder="Focus" oninput="pbUpdateBlock(${i},'focus',this.value)" style="flex:1.4;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px">
+    <input type="number" min="1" max="52" value="${b.weeks}" oninput="pbUpdateBlock(${i},'weeks',this.value)" title="weeks" style="width:56px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:13px">
+    <span style="font-size:11px;color:var(--muted)">wk</span>
+    <button class="mini-btn" onclick="pbRemoveBlock(${i})" title="Remove"><i class="ti ti-x"></i></button>
+  </div>`).join('')+`<div style="font-size:11px;color:var(--muted);margin:2px 0 10px">Total: <b style="color:var(--text-soft)">${total} weeks</b> across ${pbBlocks.length} block${pbBlocks.length>1?'s':''}</div>`;
+}
 
 async function openProgramBuilder(progId){
   pbEditId = progId;
   pbDays = [];
+  pbBlocks = [];
   $('pb-name').value=''; $('pb-sport').value=''; $('pb-level').value='intermediate'; $('pb-days-wk').value='4';
   $('pb-heading').textContent = progId ? 'Edit Program' : 'Program Builder';
   if(progId){
     // Load existing program
     const {data:prog} = await sb.from('programs').select('*').eq('id',progId).single();
     if(prog){ $('pb-name').value=prog.name||''; $('pb-sport').value=prog.sport||''; $('pb-level').value=prog.level||'intermediate'; $('pb-days-wk').value=prog.days_per_week||4; }
+    const {data:blocks} = await sb.from('program_blocks').select('*').eq('program_id',progId).order('sort_order');
+    pbBlocks = (blocks||[]).map(b=>({name:b.name||'',focus:b.focus||'',weeks:b.weeks||4}));
     const {data:wks} = await sb.from('program_workouts').select('*').eq('program_id',progId).order('day_number');
     if(wks){
       for(const w of wks){
@@ -1227,9 +1261,10 @@ async function openProgramBuilder(progId){
   }
   if(!pbDays.length) pbAddDay();
   renderPb();
+  renderPbBlocks();
   $('pb-modal-bg').classList.remove('hidden');
 }
-function closePb(){ $('pb-modal-bg').classList.add('hidden'); pbDays=[]; pbEditId=null; }
+function closePb(){ $('pb-modal-bg').classList.add('hidden'); pbDays=[]; pbEditId=null; pbBlocks=[]; }
 
 function pbAddDay(){
   pbDays.push({ title:'Day '+(pbDays.length+1), focus:'', exercises:[] });
@@ -1314,6 +1349,14 @@ async function savePbProgram(assign){
       if(we) throw we;
       const exs = d.exercises.filter(e=>e.name.trim()).map((e,idx)=>({workout_id:wk.id,order_idx:idx+1,exercise_name:e.name.trim(),sets:e.sets||3,reps:String(e.reps||'8'),target_weight:e.weight||'—',rest_seconds:e.rest||90,icon:'ti-barbell'}));
       if(exs.length){ const {error:ee}=await sb.from('program_exercises').insert(exs); if(ee) throw ee; }
+    }
+    // Training blocks (periodization): replace any existing set
+    await sb.from('program_blocks').delete().eq('program_id',pid);
+    const blocks = pbBlocks.filter(b=>(b.name||'').trim()).map((b,idx)=>({program_id:pid,name:b.name.trim(),focus:(b.focus||'').trim()||null,weeks:b.weeks||4,sort_order:idx}));
+    if(blocks.length){
+      const {error:be}=await sb.from('program_blocks').insert(blocks); if(be) throw be;
+      const totalWeeks=blocks.reduce((a,b)=>a+(b.weeks||0),0);
+      if(totalWeeks>0) await sb.from('programs').update({duration_weeks:totalWeeks}).eq('id',pid);
     }
     if(assign && selected){
       await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid});

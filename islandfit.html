@@ -779,6 +779,8 @@ body::before{
     <div class="program-card-meta" id="home-prog-meta">Week 1 of 12</div>
   </div>
 
+  <div id="home-phases" style="margin:0 18px 4px"></div>
+
   <div class="today-section">
     <div id="nudge-banner" class="nudge-banner" style="display:none"></div>
     <div class="section-header">
@@ -2395,6 +2397,32 @@ async function loadProgramAndToday(){
     const {data:exercises}=await sb.from('program_exercises').select('*').eq('workout_id',workout.id).order('order_idx');
     todayExercises=applyCoachSwaps(exercises||[]);
   } else {todayExercises=[]}
+  renderHomePhases();
+}
+
+// Coach-defined training blocks/phases (periodization stig A) — timeline + current phase
+async function renderHomePhases(){
+  const el=document.getElementById('home-phases'); if(!el) return;
+  el.innerHTML='';
+  if(!currentProfile?.program_id) return;
+  const {data:blocks}=await sb.from('program_blocks').select('*').eq('program_id',currentProfile.program_id).order('sort_order');
+  if(!blocks||!blocks.length) return;
+  const week=(currentProfile.current_week||1);
+  // figure out which block the current week falls into (cumulative weeks)
+  let cum=0, curIdx=-1;
+  const ranges=blocks.map((b,i)=>{ const start=cum+1; cum+=(b.weeks||0); return {start,end:cum,b,i}; });
+  for(const r of ranges){ if(week>=r.start && week<=r.end){ curIdx=r.i; break; } }
+  if(curIdx<0 && week>cum) curIdx=blocks.length-1; // past the end → last block
+  const cur=curIdx>=0?ranges[curIdx]:null;
+  el.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px"><i class="ti ti-timeline"></i> Training plan</div>
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+      ${ranges.map(r=>`<div title="${escapeHtml(r.b.name)} · ${r.b.weeks} wk" style="flex:${r.b.weeks||1};height:7px;border-radius:4px;background:${r.i===curIdx?'linear-gradient(90deg,var(--aurora-1),var(--aurora-2))':'var(--surface3)'}"></div>`).join('')}
+    </div>
+    ${cur?`<div style="font-size:13px;color:var(--text)"><b>${escapeHtml(cur.b.name)}</b>${cur.b.focus?` — <span style="color:var(--text-soft)">${escapeHtml(cur.b.focus)}</span>`:''}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Phase ${curIdx+1} of ${blocks.length} · week ${week-cur.start+1} of ${cur.b.weeks}</div>`:
+      `<div style="font-size:12px;color:var(--muted)">${blocks.length} phases · ${cum} weeks total</div>`}
+  </div>`;
 }
 
 // ── FLEXIBLE SCHEDULE: trained-today · rest day · ease back after a layoff (no calendar lock) ──
