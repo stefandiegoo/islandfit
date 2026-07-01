@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#0e0c0b">
 <title>ÍslandFit for Coaches · Your complete coaching workspace</title>
 <meta name="description" content="ÍslandFit for coaches — log in to monitor every client, track adherence and RPE, leave notes on sessions, build programs with drag & drop, save reusable templates, and get AI program suggestions you can fine-tune yourself.">
 <meta property="og:title" content="ÍslandFit for Coaches">
@@ -15,12 +15,12 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#0a0e1a; --bg-deep:#06080f; --surface:#10162a; --surface2:#1a2240; --surface3:#252e54;
-  --border:#1f2847; --border-bright:#2d3a6b;
-  --aurora-1:#00ffa3; --aurora-2:#22d3ee; --aurora-3:#a78bfa;
-  --lava-1:#ff4d6d; --lava-2:#ff8c42;
-  --text:#ffffff; --text-soft:#c7d2e8; --muted:#6b7896; --muted2:#3d4a6b;
-  --accent:var(--aurora-1);
+  --bg:#0e0c0b; --bg-deep:#080605; --surface:#1b1817; --surface2:#242020; --surface3:#322c29;
+  --border:#2a2521; --border-bright:#463d39;
+  --aurora-1:#19f0a8; --aurora-2:#2bd6ee; --aurora-3:#a78bfa;
+  --lava-1:#ff5421; --lava-2:#ff8a3d; --lava-deep:#df2a14;
+  --text:#f6f2ef; --text-soft:#cdc4bd; --muted:#978c84; --muted2:#6b625c;
+  --accent:var(--lava-1);
 }
 html{scroll-behavior:smooth}
 html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -76,6 +76,12 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
 .footer-copy{color:var(--muted2);font-size:13px;font-weight:500}
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
 .reveal.in{opacity:1;transform:none}
+/* ── VISUAL REFRESH — Lava & Ash / Aurora ── */
+.nav-cta{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.nav-cta:hover{box-shadow:0 8px 24px rgba(255,84,33,.28)}
+.btn-primary{background:linear-gradient(135deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));color:#1c0a04}
+.btn-primary:hover{box-shadow:0 14px 40px rgba(255,84,33,.30)}
+body::before{background:radial-gradient(ellipse at 15% 0%,rgba(255,84,33,.11),transparent 45%),radial-gradient(ellipse at 85% 5%,rgba(167,139,250,.08),transparent 45%),radial-gradient(ellipse at 50% 25%,rgba(25,240,168,.05),transparent 55%)}
 </style>
 </head>
 <body>
