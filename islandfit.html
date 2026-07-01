@@ -4858,6 +4858,8 @@ function addBuilderDay(){
   pbDays.push({title:'Day '+(pbDays.length+1), focus:'', minutes:60, exercises:[]});
   renderPbDays();
 }
+// toggle "supersetted with the exercise above"
+function pbAppToggleSs(di,ei){ const e=pbDays[di].exercises[ei]; if(e) e.ss=!e.ss; renderPbDays(); }
 
 let pbDragSrc = null; // {di, ei}
 
@@ -4883,9 +4885,10 @@ function renderPbDays(){
             ondragend="this.style.opacity='1'"
             ondragover="event.preventDefault();event.dataTransfer.dropEffect='move'"
             ondrop="event.preventDefault();pbDropExercise(${di},${ei});renderPbDays()"
-            style="cursor:grab">
+            style="cursor:grab${ei>0&&ex.ss?';border-left:3px solid var(--aurora-2)':''}">
             <div style="color:var(--muted);font-size:14px;flex-shrink:0;padding:0 4px;cursor:grab"><i class="ti ti-grip-vertical"></i></div>
             <div style="flex:1;min-width:0">
+              ${ei>0?`<button onclick="pbAppToggleSs(${di},${ei})" style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:5px;margin-bottom:4px;${ex.ss?'background:var(--aurora-2);color:#0a0a0a':'background:var(--surface2);color:var(--muted);border:1px solid var(--border)'}"><i class="ti ti-link"></i> ${ex.ss?'Superset':'Link ↑'}</button>`:''}
               <input value="${escapeHtml(ex.name)}" placeholder="Exercise name" oninput="pbDays[${di}].exercises[${ei}].name=this.value" style="width:100%;background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;padding:0;margin-bottom:4px">
               <div style="display:flex;gap:6px">
                 <input type="number" value="${ex.sets}" placeholder="Sets" oninput="pbDays[${di}].exercises[${ei}].sets=+this.value" style="width:46px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:11px;text-align:center">
@@ -4937,7 +4940,12 @@ async function saveProgramBuilder(){
       const {data:wkt, error:we} = await sb.from('program_workouts').insert({program_id:progId, day_number:di+1, title:d.title||('Day '+(di+1)), focus:d.focus||null, estimated_min:d.minutes||60}).select('id').single();
       if(we) throw we;
       if(d.exercises.length){
-        const exRows = d.exercises.map((ex,ei)=>({workout_id:wkt.id, order_idx:ei+1, exercise_name:ex.name.trim(), sets:ex.sets||3, reps:ex.reps||'8', target_weight:ex.weight||'—', rest_seconds:ex.rest||90, cues:ex.cues||null, icon:'ti-barbell'}));
+        // superset groups: each maximal run linked by ex.ss (length >= 2) shares one label
+        const exList=d.exercises;
+        const ssOf=new Array(exList.length).fill(null);
+        let ssLabel=0, k=0;
+        while(k<exList.length){ let j=k; while(j+1<exList.length && exList[j+1].ss) j++; if(j>k){ ssLabel++; const gid='g'+ssLabel; for(let m=k;m<=j;m++) ssOf[m]=gid; } k=j+1; }
+        const exRows = d.exercises.map((ex,ei)=>({workout_id:wkt.id, order_idx:ei+1, exercise_name:ex.name.trim(), sets:ex.sets||3, reps:ex.reps||'8', target_weight:ex.weight||'—', rest_seconds:ex.rest||90, cues:ex.cues||null, icon:'ti-barbell', superset_group:ssOf[ei]}));
         const {error:ee} = await sb.from('program_exercises').insert(exRows);
         if(ee) throw ee;
       }
@@ -4964,7 +4972,9 @@ async function editCustomProgram(progId){
   pbDays = [];
   for(const w of (wkts||[])){
     const {data:exs} = await sb.from('program_exercises').select('*').eq('workout_id', w.id).order('order_idx');
-    pbDays.push({title:w.title||'Day '+w.day_number, focus:w.focus||'', minutes:w.estimated_min||60, exercises:(exs||[]).map(e=>({name:e.exercise_name,sets:e.sets||3,reps:e.reps||'8',weight:e.target_weight||'—',rest:e.rest_seconds||90,cues:e.cues||''}))});
+    const mapped=(exs||[]).map(e=>({name:e.exercise_name,sets:e.sets||3,reps:e.reps||'8',weight:e.target_weight||'—',rest:e.rest_seconds||90,cues:e.cues||'',ssg:e.superset_group||null}));
+    mapped.forEach((e,i)=>{ e.ss = i>0 && e.ssg && mapped[i-1].ssg===e.ssg; });
+    pbDays.push({title:w.title||'Day '+w.day_number, focus:w.focus||'', minutes:w.estimated_min||60, exercises:mapped});
   }
   renderPbDays();
   showS('s-coach-program');

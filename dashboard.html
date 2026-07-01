@@ -167,6 +167,10 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .pb-ex{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;background:var(--surface2);margin-bottom:6px;cursor:grab;user-select:none;border:1px solid transparent}
 .pb-ex:active{cursor:grabbing}
 .pb-ex.drag-over{border-color:var(--accent);background:rgba(0,255,163,0.07)}
+.pb-ex-ss{border-left:3px solid var(--aurora-2);margin-top:-2px}
+.pb-ss-tag{position:absolute;left:34px;top:-7px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#0a0a0a;background:var(--aurora-2);padding:1px 6px;border-radius:5px}
+.pb-ex{position:relative}
+.pb-ss-btn.on{background:var(--aurora-2);color:#0a0a0a}
 .pb-ex-grip{color:var(--muted2);flex-shrink:0;font-size:16px}
 .pb-ex-name{flex:1;min-width:0}
 .pb-ex-name input{width:100%;background:transparent;border:none;color:var(--text);font-size:13px;font-weight:600;outline:none}
@@ -1367,7 +1371,10 @@ async function openProgramBuilder(progId){
     if(wks){
       for(const w of wks){
         const {data:exs} = await sb.from('program_exercises').select('*').eq('workout_id',w.id).order('order_idx');
-        pbDays.push({ wid:w.id, title:w.title||'', focus:w.focus||'', exercises:(exs||[]).map(e=>({ eid:e.id, name:e.exercise_name, sets:e.sets||3, reps:e.reps||'8', weight:e.target_weight||'—', rest:e.rest_seconds||90 })) });
+        const mapped=(exs||[]).map(e=>({ eid:e.id, name:e.exercise_name, sets:e.sets||3, reps:e.reps||'8', weight:e.target_weight||'—', rest:e.rest_seconds||90, ssg:e.superset_group||null }));
+        // reconstruct the "linked with previous" flag: same non-null superset_group as the exercise above
+        mapped.forEach((e,i)=>{ e.ss = i>0 && e.ssg && mapped[i-1].ssg===e.ssg; });
+        pbDays.push({ wid:w.id, title:w.title||'', focus:w.focus||'', exercises:mapped });
       }
     }
   }
@@ -1417,9 +1424,16 @@ function renderPb(focusDi){
   });
 }
 
+function pbToggleSuperset(di,ei){ const e=pbDays[di].exercises[ei]; if(e) e.ss=!e.ss; renderPb(di); }
 function pbExHtml(di,ei,e){
-  return `<div class="pb-ex" draggable="true" data-di="${di}" data-ei="${ei}" id="pbex-${di}-${ei}">
+  const linked = ei>0 && e.ss;
+  const linkBtn = ei>0
+    ? `<button class="mini-btn pb-ss-btn${linked?' on':''}" onclick="pbToggleSuperset(${di},${ei})" title="${linked?'Supersetted with exercise above — click to unlink':'Link as a superset with the exercise above'}"><i class="ti ti-link"></i></button>`
+    : '';
+  return `<div class="pb-ex${linked?' pb-ex-ss':''}" draggable="true" data-di="${di}" data-ei="${ei}" id="pbex-${di}-${ei}">
+    ${linked?'<span class="pb-ss-tag">superset</span>':''}
     <i class="ti ti-grip-vertical pb-ex-grip"></i>
+    ${linkBtn}
     <div class="pb-ex-name"><input placeholder="Exercise name" value="${esc(e.name)}" oninput="pbUpdateEx(${di},${ei},'name',this.value)"></div>
     <div class="pb-ex-cell"><input class="pb-ex-inp" type="number" min="1" value="${e.sets}" oninput="pbUpdateEx(${di},${ei},'sets',+this.value)"><div class="pb-ex-lbl">sets</div></div>
     <div class="pb-ex-cell"><input class="pb-ex-inp" value="${esc(e.reps)}" placeholder="8" oninput="pbUpdateEx(${di},${ei},'reps',this.value)"><div class="pb-ex-lbl">reps</div></div>
@@ -1459,7 +1473,16 @@ async function savePbProgram(assign){
       const d = pbDays[i];
       const {data:wk,error:we} = await sb.from('program_workouts').insert({program_id:pid,day_number:i+1,title:d.title||('Day '+(i+1)),focus:d.focus||null,estimated_min:60}).select('id').single();
       if(we) throw we;
-      const exs = d.exercises.filter(e=>e.name.trim()).map((e,idx)=>({workout_id:wk.id,order_idx:idx+1,exercise_name:e.name.trim(),sets:e.sets||3,reps:String(e.reps||'8'),target_weight:e.weight||'—',rest_seconds:e.rest||90,icon:'ti-barbell'}));
+      const named = d.exercises.filter(e=>e.name.trim());
+      // assign superset groups: each maximal run linked by e.ss (length >= 2) shares one label
+      const groupOf = new Array(named.length).fill(null);
+      let label=0, k=0;
+      while(k<named.length){
+        let j=k; while(j+1<named.length && named[j+1].ss) j++;
+        if(j>k){ label++; const gid='g'+label; for(let m=k;m<=j;m++) groupOf[m]=gid; }
+        k=j+1;
+      }
+      const exs = named.map((e,idx)=>({workout_id:wk.id,order_idx:idx+1,exercise_name:e.name.trim(),sets:e.sets||3,reps:String(e.reps||'8'),target_weight:e.weight||'—',rest_seconds:e.rest||90,icon:'ti-barbell',superset_group:groupOf[idx]}));
       if(exs.length){ const {error:ee}=await sb.from('program_exercises').insert(exs); if(ee) throw ee; }
     }
     // Training blocks (periodization): replace any existing set
