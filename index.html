@@ -3,25 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#0e0c0b">
 <title>ÍslandFit · Train Like a Pro</title>
 <meta name="description" content="ÍslandFit — the Icelandic training app with a built-in AI coach, sport-specific programs for 18 sports, and direct access to certified coaches. Train like a pro.">
 <meta property="og:title" content="ÍslandFit · Train Like a Pro">
 <meta property="og:description" content="AI coach, sport-specific programs for 18 sports, and access to certified human coaches.">
 <meta property="og:type" content="website">
-<link rel="manifest" href='data:application/manifest+json,{"name":"%C3%8DslandFit","short_name":"%C3%8DslandFit","start_url":".","display":"standalone","background_color":"%230a0e1a","theme_color":"%230a0e1a","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2300ffa3%22/%3E%3Cstop offset=%221%22 stop-color=%22%23ff4d6d%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22512%22 height=%22512%22 fill=%22%230a0e1a%22 rx=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2255%25%22 font-family=%22Inter,sans-serif%22 font-size=%22220%22 fill=%22url(%23g)%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-weight=%22900%22%3E%C3%8DF%3C/text%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml"}]}'>
+<link rel="manifest" href='data:application/manifest+json,{"name":"%C3%8DslandFit","short_name":"%C3%8DslandFit","start_url":".","display":"standalone","background_color":"%230e0c0b","theme_color":"%230e0c0b","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2319f0a8%22/%3E%3Cstop offset=%221%22 stop-color=%22%23ff5421%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22512%22 height=%22512%22 fill=%22%230e0c0b%22 rx=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2255%25%22 font-family=%22Inter,sans-serif%22 font-size=%22220%22 fill=%22url(%23g)%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-weight=%22900%22%3E%C3%8DF%3C/text%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml"}]}'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#0a0e1a; --bg-deep:#06080f; --surface:#10162a; --surface2:#1a2240; --surface3:#252e54;
-  --border:#1f2847; --border-bright:#2d3a6b;
-  --aurora-1:#00ffa3; --aurora-2:#22d3ee; --aurora-3:#a78bfa;
-  --lava-1:#ff4d6d; --lava-2:#ff8c42;
-  --text:#ffffff; --text-soft:#c7d2e8; --muted:#6b7896; --muted2:#3d4a6b;
-  --accent:var(--aurora-1);
+  --bg:#0e0c0b; --bg-deep:#080605; --surface:#1b1817; --surface2:#242020; --surface3:#322c29;
+  --border:#2a2521; --border-bright:#463d39;
+  --aurora-1:#19f0a8; --aurora-2:#2bd6ee; --aurora-3:#a78bfa;
+  --lava-1:#ff5421; --lava-2:#ff8a3d; --lava-deep:#df2a14;
+  --text:#f6f2ef; --text-soft:#cdc4bd; --muted:#978c84; --muted2:#6b625c;
+  --accent:var(--lava-1);
 }
 html{scroll-behavior:smooth}
 html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -110,6 +110,12 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
 .footer-copy{color:var(--muted2);font-size:13px;font-weight:500}
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
 .reveal.in{opacity:1;transform:none}
+/* ── VISUAL REFRESH — Lava & Ash / Aurora ── */
+.nav-cta{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.nav-cta:hover{box-shadow:0 8px 24px rgba(255,84,33,.28)}
+.btn-primary{background:linear-gradient(135deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));color:#1c0a04}
+.btn-primary:hover{box-shadow:0 14px 40px rgba(255,84,33,.30)}
+body::before{background:radial-gradient(ellipse at 15% 0%,rgba(255,84,33,.11),transparent 45%),radial-gradient(ellipse at 85% 5%,rgba(167,139,250,.08),transparent 45%),radial-gradient(ellipse at 50% 25%,rgba(25,240,168,.05),transparent 55%)}
 </style>
 </head>
 <body>

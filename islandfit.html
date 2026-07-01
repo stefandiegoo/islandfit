@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#0e0c0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="ÍslandFit">
 <title>ÍslandFit · Train Like a Pro</title>
-<link rel="manifest" href='data:application/manifest+json,{"name":"ÍslandFit","short_name":"ÍslandFit","start_url":"./islandfit.html","display":"standalone","background_color":"%230a0e1a","theme_color":"%230a0e1a","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2300ffa3%22/%3E%3Cstop offset=%221%22 stop-color=%22%23ff4d6d%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22512%22 height=%22512%22 fill=%22%230a0e1a%22 rx=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2255%25%22 font-family=%22Inter,sans-serif%22 font-size=%22220%22 fill=%22url(%23g)%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-weight=%22900%22%3EÍF%3C/text%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml"}]}'>
+<link rel="manifest" href='data:application/manifest+json,{"name":"ÍslandFit","short_name":"ÍslandFit","start_url":"./islandfit.html","display":"standalone","background_color":"%230e0c0b","theme_color":"%230e0c0b","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2319f0a8%22/%3E%3Cstop offset=%221%22 stop-color=%22%23ff5421%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22512%22 height=%22512%22 fill=%22%230e0c0b%22 rx=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2255%25%22 font-family=%22Inter,sans-serif%22 font-size=%22220%22 fill=%22url(%23g)%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-weight=%22900%22%3EÍF%3C/text%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml"}]}'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -21,32 +21,33 @@
    ═══════════════════════════════════════════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  /* Base — Icelandic night sky */
-  --bg:#0a0e1a;
-  --bg-deep:#06080f;
-  --surface:#10162a;
-  --surface2:#1a2240;
-  --surface3:#252e54;
-  --border:#1f2847;
-  --border-bright:#2d3a6b;
+  /* Base — warm volcanic ash */
+  --bg:#0e0c0b;
+  --bg-deep:#080605;
+  --surface:#1b1817;
+  --surface2:#242020;
+  --surface3:#322c29;
+  --border:#2a2521;
+  --border-bright:#463d39;
 
-  /* Aurora gradient — northern lights */
-  --aurora-1:#00ffa3;   /* Bright aurora green */
-  --aurora-2:#22d3ee;   /* Cyan ice */
+  /* Aurora gradient — northern lights (progress & recovery) */
+  --aurora-1:#19f0a8;   /* Bright aurora green */
+  --aurora-2:#2bd6ee;   /* Cyan ice */
   --aurora-3:#a78bfa;   /* Purple twilight */
 
-  /* Volcanic — fire & lava */
-  --lava-1:#ff4d6d;     /* Hot lava red */
-  --lava-2:#ff8c42;     /* Volcanic orange */
+  /* Volcanic — fire & lava (effort & actions) */
+  --lava-1:#ff5421;     /* Hot lava red-orange */
+  --lava-2:#ff8a3d;     /* Volcanic orange */
+  --lava-deep:#df2a14;  /* Molten core */
 
   /* Text */
-  --text:#ffffff;
-  --text-soft:#c7d2e8;
-  --muted:#6b7896;
-  --muted2:#3d4a6b;
+  --text:#f6f2ef;
+  --text-soft:#cdc4bd;
+  --muted:#978c84;
+  --muted2:#6b625c;
 
   /* Semantic */
-  --accent:var(--aurora-1);
+  --accent:var(--lava-1);
   --warn:var(--lava-2);
   --danger:var(--lava-1);
   --success:var(--aurora-1);
@@ -536,6 +537,83 @@ body::before{
 .bm-field span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
 .bm-field input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:9px;font-size:14px;width:100%}
 .bm-photo-thumb{width:100%;border-radius:8px;background:#000;object-fit:cover;aspect-ratio:3/4}
+
+/* ── VISUAL REFRESH — Lava & Ash / Aurora (override layer) ── */
+/* primary ACTIONS → lava */
+.btn-primary{background:linear-gradient(135deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));color:#1c0a04;box-shadow:0 6px 22px rgba(255,84,33,.22)}
+.btn-primary:hover{box-shadow:0 8px 26px rgba(255,84,33,.32)}
+.auth-tab.active{background:linear-gradient(135deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));color:#1c0a04}
+.onboard-option.selected .onboard-opt-icon{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.program-card-icon{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.today-cta,.td-primary{background:linear-gradient(135deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));color:#1c0a04}
+.unit-toggle button.active{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.toast{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.timer-skip-big{background:linear-gradient(135deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));color:#1c0a04}
+.btn-approve{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
+.ci-star.active{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));border-color:var(--lava-1);color:#1c0a04}
+/* lava accent tints */
+.day-cell.today{background:linear-gradient(135deg,rgba(255,84,33,.10),rgba(255,138,61,.04))}
+.onboard-option.selected{background:linear-gradient(135deg,rgba(255,84,33,.07),rgba(255,138,61,.03))}
+.sched-btn.selected{background:linear-gradient(135deg,rgba(255,84,33,.09),rgba(255,138,61,.04));color:var(--lava-2)}
+.sn-pill.cur{background:rgba(255,84,33,.12)}
+.add-chip{background:rgba(255,84,33,.12)}
+.field input:focus,.field select:focus{box-shadow:0 0 0 3px rgba(255,84,33,.12)}
+/* today hero card → warm ash + lava glow */
+.today-card{background:linear-gradient(150deg,rgba(255,84,33,.14),rgba(255,84,33,.03) 55%,#161312)}
+.today-card::before{background:radial-gradient(circle,rgba(255,84,33,.18),transparent 70%)}
+.today-card::after{background:radial-gradient(circle,rgba(167,139,250,.10),transparent 70%)}
+/* keep DONE sets, progress & recovery on AURORA */
+.set-row.done{background:linear-gradient(90deg,rgba(25,240,168,.06),transparent)}
+.set-row.done .set-num,.set-row.done .set-input{color:var(--success);border-color:rgba(25,240,168,.30)}
+.timer-up-next strong,.timer-msg strong{color:var(--aurora-1)}
+.prog-summary-label{color:var(--aurora-1)}
+.adjust-indicator{background:linear-gradient(135deg,rgba(25,240,168,.10),rgba(43,214,238,.05));border-color:rgba(25,240,168,.30);color:var(--aurora-1)}
+/* warm chrome */
+.topbar{background:rgba(14,12,11,.9)}
+.bottom-nav{background:rgba(14,12,11,.95)}
+body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),transparent 48%),radial-gradient(ellipse at 82% 8%,rgba(167,139,250,.06),transparent 50%),radial-gradient(ellipse at 52% 30%,rgba(25,240,168,.05),transparent 60%)}
+/* mono numerals */
+.set-input,.rpe-input,.rpe-pick,.sn-pill,.rx-chip{font-family:'JetBrains Mono','Inter',monospace;font-variant-numeric:tabular-nums}
+
+/* ── Active Workout — full set table (matches design 1A) ── */
+@keyframes pulseLava{0%,100%{box-shadow:0 0 0 1px rgba(255,106,43,.30),0 0 14px -4px rgba(255,84,33,.45)}50%{box-shadow:0 0 0 1px rgba(255,106,43,.55),0 0 22px -2px rgba(255,84,33,.70)}}
+.sets-block{display:flex;flex-direction:column;background:transparent;border:none;overflow:visible;padding:0}
+.sets-head{order:0;background:transparent;border-bottom:none;padding:2px 8px 9px 12px;color:var(--muted);font-size:9px;letter-spacing:.12em}
+#set-nav{display:none}                     /* pill strip retired — all sets now shown as rows */
+#sets-body{order:2}
+.quick-controls{order:3;margin-top:6px}    /* steppers move below the rows */
+.set-row{grid-template-columns:42px 1fr 1fr 1fr 44px;position:relative;border:none;border-radius:12px;margin-bottom:7px;padding:9px 8px 9px 12px;background:var(--surface)}
+.set-row::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:transparent}
+.set-row.cur{background:rgba(255,84,33,.09);animation:pulseLava 2.8s ease-in-out infinite}
+.set-row.cur::before{background:var(--lava-1)}
+.set-row.done{background:rgba(25,240,168,.05)}
+.set-row.done::before{background:var(--aurora-1)}
+.set-row.dnc{background:rgba(239,68,68,.06)}
+.set-row.dnc::before{background:#ef4444}
+.set-num{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;background:var(--surface3);color:var(--muted);border:1px solid var(--border)}
+.set-row.cur .set-num{background:rgba(255,84,33,.16);border-color:rgba(255,106,43,.50);color:#ff9b63}
+.set-row.done .set-num{background:rgba(25,240,168,.12);border-color:rgba(25,240,168,.40);color:var(--aurora-1)}
+.set-row.dnc .set-num{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.40);color:#ff6b6b}
+.set-input{background:var(--surface2);border:1px solid transparent;font-size:15px;font-weight:600;padding:9px 6px}
+.set-input:focus,.rpe-input:focus{background:var(--surface3);border-color:var(--accent)}
+.set-row.done .set-input{background:transparent;color:var(--aurora-1);border-color:transparent}
+.rpe-pick{background:var(--surface2);border:1px solid transparent;font-size:14px;padding:9px 4px}
+.log-btn{width:38px;height:38px;border-radius:10px;background:var(--surface3);color:var(--muted)}
+.set-row.cur .log-btn{background:transparent;border:1.5px solid rgba(255,106,43,.60);color:#ff8a4d}
+.set-row.done .log-btn{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));color:#06140f}
+.rx-chip.rx-target{background:rgba(255,84,33,.10);border-color:rgba(255,106,43,.35);color:#ffb38a;font-weight:700}
+
+/* ── Rest timer (aurora recovery) & Home ── */
+.timer-overlay{background:rgba(8,6,5,.98)}
+.timer-overlay::before{background:radial-gradient(circle at 30% 20%,rgba(25,240,168,.10),transparent 50%),radial-gradient(circle at 70% 80%,rgba(167,139,250,.08),transparent 50%)}
+.timer-num-big{font-family:'JetBrains Mono',monospace;font-size:74px;font-weight:600;letter-spacing:.01em;background:none;-webkit-text-fill-color:var(--text);color:var(--text)}
+.timer-ring-fg{filter:drop-shadow(0 0 10px rgba(25,240,168,.40))}
+.timer-skip-big{background:rgba(25,240,168,.10);border:1px solid rgba(25,240,168,.40);color:var(--aurora-1)}
+.timer-up-next{background:var(--surface);border:1px solid var(--border)}
+.timer-up-next strong{color:#ff9b63}
+@keyframes glowDot{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1)}}
+.today-label::before{animation:glowDot 2s ease-in-out infinite}
+.complete-overlay::before{background:radial-gradient(circle at 50% 30%,rgba(25,240,168,.14),transparent 60%)}
 </style>
 </head>
 <body>
@@ -894,8 +972,9 @@ body::before{
     <svg viewBox="0 0 240 240">
       <defs>
         <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#00ffa3"/>
-          <stop offset="100%" stop-color="#22d3ee"/>
+          <stop offset="0%" stop-color="#19f0a8"/>
+          <stop offset="55%" stop-color="#2bd6ee"/>
+          <stop offset="100%" stop-color="#a78bfa"/>
         </linearGradient>
       </defs>
       <circle class="timer-ring-bg" cx="120" cy="120" r="110"/>
@@ -2671,20 +2750,25 @@ function renderExercise(){
   const setCount=ex.sets||1;
   if(curSet>=setCount||curSet<0) curSet=0;
   renderSetNav(ex);
-  const i=curSet, s=saved[i]||{};                       // only the working set is shown
-  body.innerHTML=`<div class="set-row ${s.done?'done':''}" id="set-row-${i}">
+  body.innerHTML=Array.from({length:setCount},(_,i)=>{
+    const s=saved[i]||{};
+    const stateCls=s.done?(s.dnc?'dnc':'done'):(i===curSet?'cur':'');
+    return `<div class="set-row ${stateCls}" id="set-row-${i}">
       <div class="set-num">${i+1}</div>
       <input class="set-input" type="text" value="${s.reps||ex.reps}" id="reps-${i}" oninput="saveSet(${i})">
       <input class="set-input" type="text" value="${s.kg_display||dispWeight}" id="kg-${i}" oninput="saveSet(${i})">
       <button class="rpe-pick" id="rpe-${i}" data-rpe="${s.rpe||7}" data-dnc="${s.dnc?1:0}" onclick="openRpe(${i})" style="color:${s.dnc?'#ef4444':rpeZone(s.rpe||7).c}">${s.dnc?'DNC':(s.rpe||7)}</button>
       <button class="log-btn ${s.done?'done':''}" onclick="toggleSet(this,${i})">${s.done?'<i class="ti ti-check"></i>':'<i class="ti ti-circle"></i>'}</button>
     </div>`;
+  }).join('');
   updateActiveProgress();
 }
 
 function renderRxBar(ex,rx,tp){
   const el=document.getElementById('rx-bar'); if(!el) return;
   let h='';
+  const _w=isNaN(parseFloat(rx.kg))?'BW':displayWeight(parseFloat(rx.kg))+' '+weightUnit();
+  h+=`<span class="rx-chip rx-target"><i class="ti ti-barbell"></i> ${ex.sets}×${ex.reps}${_w==='BW'?' · BW':' · '+_w}</span>`;
   const _g=exGroup(curEx); if(_g.length>1) h+=`<span class="rx-chip" style="border-color:#a78bfa;color:#a78bfa"><i class="ti ti-link"></i> Superset ${_g.indexOf(curEx)+1}/${_g.length}</span>`;
   h+=`<span class="rx-chip ${rx.deload?'deload':''}"><i class="ti ti-stairs-up"></i> Week ${currentProfile?.current_week||1} · ${rx.phase}${rx.pct?` · ${rx.pct}% 1RM`:''}</span>`;
   if(rx.source==='1rm'&&rx.fine) h+=`<span class="rx-chip"><i class="ti ti-adjustments-alt"></i> RPE ${rx.fine>0?'+':''}${rx.fine}%</span>`;
