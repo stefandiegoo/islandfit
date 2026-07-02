@@ -614,6 +614,31 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
 @keyframes glowDot{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1)}}
 .today-label::before{animation:glowDot 2s ease-in-out infinite}
 .complete-overlay::before{background:radial-gradient(circle at 50% 30%,rgba(25,240,168,.14),transparent 60%)}
+
+/* ── SIMPLIFY PASS ── */
+/* #1 overflow menu */
+.ex-actions{position:relative}
+.ex-more-btn i{color:var(--muted)!important}
+.ex-more-menu{position:absolute;right:18px;top:calc(100% + 6px);z-index:40;display:none;flex-direction:column;min-width:196px;background:#171413;border:1px solid var(--border-bright);border-radius:12px;padding:6px;box-shadow:0 18px 40px -12px rgba(0,0,0,.7)}
+.ex-more-menu.open{display:flex}
+.ex-more-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;background:none;border:none;color:var(--text-soft);font:600 13px/1 Inter;border-radius:8px;text-align:left}
+.ex-more-menu button:hover{background:var(--surface2)}
+.ex-more-menu button i{font-size:16px;color:var(--muted)}
+/* #2 hide now-redundant Continue buttons (elements kept for JS) */
+#onb-next-1,#onb-next-2,#onb-next-3,#onb-next-4,#onb-next-5{display:none}
+.onboard-option,.sched-btn{transition:transform .12s ease,border-color .2s,background .2s}
+.onboard-option.selected{transform:translateX(2px)}
+/* #4 Home hierarchy */
+#s-home .program-card{background:transparent;border:none;padding:2px 4px 0;margin-bottom:8px;box-shadow:none}
+#s-home .program-card-icon{width:34px;height:34px}
+#s-home .stat-card{background:#161312;border-color:rgba(255,255,255,.05)}
+#s-home .stat-num{font-size:26px}
+/* #5 calm chrome */
+#s-home{padding-bottom:96px}
+#s-home .today-section,#s-home .week-section{margin-bottom:22px}
+#s-home .section-header{margin-bottom:12px}
+.topbar{border-bottom-color:rgba(255,255,255,.05)}
+.bottom-nav{border-top-color:rgba(255,255,255,.05)}
 </style>
 </head>
 <body>
@@ -926,8 +951,11 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
   <div class="ex-actions">
     <button class="ex-act-btn" onclick="openDemo()"><i class="ti ti-player-play"></i> Demo</button>
     <button class="ex-act-btn" onclick="openHistory()"><i class="ti ti-history"></i> History</button>
-    <button class="ex-act-btn" onclick="openReplace()"><i class="ti ti-refresh"></i> Replace</button>
-    <button class="ex-act-btn" onclick="resetExercise()"><i class="ti ti-rotate-2"></i> Reset</button>
+    <button class="ex-act-btn ex-more-btn" onclick="exMoreToggle(event)"><i class="ti ti-dots"></i> More</button>
+    <div class="ex-more-menu" id="ex-more-menu">
+      <button onclick="openReplace();exMoreClose()"><i class="ti ti-refresh"></i> Replace exercise</button>
+      <button onclick="resetExercise();exMoreClose()"><i class="ti ti-rotate-2"></i> Reset sets</button>
+    </div>
   </div>
   <div class="sets-block">
     <div class="sets-head">
@@ -2121,6 +2149,7 @@ function renderPositions(){
   });
 }
 
+let onbAdvancing=false;
 function selectOnb(el,key,value,displayName){
   // For schedule buttons (single-line buttons, not full option cards)
   if(el.classList.contains('sched-btn')){
@@ -2138,6 +2167,9 @@ function selectOnb(el,key,value,displayName){
   if(key==='goal') document.getElementById('onb-next-3').disabled=false;
   if(key==='level') document.getElementById('onb-next-4').disabled=false;
   if(key==='equipment') document.getElementById('onb-next-5').disabled=false;
+  // Auto-advance single-select steps (~300ms) so onboarding feels like fewer steps
+  const _autoStep={sport:1,position:2,goal:3,level:4,equipment:5}[key];
+  if(_autoStep && !onbAdvancing){ onbAdvancing=true; setTimeout(function(){ onbAdvancing=false; onbNext(_autoStep); },300); }
   // Step 6: need both days and session
   if(key==='days'||key==='session'){
     if(onbState.days && onbState.session){
@@ -2155,12 +2187,20 @@ function goToOnbStep(n){
 function onbNext(step){
   if(step===1) renderPositions();
   if(step===5){
-    // Pre-render schedule with sensible defaults shown but not selected
+    // Smart defaults on the schedule step: 4 days · 60 min, pre-selected & ready
+    if(!onbState.days){ const b=document.querySelector('#onb-days .sched-btn:nth-child(2)'); if(b) b.classList.add('selected'); onbState.days=4; }
+    if(!onbState.session){ const b=document.querySelector('#onb-length .sched-btn:nth-child(3)'); if(b) b.classList.add('selected'); onbState.session=60; }
+    if(onbState.days && onbState.session){ const f=document.getElementById('onb-finish'); if(f) f.disabled=false; renderProgramMatch(); }
   }
   goToOnbStep(step+1);
 }
 
 function onbBack(step){goToOnbStep(step-1)}
+
+// Active-workout secondary actions overflow menu
+function exMoreToggle(e){ if(e){e.stopPropagation();} const m=document.getElementById('ex-more-menu'); if(m) m.classList.toggle('open'); }
+function exMoreClose(){ const m=document.getElementById('ex-more-menu'); if(m) m.classList.remove('open'); }
+document.addEventListener('click',function(e){ const m=document.getElementById('ex-more-menu'); if(m && m.classList.contains('open') && !e.target.closest('.ex-actions')) m.classList.remove('open'); });
 
 async function renderProgramMatch(){
   // Find best matching program based on sport + level + days
