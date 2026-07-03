@@ -639,6 +639,13 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
 #s-home .section-header{margin-bottom:12px}
 .topbar{border-bottom-color:rgba(255,255,255,.05)}
 .bottom-nav{border-top-color:rgba(255,255,255,.05)}
+
+/* ── COACH PORTAL TABS ── */
+.ctabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:14px}
+.ctab{flex:1;padding:10px 6px;border:none;background:none;color:var(--muted);font:700 12px/1 Inter;text-transform:uppercase;letter-spacing:.05em;border-radius:9px;cursor:pointer;transition:all .15s}
+.ctab.active{background:var(--surface3);color:var(--text)}
+.ctab-panel{display:none}
+.ctab-panel.active{display:block}
 </style>
 </head>
 <body>
@@ -1344,6 +1351,14 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
 
     <!-- Client list -->
     <div class="section-label">My Clients <span id="coach-client-count" style="color:var(--muted)"></span></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="coach-client-search" placeholder="Search name or sport…" oninput="renderCoachClientList()" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:9px;font-size:13px">
+      <select id="coach-client-sort" onchange="renderCoachClientList()" style="background:var(--surface);border:1px solid var(--border);color:var(--text-soft);padding:10px;border-radius:9px;font-size:12px;font-weight:600">
+        <option value="attention">Needs attention</option>
+        <option value="recent">Recent</option>
+        <option value="name">Name</option>
+      </select>
+    </div>
     <div id="coach-clients-list"><div style="color:var(--muted);font-size:14px;text-align:center;padding:24px">Loading...</div></div>
 
     <!-- Custom programs -->
@@ -1373,8 +1388,15 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <div id="coach-client-stats" style="margin-bottom:8px"></div>
     <div id="coach-client-profile-info" style="margin-bottom:16px"></div>
 
+    <div class="ctabs">
+      <button class="ctab" data-coachtab="overview" onclick="coachTab('overview')">Overview</button>
+      <button class="ctab" data-coachtab="training" onclick="coachTab('training')">Training</button>
+      <button class="ctab" data-coachtab="progress" onclick="coachTab('progress')">Progress</button>
+    </div>
+
+    <div class="ctab-panel" data-coachtabpanel="overview">
     <!-- Assign program -->
-    <div class="section-label">Assigned Program</div>
+    <div class="section-label" style="margin-top:4px">Assigned Program</div>
     <div id="coach-client-program" style="margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <select id="coach-assign-select" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:13px">
@@ -1394,9 +1416,11 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <div class="section-label">Coach Notes (visible to AI coach)</div>
     <textarea id="coach-client-notes" class="ai-onboard-text" rows="3" placeholder="Injuries, goals, things to keep in mind..." style="margin-bottom:8px"></textarea>
     <button class="btn btn-primary" onclick="saveClientNotes()" style="margin-bottom:20px">Save Notes</button>
+    </div>
 
+    <div class="ctab-panel" data-coachtabpanel="progress">
     <!-- Weekly check-ins -->
-    <div class="section-label">Weekly Check-ins <span id="coach-ci-count" style="color:var(--lava-2)"></span></div>
+    <div class="section-label" style="margin-top:4px">Weekly Check-ins <span id="coach-ci-count" style="color:var(--lava-2)"></span></div>
     <div id="coach-client-checkins"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
     <!-- Form checks -->
@@ -1418,14 +1442,17 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <!-- Strength progress -->
     <div class="section-label">Strength Progress · est. 1RM over time</div>
     <div id="coach-client-progress"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+    </div>
 
+    <div class="ctab-panel" data-coachtabpanel="training">
     <!-- Recent workouts -->
-    <div class="section-label">Recent Workouts</div>
+    <div class="section-label" style="margin-top:4px">Recent Workouts</div>
     <div id="coach-client-workouts"></div>
 
     <!-- PRs -->
     <div class="section-label">Personal Records</div>
     <div id="coach-client-prs"></div>
+    </div>
 
     <div style="margin-top:20px;margin-bottom:16px">
       <button class="btn btn-ghost" style="width:100%;color:var(--lava-1);border:1px solid rgba(255,77,109,0.3)" onclick="removeClient()">Remove Client</button>
@@ -3847,10 +3874,36 @@ async function deleteCoachExerciseDemo(id){
   showToast('Deleted'); loadCoachExerciseDemos();
 }
 
+// coach client-detail tabs (mobile portal)
+function coachTab(name){
+  document.querySelectorAll('#s-coach-client .ctab').forEach(b=>b.classList.toggle('active', b.dataset.coachtab===name));
+  document.querySelectorAll('#s-coach-client .ctab-panel').forEach(p=>p.classList.toggle('active', p.dataset.coachtabpanel===name));
+  if(name==='progress' && charts.coachProg){ setTimeout(()=>{ try{ charts.coachProg.resize(); }catch(e){} }, 40); }
+}
+
+function coachClientAttention(c){
+  if(c.status==='pending') return 0;
+  const since = c.lastWorkout ? Math.floor((Date.now()-new Date(c.lastWorkout))/864e5) : Infinity;
+  let a=0;
+  if(since>=10) a+=4; else if(since>=6) a+=2;
+  if(!c.lastWorkout) a+=1;
+  return a;
+}
 function renderCoachClientList(){
   const list = document.getElementById('coach-clients-list');
   if(!coachClients.length){ list.innerHTML=''; return; }
-  list.innerHTML = coachClients.map(c=>{
+  const q=(document.getElementById('coach-client-search')?.value||'').toLowerCase().trim();
+  const sort=document.getElementById('coach-client-sort')?.value||'attention';
+  let arr=coachClients.filter(c=>{
+    if(!q) return true;
+    const p=c.profile;
+    return (p.name||'').toLowerCase().includes(q) || (p.sport||'').toLowerCase().includes(q);
+  });
+  if(sort==='name') arr=arr.slice().sort((a,b)=>String(a.profile.name||'').localeCompare(String(b.profile.name||'')));
+  else if(sort==='recent') arr=arr.slice().sort((a,b)=>new Date(b.lastWorkout||0)-new Date(a.lastWorkout||0));
+  else arr=arr.slice().sort((a,b)=>coachClientAttention(b)-coachClientAttention(a));
+  if(!arr.length){ list.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">No matches.</div>'; return; }
+  list.innerHTML = arr.map(c=>{
     const p = c.profile;
     const isPending = c.status === 'pending';
     const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -3909,6 +3962,7 @@ async function openClientDetail(clientId){
   const p = viewingClient.profile;
   document.getElementById('coach-client-title').textContent = p.name || 'Client';
   showS('s-coach-client');
+  coachTab('overview');
   // Stats strip
   document.getElementById('coach-client-stats').innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-num" style="font-size:14px">${escapeHtml(p.sport||'—')}</div><div class="stat-label">Sport</div></div><div class="stat-card"><div class="stat-num" id="cc-workouts">...</div><div class="stat-label">Workouts</div></div><div class="stat-card"><div class="stat-num" id="cc-adherence">...</div><div class="stat-label">Adherence</div></div><div class="stat-card"><div class="stat-num" id="cc-rpe">...</div><div class="stat-label">Avg RPE</div></div><div class="stat-card"><div class="stat-num" id="cc-prs">...</div><div class="stat-label">PRs</div></div></div>`;
   // Profile info cards

@@ -193,6 +193,32 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .tb-btn.accent{background:linear-gradient(135deg,var(--lava-2),var(--lava-1));color:#1c0a04}
 .field input:focus{box-shadow:0 0 0 3px rgba(255,84,33,.12)}
 body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),transparent 45%),radial-gradient(ellipse at 88% 5%,rgba(167,139,250,.06),transparent 45%),radial-gradient(ellipse at 50% 30%,rgba(25,240,168,.05),transparent 55%)}
+
+/* ── COACH EFFICIENCY PASS ── */
+/* #1 client-detail tabs */
+.ctabs{display:flex;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:16px}
+.ctab{flex:1;padding:9px 6px;border:none;background:none;color:var(--muted);font:700 12px/1 Inter;text-transform:uppercase;letter-spacing:.05em;border-radius:9px;cursor:pointer;transition:all .15s}
+.ctab:hover{color:var(--text-soft)}
+.ctab.active{background:var(--surface3);color:var(--text)}
+.ctab-panel{display:none}
+.ctab-panel.active{display:block}
+/* #2 client list tools */
+.client-tools{display:flex;gap:8px;margin-bottom:10px}
+.client-search{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:9px;font-size:13px}
+.client-search:focus{outline:none;border-color:var(--accent)}
+.client-sort{background:var(--surface2);border:1px solid var(--border);color:var(--text-soft);padding:9px 10px;border-radius:9px;font-size:12px;font-weight:600}
+/* #4 connect chevron */
+#connect-chevron{color:var(--muted);font-size:16px}
+/* #3+#5 compact stats & calm chrome */
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.stat{padding:14px 16px;border-color:rgba(255,255,255,.05)}
+.stat-num{font-size:26px}
+.panel{border-color:rgba(255,255,255,.05)}
+.topbar{background:rgba(14,12,11,.92)}
+/* #5 colour consistency: green = good (aurora), not lava */
+.req-banner{background:linear-gradient(135deg,rgba(25,240,168,.08),rgba(43,214,238,.05))}
+.pill-green{background:rgba(25,240,168,.14);color:var(--aurora-1)}
+.msg-me{background:linear-gradient(135deg,rgba(25,240,168,.18),rgba(43,214,238,.12));border:1px solid rgba(25,240,168,.25)}
 </style>
 </head>
 <body>
@@ -230,12 +256,12 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
     </div>
   </div>
   <main>
-    <!-- Stats -->
-    <div class="stats" id="stats"></div>
-    <!-- Attention needed -->
+    <!-- Attention needed (triage first) -->
     <div id="alerts"></div>
     <!-- Pending requests -->
     <div id="requests"></div>
+    <!-- Stats -->
+    <div class="stats" id="stats"></div>
     <!-- Whole-roster overview -->
     <div id="roster"></div>
     <!-- Grid -->
@@ -244,21 +270,33 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
       <div style="display:flex;flex-direction:column;gap:24px">
         <div class="panel">
           <div class="panel-title">My Clients <span id="client-count" style="color:var(--muted);font-weight:700"></span></div>
+          <div class="client-tools">
+            <input class="client-search" id="client-search" placeholder="Search name or sport…" oninput="renderClientList()">
+            <select class="client-sort" id="client-sort" onchange="renderClientList()">
+              <option value="attention">Needs attention</option>
+              <option value="adherence">Lowest adherence</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
           <div id="client-list"></div>
         </div>
         <div class="panel">
-          <div class="panel-title">Connect a Client</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Invite code</div>
-          <div class="row-gap" style="margin-bottom:8px">
-            <div id="invite-code" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Bebas Neue';font-size:22px;letter-spacing:0.12em;text-align:center">—</div>
-            <button class="mini-btn" style="padding:0 14px" onclick="copyInvite()"><i class="ti ti-copy"></i></button>
-            <button class="mini-btn" style="padding:0 14px" onclick="newInvite()"><i class="ti ti-refresh"></i></button>
-          </div>
-          <div id="invite-expire" style="font-size:11px;color:var(--muted);margin-bottom:16px"></div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Or add by email</div>
-          <div class="row-gap">
-            <input type="email" id="add-email" placeholder="client@email.com" class="sel" style="flex:1">
-            <button class="btn btn-primary" style="padding:12px 18px" onclick="addByEmail()">Send</button>
+          <button class="panel-title" style="width:100%;background:none;border:none;cursor:pointer;padding:0" onclick="toggleConnect()">
+            <span>Connect a Client</span><i class="ti ti-chevron-down" id="connect-chevron"></i>
+          </button>
+          <div id="connect-body" style="display:none;margin-top:12px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Invite code</div>
+            <div class="row-gap" style="margin-bottom:8px">
+              <div id="invite-code" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Bebas Neue';font-size:22px;letter-spacing:0.12em;text-align:center">—</div>
+              <button class="mini-btn" style="padding:0 14px" onclick="copyInvite()"><i class="ti ti-copy"></i></button>
+              <button class="mini-btn" style="padding:0 14px" onclick="newInvite()"><i class="ti ti-refresh"></i></button>
+            </div>
+            <div id="invite-expire" style="font-size:11px;color:var(--muted);margin-bottom:16px"></div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Or add by email</div>
+            <div class="row-gap">
+              <input type="email" id="add-email" placeholder="client@email.com" class="sel" style="flex:1">
+              <button class="btn btn-primary" style="padding:12px 18px" onclick="addByEmail()">Send</button>
+            </div>
           </div>
         </div>
         <div class="panel">
@@ -728,19 +766,42 @@ function renderRequests(){
     </div>`).join('')}</div>`;
 }
 
-// ── RENDER: CLIENT LIST ──
+// ── RENDER: CLIENT LIST (search + sort) ──
+function clientAttention(c){
+  // derived from existing per-client fields — no new data
+  const last=c.workouts.length?c.workouts[0].completed_at:null;
+  const since=daysSince(last);
+  let a=0;
+  if(c.pendingFc>0) a+=5;
+  if(since>=10) a+=4; else if(since>=6) a+=2;
+  if(c.workouts.length>=2 && c.adherence<50) a+=2;
+  if(c.avgRpe!=null && c.avgRpe>=9) a+=1;
+  if(!c.checkedInThisWeek) a+=1;
+  return a;
+}
 function renderClientList(){
   const active = clients.filter(c=>c.status==='active');
   $('client-count').textContent = '('+active.length+')';
   if(!clients.length){ $('client-list').innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">No clients yet — share your invite code.</div>'; return; }
-  $('client-list').innerHTML = clients.map(c=>{
+  const q=($('client-search')?.value||'').toLowerCase().trim();
+  const sort=$('client-sort')?.value||'attention';
+  let list=clients.filter(c=>{
+    if(!q) return true;
+    return (c.profile.name||'').toLowerCase().includes(q) || (c.profile.sport||'').toLowerCase().includes(q);
+  });
+  if(sort==='name') list=list.slice().sort((a,b)=>String(a.profile.name||'').localeCompare(String(b.profile.name||'')));
+  else if(sort==='adherence') list=list.slice().sort((a,b)=>a.adherence-b.adherence);
+  else list=list.slice().sort((a,b)=>clientAttention(b)-clientAttention(a));
+  if(!list.length){ $('client-list').innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">No matches.</div>'; return; }
+  $('client-list').innerHTML = list.map(c=>{
     const pend = c.status==='pending';
     const col = c.adherence>=80?'pill-green':c.adherence>=50?'pill-amber':'pill-red';
     const last = c.workouts.length ? relDate(c.workouts[0].completed_at) : 'no workouts';
+    const risk = !pend && clientAttention(c)>=4 ? ' <span title="Needs attention" style="color:var(--amber)">⚠</span>' : '';
     return `<div class="client-row ${selected&&selected.client_id===c.client_id?'active':''}" onclick="selectClient('${c.client_id}')">
       <div class="avatar">${esc((c.profile.name||'?')[0].toUpperCase())}</div>
       <div class="client-info">
-        <div class="client-name">${esc(c.profile.name||'—')}</div>
+        <div class="client-name">${esc(c.profile.name||'—')}${risk}</div>
         <div class="client-meta">${esc(c.profile.sport||'—')} · ${last}</div>
       </div>
       ${pend?'<span class="pill pill-pending">Pending</span>':`<span class="pill ${col}">${c.adherence}%</span>`}
@@ -751,6 +812,24 @@ function renderClientList(){
 function relDate(d){
   const days = Math.floor((Date.now()-new Date(d))/864e5);
   return days===0?'today':days===1?'yesterday':days+'d ago';
+}
+
+// Client-detail tabs
+let ctabCur = 'overview';
+function ctab(name){
+  ctabCur = name;
+  document.querySelectorAll('#detail .ctab').forEach(b=>b.classList.toggle('active', b.dataset.ctab===name));
+  document.querySelectorAll('#detail .ctab-panel').forEach(p=>p.classList.toggle('active', p.dataset.ctabpanel===name));
+  if(name==='progress' && progChart){ setTimeout(()=>{ try{ progChart.resize(); }catch(e){} }, 40); }
+  if(name==='messages'){ const box=$('msg-thread'); if(box) box.scrollTop=box.scrollHeight; }
+}
+
+// "Connect a Client" collapse
+function toggleConnect(){
+  const b=$('connect-body'), ch=$('connect-chevron');
+  const open=b.style.display!=='none';
+  b.style.display=open?'none':'block';
+  if(ch) ch.className=open?'ti ti-chevron-down':'ti ti-chevron-up';
 }
 
 
@@ -791,6 +870,14 @@ async function renderDetail(){
       ${p.days_available?`<div class="dstat"><div class="dstat-num">${p.days_available}</div><div class="dstat-lbl">Days/wk</div></div>`:''}
     </div>
 
+    <div class="ctabs">
+      <button class="ctab" data-ctab="overview" onclick="ctab('overview')">Overview</button>
+      <button class="ctab" data-ctab="training" onclick="ctab('training')">Training</button>
+      <button class="ctab" data-ctab="progress" onclick="ctab('progress')">Progress</button>
+      <button class="ctab" data-ctab="messages" onclick="ctab('messages')">Messages</button>
+    </div>
+
+    <div class="ctab-panel" data-ctabpanel="overview">
     ${p.injuries?`<div style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);border-radius:11px;padding:11px 14px;font-size:13px;margin-bottom:8px"><b style="color:var(--lava-1)">⚠ Injuries/notes:</b> ${esc(p.injuries)}</div>`:''}
 
     <div class="section-lbl">Assigned Program</div>
@@ -810,13 +897,19 @@ async function renderDetail(){
     <div class="section-lbl">Coach Notes <span style="text-transform:none;color:var(--muted2);font-weight:600">· visible to AI coach</span></div>
     <textarea class="txta" id="coach-notes" rows="3" placeholder="Injuries, goals, things to keep in mind...">${esc(p.coach_notes||'')}</textarea>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="saveNotes()"><i class="ti ti-device-floppy"></i> Save notes</button>
-
-    <div class="section-lbl">Messages <span style="text-transform:none;color:var(--muted2);font-weight:600">· two-way chat with ${esc(p.name||'client')}</span></div>
-    <div id="msg-thread" class="msg-thread"><div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">Loading...</div></div>
-    <div class="row-gap" style="margin-top:10px">
-      <input id="msg-input" class="sel" style="flex:1" placeholder="Write a message..." onkeydown="if(event.key==='Enter')sendMessage()">
-      <button class="btn btn-primary" style="padding:12px 18px" onclick="sendMessage()"><i class="ti ti-send"></i></button>
     </div>
+
+    <div class="ctab-panel" data-ctabpanel="training">
+    <div class="section-lbl" style="margin-top:0">Recent Workouts</div>
+    <div id="wk-list">${recent.length?recent.map(w=>wkHtml(w, c.noteMap[w.id]||'')).join(''):'<div style="color:var(--muted);font-size:13px">No workouts yet</div>'}</div>
+
+    <div class="section-lbl">Personal Records</div>
+    ${prs.length?`<div class="pr-table">${prs.map(pr=>`<div class="pr-row"><span style="font-weight:600">${esc(pr.exercise_name)}</span><span style="font-weight:800;color:var(--accent)">${(+pr.weight_kg)} kg × ${pr.reps}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">No PRs yet</div>'}
+    </div>
+
+    <div class="ctab-panel" data-ctabpanel="progress">
+    <div class="section-lbl" style="margin-top:0">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
+    <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
 
     <div class="section-lbl">Weekly Check-ins <span id="ci-count" style="text-transform:none;color:var(--lava-2);font-weight:700"></span></div>
     <div id="ci-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
@@ -832,16 +925,18 @@ async function renderDetail(){
 
     <div class="section-lbl">Habits &amp; Cardio</div>
     <div id="lifestyle-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+    </div>
 
-    <div class="section-lbl">Strength Progress <span style="text-transform:none;color:var(--muted2);font-weight:600">· est. 1RM over time</span></div>
-    <div id="prog-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
-
-    <div class="section-lbl">Recent Workouts</div>
-    <div id="wk-list">${recent.length?recent.map(w=>wkHtml(w, c.noteMap[w.id]||'')).join(''):'<div style="color:var(--muted);font-size:13px">No workouts yet</div>'}</div>
-
-    <div class="section-lbl">Personal Records</div>
-    ${prs.length?`<div class="pr-table">${prs.map(pr=>`<div class="pr-row"><span style="font-weight:600">${esc(pr.exercise_name)}</span><span style="font-weight:800;color:var(--accent)">${(+pr.weight_kg)} kg × ${pr.reps}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">No PRs yet</div>'}
+    <div class="ctab-panel" data-ctabpanel="messages">
+    <div class="section-lbl" style="margin-top:0">Messages <span style="text-transform:none;color:var(--muted2);font-weight:600">· two-way chat with ${esc(p.name||'client')}</span></div>
+    <div id="msg-thread" class="msg-thread"><div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">Loading...</div></div>
+    <div class="row-gap" style="margin-top:10px">
+      <input id="msg-input" class="sel" style="flex:1" placeholder="Write a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+      <button class="btn btn-primary" style="padding:12px 18px" onclick="sendMessage()"><i class="ti ti-send"></i></button>
+    </div>
+    </div>
   `;
+  ctab(ctabCur);
   loadMessages();
   renderProgress();
   renderFormChecks();
@@ -1163,7 +1258,7 @@ async function renderProgress(){
   });
   const days = Array.from(daySet).sort();
   const labels = days.map(d=>{ const dt=new Date(d+'T00:00:00'); return (dt.getMonth()+1)+'/'+dt.getDate(); });
-  const colors = ['#00ffa3','#22d3ee','#a78bfa'];
+  const colors = ['#19f0a8','#2bd6ee','#a78bfa'];
   const datasets = topEx.map((ex,i)=>({
     label:ex,
     data:days.map(d=> perEx[ex][d]!=null ? perEx[ex][d] : null),
