@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0e0c0b">
+<title>Persónuverndarstefna · ÍslandFit</title>
+<meta name="description" content="Persónuverndarstefna ÍslandFit — hvernig við söfnum, notum og verndum persónuupplýsingar þínar, þar á meðal heilsufarsgögn.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e0c0b; --surface:#1b1817; --border:#2a2521;
+  --aurora-1:#19f0a8; --lava-1:#ff5421;
+  --text:#f6f2ef; --text-soft:#cdc4bd; --muted:#978c84;
+  --accent:var(--lava-1);
+}
+html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;line-height:1.65}
+a{color:var(--aurora-1)}
+.wrap{max-width:760px;margin:0 auto;padding:48px 22px 80px}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:26px;text-transform:uppercase;margin-bottom:34px;display:inline-block;color:var(--text);text-decoration:none}
+.logo span{background:linear-gradient(135deg,#19f0a8,#2bd6ee,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(34px,7vw,52px);line-height:1;text-transform:uppercase;margin-bottom:6px}
+.updated{color:var(--muted);font-size:13px;margin-bottom:34px}
+h2{font-size:19px;font-weight:800;margin:36px 0 12px;color:var(--text)}
+h3{font-size:15px;font-weight:700;margin:22px 0 8px}
+p,li{font-size:14.5px;color:var(--text-soft);margin-bottom:10px}
+ul,ol{padding-left:22px;margin-bottom:12px}
+li{margin-bottom:6px}
+table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:13.5px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-soft);vertical-align:top}
+th{color:var(--text);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.05em}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:14px 0}
+.warn{border-left:3px solid var(--lava-1)}
+strong{color:var(--text)}
+.toc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px 10px;margin-bottom:10px}
+.toc a{display:block;font-size:13.5px;margin-bottom:7px;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="logo" href="index.html"><span>ÍSLAND</span>FIT</a>
+<h1>Persónuverndarstefna</h1>
+<div class="updated">Útgáfa 1.0 · Síðast uppfærð 10. júlí 2026</div>
+
+<div class="box warn">
+<p><strong>Í stuttu máli:</strong> ÍslandFit geymir æfinga- og heilsufarsgögn sem þú skráir sjálf(ur), deilir þeim aðeins með þjálfara sem <strong>þú</strong> tengist, notar gervigreind til að veita þér þjálfunarráðgjöf, selur aldrei gögnin þín og gerir þér kleift að eyða þeim öllum með einum hnappi í stillingum. Full útgáfa fylgir hér að neðan.</p>
+</div>
+
+<div class="toc">
+<a href="#abyrgd">1. Ábyrgðaraðili</a>
+<a href="#gogn">2. Hvaða persónuupplýsingum söfnum við?</a>
+<a href="#vidkvaem">3. Viðkvæm gögn — heilsufarsupplýsingar</a>
+<a href="#tilgangur">4. Tilgangur vinnslu og lagagrundvöllur</a>
+<a href="#deiling">5. Hverjir fá aðgang að gögnunum?</a>
+<a href="#ai">6. Gervigreind (AI-þjálfarinn)</a>
+<a href="#vinnsluadilar">7. Vinnsluaðilar og gagnaflutningur út fyrir EES</a>
+<a href="#geymsla">8. Geymslutími</a>
+<a href="#oryggi">9. Öryggi gagna</a>
+<a href="#rettindi">10. Réttindi þín</a>
+<a href="#born">11. Börn og ungmenni</a>
+<a href="#kokur">12. Vefkökur og staðbundin geymsla</a>
+<a href="#breytingar">13. Breytingar á stefnunni</a>
+<a href="#samband">14. Hafðu samband & kvörtunarleiðir</a>
+</div>
+
+<h2 id="abyrgd">1. Ábyrgðaraðili</h2>
+<p>Ábyrgðaraðili vinnslu persónuupplýsinga í ÍslandFit-appinu og tengdum vefsíðum (islandfit.html, þjálfaramælaborð og markaðssíður — saman „þjónustan") er:</p>
+<div class="box">
+<p><strong>ÍslandFit</strong> [félagsform og kennitala kemur hér við skráningu fyrirtækis]<br>
+Netfang persónuverndarfyrirspurna: <a href="mailto:stefandiegoo@gmail.com">stefandiegoo@gmail.com</a><br>
+Ísland</p>
+</div>
+<p>Um vinnsluna gilda lög nr. 90/2018 um persónuvernd og vinnslu persónuupplýsinga og almenna persónuverndarreglugerð ESB (GDPR, reglugerð (ESB) 2016/679).</p>
+
+<h2 id="gogn">2. Hvaða persónuupplýsingum söfnum við?</h2>
+<p>Við söfnum <strong>eingöngu</strong> upplýsingum sem þú leggur sjálf(ur) fram eða verða til við notkun þína á þjónustunni. Við kaupum ekki gögn frá þriðju aðilum og fylgjumst ekki með þér á öðrum vefsíðum.</p>
+<table>
+<tr><th>Flokkur</th><th>Dæmi</th><th>Hvaðan</th></tr>
+<tr><td>Auðkenni</td><td>Nafn, netfang, lykilorð (dulkóðað hash), hlutverk (íþróttamaður/þjálfari)</td><td>Skráning</td></tr>
+<tr><td>Prófílupplýsingar</td><td>Íþrótt, staða, markmið, reynslustig, aldur, dagar til æfinga, búnaður, keppnisdagur</td><td>Þú skráir</td></tr>
+<tr><td>Æfingagögn</td><td>Æfingar, sett, þyngdir, endurtekningar, RPE, persónuleg met, þol-/cardio-æfingar</td><td>Þú skráir</td></tr>
+<tr><td>Heilsufars- og líkamsgögn</td><td>Líkamsþyngd, fituprósenta, ummálsmælingar, meiðsli, orka/svefn/streita (check-in), svefntímar, skref, vatnsdrykkja, næringarskráning</td><td>Þú skráir</td></tr>
+<tr><td>Myndefni</td><td>Framvindumyndir (líkamsmyndir), tæknimyndbönd (form check)</td><td>Þú hleður upp</td></tr>
+<tr><td>Samskipti</td><td>Skilaboð milli þín og þjálfara, hópspjall, athugasemdir þjálfara</td><td>Þú/þjálfarinn</td></tr>
+<tr><td>Þjálfaragögn</td><td>Umsókn um þjálfararéttindi (menntun, vottanir, ferilskrá)</td><td>Þjálfarar skrá</td></tr>
+<tr><td>Tæknigögn</td><td>Villuskrár (villuboð, síða, vafraupplýsingar), innskráningartímar</td><td>Sjálfvirkt</td></tr>
+</table>
+
+<h2 id="vidkvaem">3. Viðkvæm gögn — heilsufarsupplýsingar</h2>
+<p>Hluti þeirra gagna sem þjónustan geymir — svo sem líkamsmælingar, meiðslaskráning, líðan (orka, svefn, streita), næringarskráning og líkamsmyndir — teljast <strong>heilsufarsupplýsingar</strong> og þar með <strong>viðkvæmar persónuupplýsingar</strong> í skilningi 3. tölul. 3. gr. laga nr. 90/2018 og 9. gr. GDPR.</p>
+<p>Vinnsla þessara gagna byggist á <strong>afdráttarlausu samþykki þínu</strong> (1. mgr. a-liðar 9. gr. GDPR / 1. tölul. 1. mgr. 11. gr. laga nr. 90/2018), sem þú veitir með því að skrá gögnin sjálf(ur) inn í þjónustuna. Þér er aldrei skylt að skrá nein heilsufarsgögn — appið virkar án þeirra, en með takmarkaðri virkni (t.d. engin þyngdarþróun eða líðanar-check-in).</p>
+<p>Þú getur afturkallað samþykkið hvenær sem er með því að eyða viðkomandi færslum eða öllum reikningnum þínum (sjá <a href="#rettindi">kafla 10</a>).</p>
+
+<h2 id="tilgangur">4. Tilgangur vinnslu og lagagrundvöllur</h2>
+<table>
+<tr><th>Tilgangur</th><th>Gögn</th><th>Lagagrundvöllur (GDPR)</th></tr>
+<tr><td>Að reka reikninginn þinn og veita grunnvirkni appsins (æfingaáætlanir, skráning, tölfræði)</td><td>Auðkenni, prófíll, æfingagögn</td><td>Samningur (6. gr. 1.b)</td></tr>
+<tr><td>Fjarþjálfun — að þjálfarinn þinn geti fylgst með og aðlagað þjálfun</td><td>Öll gögn sem lýst er í kafla 5</td><td>Samningur + afdráttarlaust samþykki (9. gr. 2.a) fyrir heilsufarsgögn</td></tr>
+<tr><td>Sjálfvirk þjálfunarráðgjöf (AI-þjálfari)</td><td>Sjá <a href="#ai">kafla 6</a></td><td>Samningur + afdráttarlaust samþykki fyrir heilsufarsgögn</td></tr>
+<tr><td>Villugreining og rekstraröryggi</td><td>Villuskrár, tæknigögn</td><td>Lögmætir hagsmunir (6. gr. 1.f) — að halda þjónustunni virkri og öruggri</td></tr>
+<tr><td>Mat á þjálfaraumsóknum</td><td>Þjálfaragögn</td><td>Samningur / ráðstafanir að beiðni umsækjanda</td></tr>
+</table>
+<p>Við notum gögnin þín <strong>ekki</strong> í markaðssetningu þriðju aðila, seljum þau ekki og notum þau ekki til sjálfvirkrar ákvarðanatöku sem hefur réttaráhrif á þig.</p>
+
+<h2 id="deiling">5. Hverjir fá aðgang að gögnunum?</h2>
+<ul>
+<li><strong>Þjálfarinn þinn</strong> — aðeins þjálfari sem þú hefur sjálf(ur) samþykkt tengingu við (með boðskóða eða staðfestingu) sér gögnin þín: æfingasögu, mælingar, myndir, myndbönd, check-in, næringu og skilaboð. Aðgangurinn fellur niður um leið og tengingunni er slitið — hvor aðili sem er getur slitið henni hvenær sem er.</li>
+<li><strong>Hópmeðlimir</strong> — ef þú ert í æfingahópi sjá aðrir hópmeðlimir nafn þitt, fjölda æfinga á stigatöflu og hópskilaboð sem þú sendir. Ekkert annað.</li>
+<li><strong>Aðrir notendur</strong> — sjá <strong>ekkert</strong> um þig. Aðgangsstýring er framfylgt í gagnagrunninum sjálfum (Row Level Security), ekki bara í viðmótinu.</li>
+<li><strong>Stjórnendur þjónustunnar</strong> — hafa tæknilegan aðgang að gagnagrunninum til reksturs og villugreiningar, undir trúnaðarskyldu.</li>
+</ul>
+<p>Við afhendum stjórnvöldum aðeins gögn ef lagaskylda krefst þess.</p>
+
+<h2 id="ai">6. Gervigreind (AI-þjálfarinn)</h2>
+<p>Þjónustan býður upp á sjálfvirka þjálfunarráðgjöf sem knúin er af gervigreindarlíkani frá <strong>Anthropic</strong> (Claude). Þegar þú biður um vikuyfirlit, spyrð AI-þjálfarann spurninga eða óskar eftir prógram-tillögum eru eftirfarandi gögn send til Anthropic API til úrvinnslu:</p>
+<ul>
+<li>Þjálfunaryfirlit (æfingamagn, RPE-þróun, styrktartölur)</li>
+<li>Prófílupplýsingar (íþrótt, markmið, reynsla, meiðsli, athugasemdir þjálfara)</li>
+<li>Nýjasta vikulega check-in (orka, svefn, streita, líkamsþyngd, athugasemdir), líkamsþróun og næringargögn — ef þú hefur skráð þau</li>
+</ul>
+<p>Gögnin eru send án nafns og netfangs. Samkvæmt skilmálum Anthropic API eru innsend gögn <strong>ekki notuð til að þjálfa gervigreindarlíkön</strong>. Ráðgjöf AI-þjálfarans er almenn þjálfunarleiðsögn en <strong>ekki læknisráðgjöf</strong> — leitaðu til fagfólks vegna heilsufarsvandamála.</p>
+
+<h2 id="vinnsluadilar">7. Vinnsluaðilar og gagnaflutningur út fyrir EES</h2>
+<table>
+<tr><th>Vinnsluaðili</th><th>Hlutverk</th><th>Staðsetning</th></tr>
+<tr><td>Supabase Inc.</td><td>Gagnagrunnur, auðkenning, skráaskil (myndir/myndbönd)</td><td>Gagnaver innan ESB/EES eða Bandaríkjanna eftir svæðisvali verkefnis; flutningur varinn með stöðluðum samningsákvæðum ESB (SCC)</td></tr>
+<tr><td>Anthropic PBC</td><td>Gervigreindarúrvinnsla (AI-þjálfari)</td><td>Bandaríkin — flutningur varinn með SCC; gögn ekki notuð til líkanaþjálfunar</td></tr>
+<tr><td>GitHub Inc. (GitHub Pages)</td><td>Hýsing vefsíðna (statískar skrár — engin notendagögn geymd þar)</td><td>Bandaríkin</td></tr>
+<tr><td>Google LLC (Fonts) &amp; jsDelivr</td><td>Leturgerðir og forritasöfn (CDN) — vafrinn þinn sækir skrár; IP-tala þín berst þessum aðilum tæknilega við niðurhal</td><td>Alþjóðlegt</td></tr>
+</table>
+<p>Allir vinnsluaðilar starfa á grundvelli vinnslusamninga skv. 28. gr. GDPR. Þar sem gögn flytjast út fyrir EES byggist flutningurinn á stöðluðum samningsákvæðum ESB (SCC) eða jafngildum verndarráðstöfunum.</p>
+
+<h2 id="geymsla">8. Geymslutími</h2>
+<ul>
+<li><strong>Reikningsgögn og öll skráð gögn:</strong> geymd á meðan reikningurinn þinn er virkur. Þegar þú eyðir reikningnum er <strong>öllum</strong> gögnum eytt samstundis og varanlega (sjá kafla 10).</li>
+<li><strong>Skilaboð:</strong> geymd á meðan báðir reikningar eru til; eyðast með reikningi hvors aðila sem er.</li>
+<li><strong>Villuskrár:</strong> geymdar í mesta lagi 12 mánuði.</li>
+<li><strong>Afrit (backups):</strong> öryggisafrit gagnagrunnsins geta geymt eydd gögn í allt að 30 daga eftir eyðingu áður en þau hverfa endanlega úr afritum.</li>
+</ul>
+
+<h2 id="oryggi">9. Öryggi gagna</h2>
+<ul>
+<li><strong>Aðgangsstýring í gagnagrunni (Row Level Security):</strong> hver einasta tafla er varin reglum sem tryggja að notandi geti aðeins lesið og breytt eigin gögnum — og þjálfari aðeins gögnum skjólstæðinga með virka, samþykkta tengingu. Þessar reglur eru framfylgdar af gagnagrunninum sjálfum óháð viðmótinu.</li>
+<li><strong>Dulkóðun:</strong> öll gagnasamskipti fara um HTTPS/TLS; gögn eru dulkóðuð í hvíld hjá hýsingaraðila; lykilorð eru geymd sem einstefnu-hash (bcrypt).</li>
+<li><strong>Lokuð skráasöfn:</strong> myndir og myndbönd eru geymd í lokuðum (private) geymslum; aðgangur er aðeins veittur gegnum tímabundna, undirritaða hlekki fyrir þig og virkan þjálfara þinn.</li>
+<li><strong>Reglulegar öryggisúttektir:</strong> aðgangsreglur og öryggisstillingar eru yfirfarnar reglulega, m.a. með sjálfvirkri öryggisgreiningu hýsingaraðila.</li>
+</ul>
+<p>Verði öryggisbrestur sem hefur í för með sér áhættu fyrir réttindi þín tilkynnum við hann til Persónuverndar innan 72 klst. og til þín án ótilhlýðilegrar tafar, í samræmi við 33.–34. gr. GDPR.</p>
+
+<h2 id="rettindi">10. Réttindi þín</h2>
+<p>Samkvæmt GDPR og lögum nr. 90/2018 átt þú eftirfarandi réttindi:</p>
+<ul>
+<li><strong>Aðgangsréttur</strong> — þú getur fengið staðfestingu á vinnslu og afrit af gögnunum þínum. Nær öll gögn eru þér þegar sýnileg beint í appinu.</li>
+<li><strong>Leiðréttingarréttur</strong> — þú getur breytt prófíl, mælingum og skráningum beint í appinu hvenær sem er.</li>
+<li><strong>Réttur til eyðingar („rétturinn til að gleymast")</strong> — í <strong>Stillingar → Persónuvernd → „Eyða reikningi og öllum gögnum"</strong> geturðu eytt reikningnum þínum og öllum gögnum — æfingasögu, mælingum, myndum, myndböndum, skilaboðum og prófíl — samstundis og án aðkomu okkar.</li>
+<li><strong>Réttur til að afturkalla samþykki</strong> — hvenær sem er, án áhrifa á lögmæti fyrri vinnslu; einfaldast með því að eyða viðkomandi gögnum eða hætta að skrá þau.</li>
+<li><strong>Réttur til takmörkunar vinnslu og andmæla</strong> — hafðu samband og við bregðumst við innan mánaðar.</li>
+<li><strong>Réttur til gagnaflutnings</strong> — þú getur óskað eftir gögnunum þínum á tölvutæku sniði (JSON/CSV) með því að senda beiðni á netfangið í kafla 1.</li>
+</ul>
+<p>Beiðnum er svarað <strong>án endurgjalds innan eins mánaðar</strong>. Ef þú telur á þér brotið geturðu kvartað til <strong>Persónuverndar</strong> (sjá kafla 14).</p>
+
+<h2 id="born">11. Börn og ungmenni</h2>
+<p>Þjónustan er ekki ætluð börnum yngri en <strong>13 ára</strong>, sbr. aldursmörk 5. mgr. 10. gr. laga nr. 90/2018 um samþykki barna vegna stafrænnar þjónustu. Notendur á aldrinum 13–17 ára ættu að nota þjónustuna í samráði við foreldri eða forsjáraðila — sérstaklega við skráningu heilsufarsgagna. Verðum við þess áskynja að barn undir 13 ára hafi stofnað reikning eyðum við honum og gögnunum án tafar.</p>
+
+<h2 id="kokur">12. Vefkökur og staðbundin geymsla</h2>
+<p>Þjónustan notar <strong>engar auglýsinga- eða greiningarkökur</strong> og enga vöktun þriðju aðila. Við notum eingöngu:</p>
+<ul>
+<li><strong>Innskráningarlykla</strong> (localStorage) frá auðkenniskerfi Supabase, svo þú haldist innskráð(ur) — nauðsynlegt fyrir virkni þjónustunnar.</li>
+<li><strong>Staðbundnar stillingar</strong> (localStorage) — t.d. einingaval (kg/lbs), skyndiminni AI-yfirlits og framvinda æfingar dagsins. Þessi gögn fara ekki af tækinu þínu.</li>
+<li><strong>Skyndiminni forritsins</strong> (service worker cache) svo appið virki án nettengingar.</li>
+</ul>
+<p>Þar sem eingöngu er um nauðsynlega tæknilega geymslu að ræða er ekki krafist sérstaks kökusamþykkis.</p>
+
+<h2 id="breytingar">13. Breytingar á stefnunni</h2>
+<p>Við kunnum að uppfæra stefnuna, t.d. þegar ný virkni bætist við (svo sem greiðslulausnir eða ýttar tilkynningar — slíkt kallar á uppfærslu þessarar stefnu áður en virknin fer í loftið). Verulegar breytingar verða kynntar í appinu með a.m.k. 14 daga fyrirvara. Dagsetning nýjustu útgáfu er efst á síðunni.</p>
+
+<h2 id="samband">14. Hafðu samband & kvörtunarleiðir</h2>
+<div class="box">
+<p><strong>Fyrirspurnir um persónuvernd:</strong> <a href="mailto:stefandiegoo@gmail.com">stefandiegoo@gmail.com</a></p>
+<p><strong>Eftirlitsstjórnvald:</strong> Persónuvernd · Laugavegi 166, 105 Reykjavík · <a href="https://www.personuvernd.is" target="_blank" rel="noopener">personuvernd.is</a> · postur@personuvernd.is</p>
+</div>
+<p style="margin-top:26px"><a href="terms.html">Notkunarskilmálar</a> · <a href="index.html">Til baka á forsíðu</a></p>
+</div>
+</body>
+</html>

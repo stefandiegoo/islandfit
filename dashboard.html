@@ -399,6 +399,25 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
 const SUPA_URL = 'https://dlizuycilevrekjvltlq.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsaXp1eWNpbGV2cmVranZsdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjY4NDgsImV4cCI6MjA5NDk0Mjg0OH0.FoZzZt12hVCkFr_j0kTVfmgwAbRiONoSh0hSXKf35m4';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// error logging → client_errors (max 5 per session, deduped)
+(function(){
+  let sent=0; const seen=new Set();
+  async function report(message, stack){
+    try{
+      if(sent>=5) return;
+      const key=String(message).slice(0,120);
+      if(seen.has(key)) return;
+      seen.add(key); sent++;
+      const {data:{user}}=await sb.auth.getUser();
+      if(!user) return;
+      await sb.from('client_errors').insert({user_id:user.id, page:'dashboard.html', message:String(message).slice(0,500), stack:String(stack||'').slice(0,2000), user_agent:navigator.userAgent.slice(0,300)});
+    }catch(e){}
+  }
+  window.addEventListener('error', e=>report(e.message, e.error&&e.error.stack));
+  window.addEventListener('unhandledrejection', e=>report('unhandledrejection: '+(e.reason&&e.reason.message||e.reason), e.reason&&e.reason.stack));
+})();
+
 const AI_URL = SUPA_URL + '/functions/v1/ai';
 const AI_APIKEY = 'sb_publishable_d0nvL0hqYcdJuLhLCPqqVA_TSbxTnsL';
 
