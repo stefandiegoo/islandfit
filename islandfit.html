@@ -680,6 +680,7 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
         </div>
       </div>
       <button class="btn btn-primary" onclick="signup()" id="btn-signup" style="margin-top:8px">Create Account</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5">Með því að stofna reikning samþykkir þú <a href="terms.html" target="_blank" style="color:var(--accent)">notkunarskilmálana</a> og <a href="privacy.html" target="_blank" style="color:var(--accent)">persónuverndarstefnuna</a>, þ.m.t. vinnslu heilsufarsgagna sem þú skráir sjálf(ur).</div>
     </div>
   </div>
 </div>
@@ -1296,6 +1297,14 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <button class="btn btn-primary" onclick="redeemInviteCode()" style="margin-top:6px">Connect to Coach</button>
   </div>
   <div class="settings-section">
+    <h3>Persónuvernd</h3>
+    <div style="font-size:13px;color:var(--text-soft);line-height:1.6;margin-bottom:12px">
+      <a href="privacy.html" target="_blank" style="color:var(--accent);font-weight:600">Persónuverndarstefna</a> · <a href="terms.html" target="_blank" style="color:var(--accent);font-weight:600">Notkunarskilmálar</a>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;color:var(--lava-1);border:1px solid rgba(255,84,33,0.3)" onclick="deleteMyAccount()"><i class="ti ti-trash"></i> Eyða reikningi og öllum gögnum</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Eyðir reikningnum þínum, æfingasögu, mælingum, myndum, myndböndum og skilaboðum — varanlega og án afturkvæmt.</div>
+  </div>
+  <div class="settings-section">
     <h3>About</h3>
     <div style="font-size:13px;color:var(--text-soft);line-height:1.6">ÍslandFit v3.0<br>Auto-regulation enabled ⚡<br>Made in Iceland 🇮🇸</div>
   </div>
@@ -1536,6 +1545,29 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
 const SUPA_URL = 'https://dlizuycilevrekjvltlq.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsaXp1eWNpbGV2cmVranZsdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjY4NDgsImV4cCI6MjA5NDk0Mjg0OH0.FoZzZt12hVCkFr_j0kTVfmgwAbRiONoSh0hSXKf35m4';
 const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ── ERROR LOGGING — runtime errors go to client_errors (max 5 per session, deduped) ──
+(function(){
+  let sent=0; const seen=new Set();
+  async function report(message, stack){
+    try{
+      if(sent>=5) return;
+      const key=String(message).slice(0,120);
+      if(seen.has(key)) return;
+      seen.add(key); sent++;
+      const {data:{user}}=await sb.auth.getUser();
+      if(!user) return; // only log for signed-in users (RLS requires it)
+      await sb.from('client_errors').insert({
+        user_id:user.id, page:'islandfit.html',
+        message:String(message).slice(0,500),
+        stack:String(stack||'').slice(0,2000),
+        user_agent:navigator.userAgent.slice(0,300)
+      });
+    }catch(e){}
+  }
+  window.addEventListener('error', e=>report(e.message, e.error&&e.error.stack));
+  window.addEventListener('unhandledrejection', e=>report('unhandledrejection: '+(e.reason&&e.reason.message||e.reason), e.reason&&e.reason.stack));
+})();
 
 // ── AI (calls the Supabase Edge Function "ai", which holds the Anthropic key server-side) ──
 const AI_URL = SUPA_URL + '/functions/v1/ai';
@@ -1917,6 +1949,32 @@ async function logout(){
   currentUser=null; currentProfile=null; currentProgram=null;
   document.getElementById('bottom-nav').classList.remove('show');
   showS('s-auth');
+}
+
+// ── GDPR: delete account + every piece of data (right to be forgotten) ──
+async function deleteMyAccount(){
+  if(!currentUser) return;
+  if(!confirm('Ertu alveg viss? Þetta eyðir reikningnum þínum og ÖLLUM gögnum — æfingasögu, mælingum, myndum, myndböndum og skilaboðum. Þetta er EKKI hægt að afturkalla.')) return;
+  const typed = prompt('Skrifaðu EYÐA til að staðfesta:');
+  if((typed||'').trim().toUpperCase()!=='EYÐA'){ showToast('Hætt við — engu var eytt'); return; }
+  showToast('Eyði gögnum...');
+  try{
+    // remove storage blobs first (the RPC deletes the DB rows)
+    for(const bucket of ['form-checks','progress-photos']){
+      try{
+        const {data:files}=await sb.storage.from(bucket).list(currentUser.id, {limit:1000});
+        if(files&&files.length){
+          await sb.storage.from(bucket).remove(files.map(f=>currentUser.id+'/'+f.name));
+        }
+      }catch(e){}
+    }
+    const {error}=await sb.rpc('delete_my_account');
+    if(error) throw error;
+    try{ localStorage.clear(); }catch(e){}
+    await sb.auth.signOut();
+    alert('Reikningnum þínum og öllum gögnum hefur verið eytt. Takk fyrir að nota ÍslandFit.');
+    location.reload();
+  }catch(e){ showToast('Villa: '+e.message); }
 }
 
 function showError(msg){
