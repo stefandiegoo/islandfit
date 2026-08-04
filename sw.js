@@ -1,13 +1,18 @@
 // ÍslandFit service worker — offline app shell + installability.
 // Strategy: never touch Supabase (always network); navigations are network-first
 // (so the app always updates after a deploy); static CDN assets are cache-first.
-const CACHE = 'islandfit-v20';
+const CACHE = 'islandfit-v21';
 const SHELL = [
   './',
   './index.html',
   './islandfit.html',
   './coaches.html',
   './dashboard.html',
+  './privacy.html',
+  './terms.html',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-badge.png',
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
@@ -25,6 +30,49 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+// ── PUSH NOTIFICATIONS ──
+// The payload is written by the push edge function: {title, body, url, tag}.
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
+  const title = d.title || 'ÍslandFit';
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || '',
+    tag: d.tag || 'islandfit',
+    renotify: true,
+    badge: './icon-badge.png',
+    icon: './icon-192.png',
+    data: { url: d.url || './islandfit.html' },
+    vibrate: [60, 30, 60]
+  }));
+});
+
+// Focus an already-open tab when possible instead of opening a duplicate.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = (e.notification.data && e.notification.data.url) || './islandfit.html';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const wanted = new URL(target, self.location.origin);
+      for (const c of list) {
+        if (new URL(c.url).pathname === wanted.pathname && 'focus' in c) {
+          if ('navigate' in c && c.url !== wanted.href) c.navigate(wanted.href);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(wanted.href);
+    })
+  );
+});
+
+// A subscription can be rotated by the browser; tell any open tab to re-save it.
+self.addEventListener('pushsubscriptionchange', e => {
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(list => list.forEach(c => c.postMessage({ type: 'push-resubscribe' })))
   );
 });
 

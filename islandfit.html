@@ -8,7 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="ÍslandFit">
 <title>ÍslandFit · Train Like a Pro</title>
-<link rel="manifest" href='data:application/manifest+json,{"name":"ÍslandFit","short_name":"ÍslandFit","start_url":"./islandfit.html","display":"standalone","background_color":"%230e0c0b","theme_color":"%230e0c0b","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2319f0a8%22/%3E%3Cstop offset=%221%22 stop-color=%22%23ff5421%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22512%22 height=%22512%22 fill=%22%230e0c0b%22 rx=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2255%25%22 font-family=%22Inter,sans-serif%22 font-size=%22220%22 fill=%22url(%23g)%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-weight=%22900%22%3EÍF%3C/text%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml"}]}'>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href='data:application/manifest+json,{"name":"ÍslandFit","short_name":"ÍslandFit","start_url":"./islandfit.html","display":"standalone","background_color":"%230e0c0b","theme_color":"%230e0c0b","icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
@@ -1297,6 +1299,10 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <button class="btn btn-primary" onclick="redeemInviteCode()" style="margin-top:6px">Connect to Coach</button>
   </div>
   <div class="settings-section">
+    <h3>Tilkynningar</h3>
+    <div id="push-setting"></div>
+  </div>
+  <div class="settings-section">
     <h3>Persónuvernd</h3>
     <div style="font-size:13px;color:var(--text-soft);line-height:1.6;margin-bottom:12px">
       <a href="privacy.html" target="_blank" style="color:var(--accent);font-weight:600">Persónuverndarstefna</a> · <a href="terms.html" target="_blank" style="color:var(--accent);font-weight:600">Notkunarskilmálar</a>
@@ -1574,6 +1580,154 @@ const AI_URL = SUPA_URL + '/functions/v1/ai';
 // New-style publishable key (public, safe to embed) — the Edge Functions gateway rejects the
 // legacy anon key, so AI calls use this. DB/auth keep using SUPA_KEY (proven working).
 const AI_APIKEY = 'sb_publishable_d0nvL0hqYcdJuLhLCPqqVA_TSbxTnsL';
+
+// ── PUSH NOTIFICATIONS ──
+// Public VAPID key only — the private half lives server-side in app_secrets.
+const VAPID_PUBLIC_KEY = 'BGGnQ4XfGTLfQwyZb6OeT-UPXh7w6Kdh6AGfcY1XheiH1RKtJsyi58XZsn3w2GZBqHgHpbUbkzAn8IHcJ7bLQu0';
+const PUSH_URL = SUPA_URL + '/functions/v1/push';
+
+function pushSupported(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+function b64uToUint8(s){
+  const pad='='.repeat((4-s.length%4)%4);
+  const raw=atob((s+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from(raw, c=>c.charCodeAt(0));
+}
+function bufToB64u(buf){
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+// Fire-and-forget: a failed notification must never break the action that caused it.
+async function notify(payload){
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session) return;
+    await fetch(PUSH_URL, {
+      method:'POST',
+      headers:{ 'content-type':'application/json', 'Authorization':'Bearer '+session.access_token, 'apikey':AI_APIKEY },
+      body: JSON.stringify(payload)
+    });
+  }catch(e){}
+}
+
+async function currentPushSub(){
+  if(!pushSupported()) return null;
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    return await reg.pushManager.getSubscription();
+  }catch(e){ return null; }
+}
+
+async function savePushSub(sub){
+  const j = sub.toJSON();
+  await sb.from('push_subscriptions').upsert({
+    user_id: currentUser.id,
+    endpoint: sub.endpoint,
+    p256dh: j.keys.p256dh,
+    auth: j.keys.auth,
+    user_agent: navigator.userAgent.slice(0,300)
+  }, { onConflict:'endpoint' });
+}
+
+async function enablePush(){
+  if(!pushSupported()){ showToast('Vafrinn þinn styður ekki tilkynningar'); return false; }
+  if(!currentUser){ return false; }
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      showToast(perm==='denied' ? 'Tilkynningar eru lokaðar í stillingum vafrans' : 'Tilkynningar ekki virkjaðar');
+      renderPushSetting();
+      return false;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: b64uToUint8(VAPID_PUBLIC_KEY)
+      });
+    }
+    await savePushSub(sub);
+    showToast('Tilkynningar virkjaðar 🔔');
+    renderPushSetting();
+    return true;
+  }catch(e){
+    showToast('Villa: '+e.message);
+    renderPushSetting();
+    return false;
+  }
+}
+
+async function disablePush(){
+  try{
+    const sub = await currentPushSub();
+    if(sub){
+      await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+    }
+    showToast('Tilkynningar afvirkjaðar');
+  }catch(e){ showToast('Villa: '+e.message); }
+  renderPushSetting();
+}
+
+async function togglePush(on){ return on ? enablePush() : disablePush(); }
+
+// Keep the stored subscription fresh if the browser rotates it.
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', async e=>{
+    if(e.data && e.data.type==='push-resubscribe' && currentUser){
+      try{
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64uToUint8(VAPID_PUBLIC_KEY) });
+        await savePushSub(sub);
+      }catch(err){}
+    }
+  });
+}
+
+async function renderPushSetting(){
+  const wrap = document.getElementById('push-setting');
+  if(!wrap) return;
+  if(!pushSupported()){
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--muted)">Vafrinn þinn styður ekki push-tilkynningar. Á iPhone þarftu að bæta appinu á heimaskjáinn fyrst.</div>';
+    return;
+  }
+  const perm = Notification.permission;
+  const sub = await currentPushSub();
+  const on = perm==='granted' && !!sub;
+  const p = currentProfile || {};
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:${on?'12px':'0'}">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">Push-tilkynningar</div>
+        <div style="font-size:11px;color:var(--muted)">${perm==='denied' ? 'Lokað í vafrastillingum — opnaðu þær þar til að kveikja' : (on?'Virkar á þessu tæki':'Fáðu tilkynningu um skilaboð og þjálfaravirkni')}</div>
+      </div>
+      <button onclick="togglePush(${on?'false':'true'})" ${perm==='denied'?'disabled':''}
+        style="min-width:78px;padding:9px 14px;border-radius:9px;font-size:12px;font-weight:700;border:1px solid ${on?'var(--border)':'var(--accent)'};background:${on?'var(--surface2)':'var(--accent)'};color:${on?'var(--text-soft)':'#1c0a04'};${perm==='denied'?'opacity:.45':''}">
+        ${on?'Slökkva':'Kveikja'}
+      </button>
+    </div>
+    ${on?`
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-soft);margin-bottom:7px;cursor:pointer">
+      <input type="checkbox" ${p.notify_messages===false?'':'checked'} onchange="setNotifyPref('notify_messages',this.checked)" style="width:17px;height:17px;accent-color:var(--accent)">
+      Skilaboð frá þjálfara og hópum
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-soft);cursor:pointer">
+      <input type="checkbox" ${p.notify_coach_activity===false?'':'checked'} onchange="setNotifyPref('notify_coach_activity',this.checked)" style="width:17px;height:17px;accent-color:var(--accent)">
+      Prógram, tæknisvör og check-in
+    </label>`:''}
+  `;
+}
+
+async function setNotifyPref(col, val){
+  if(!currentUser) return;
+  const patch = {}; patch[col] = val;
+  const {error} = await sb.from('profiles').update(patch).eq('id', currentUser.id);
+  if(error){ showToast('Villa: '+error.message); return; }
+  if(currentProfile) currentProfile[col] = val;
+  showToast('Vistað');
+}
+
 function aiLang(){ return (currentProfile && currentProfile.language === 'is') ? 'is' : 'en'; }
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function aiCall(action, payload){
@@ -3770,7 +3924,7 @@ function showS(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
-  if(id==='s-settings' && currentUser) loadMyCoachSection();
+  if(id==='s-settings' && currentUser){ loadMyCoachSection(); renderPushSetting(); }
 }
 
 function setNav(id){
@@ -4345,6 +4499,7 @@ async function assignProgramToClient(){
     const {error} = await sb.rpc('coach_assign_program',{p_client:viewingClient.client_id, p_program:progId, p_peak:peak});
     if(error) throw error;
     if(viewingClient.profile) viewingClient.profile.peak_date = peak;
+    notify({to:viewingClient.client_id, type:'program'});
     showToast(peak ? 'Program assigned · peaks ' + peak : 'Program assigned!');
     const sel = document.getElementById('coach-assign-select');
     const name = sel.options[sel.selectedIndex].text;
@@ -4592,6 +4747,7 @@ async function sendClientGroupMessage(gid){
   inp.value='';
   const {error}=await sb.from('group_messages').insert({group_id:gid, sender_id:currentUser.id, body});
   if(error){ showToast('Error: '+error.message); inp.value=body; return; }
+  notify({type:'group_message', group_id:gid});
   loadClientGroupMessages(gid);
 }
 
@@ -4632,6 +4788,7 @@ async function sendCoachMessage(coachId){
   const {error} = await sb.from('coach_messages').insert({coach_id:coachId, client_id:currentUser.id, sender_id:currentUser.id, body});
   inp.disabled=false; inp.focus();
   if(error){ showToast('Error: '+error.message); inp.value=body; return; }
+  notify({to:coachId, type:'message'});
   loadCoachMessages(coachId);
 }
 
@@ -4666,6 +4823,7 @@ async function sendFormCheck(coachId){
     document.getElementById('fc-note-'+coachId).value='';
     fileEl.value='';
     showToast('Form check sent to your coach 🎥');
+    notify({to:coachId, type:'form_check'});
     loadClientFormChecks(coachId);
   }catch(e){ showToast('Error: '+e.message); }
   finally{ btn.disabled=false; btn.innerHTML='<i class="ti ti-upload"></i> Send form check'; }
@@ -4744,6 +4902,7 @@ async function submitCheckin(coachId){
   }, {onConflict:'client_id,week_date'});
   btn.disabled=false; btn.innerHTML='<i class="ti ti-clipboard-check"></i> Submit check-in';
   if(error){ showToast('Error: '+error.message); return; }
+  notify({to:coachId, type:'checkin'});
   showToast('Check-in submitted!');
   ciVals[coachId]={};
   ['energy','sleep','stress'].forEach(f=>{

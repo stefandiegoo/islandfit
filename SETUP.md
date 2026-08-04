@@ -70,3 +70,25 @@ Appið er með þrjá AI-eiginleika: **vikulega þjálfara-samantekt** (Progress
 **Kostnaður / model:** efst í `index.ts` er `const MODEL`. Sjálfgefið `claude-opus-4-8` (besta gæði, dýrast). Fyrir ókeypis app með mörgum notendum: skiptu í `claude-sonnet-4-6` (~2× ódýrara) eða `claude-haiku-4-5` (~5× ódýrara) — sömu prompt virka á öllum. Köllin eru fá og stutt (samantekt einu sinni á viku per notanda, cache-uð í `localStorage`).
 
 **Öryggi:** lykillinn er aldrei í HTML/appinu — bara sem Supabase secret. Edge function-ið er JWT-varið (bara innskráðir notendur ná í það). Engin AI-svör eru geymd nema vikusamantektin (í `localStorage` notandans).
+
+## 6. Push-tilkynningar
+
+Appið sendir tilkynningar þegar þjálfari/skjólstæðingur sendir skilaboð, þegar prógrami er úthlutað, þegar tæknimyndband berst eða er svarað, og við vikulegt check-in.
+
+**Þetta er þegar uppsett** — VAPID-lyklar voru búnir til og settir í `app_secrets`-töfluna, og edge function-ið `push` er komið í loftið. Ekkert þarf að gera nema notandinn kveiki á þeim í appinu.
+
+**Hvernig það virkar:**
+- Notandi fer í **Stillingar → Tilkynningar → Kveikja** og samþykkir í vafranum. Áskriftin (endapunktur + lyklar) vistast í `push_subscriptions`.
+- Þegar aðgerð á sér stað kallar appið á `push` edge function-ið. Það **staðfestir tengslin** í gagnagrunninum (aðeins virkur þjálfari↔skjólstæðingur eða sami hópur), semur textann **server-megin** og sendir dulkóðaða tilkynningu.
+- Service worker-inn (`sw.js`) tekur við henni og birtir hana; smellur opnar réttan skjá.
+
+**Öryggi:**
+- Einkalykillinn (VAPID) er í `app_secrets` sem hefur RLS kveikt **án nokkurra reglna** — aðeins `service_role` (edge function-ið) kemst í hann. Hann fer aldrei í vafrann; þar er bara opinberi lykillinn.
+- Enginn getur sent tilkynningu á notanda sem hann er ekki tengdur. Textinn í skilaboða-tilkynningum er sóttur úr gagnagrunninum, ekki treyst frá kallandanum.
+- Áskriftir sem push-þjónustan hafnar (404/410) eru sjálfvirkt hreinsaðar út.
+
+**Stillingar notanda:** hver notandi getur slökkt á tveimur flokkum sérstaklega (`notify_messages`, `notify_coach_activity` í `profiles`).
+
+**Ef lyklarnir þurfa að endurnýjast** (t.d. ef þeir leka): búðu til nýtt P-256 par, uppfærðu bæði `app_secrets` og `VAPID_PUBLIC_KEY` í `islandfit.html` — og athugaðu að **allar núverandi áskriftir verða ógildar**, notendur þurfa að kveikja aftur.
+
+**iPhone:** Safari styður push aðeins þegar appið hefur verið **bætt á heimaskjáinn** (Deila → Bæta á heimaskjá). Í vafranum sjálfum birtist enginn kveikja-hnappur.
