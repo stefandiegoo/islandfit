@@ -4433,7 +4433,7 @@ async function renderCoachFormChecks(clientId){
   if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No form checks submitted yet.</div>'; if(countEl) countEl.textContent=''; return; }
   const pending = fcs.filter(f=>f.status!=='reviewed' && !f.coach_feedback).length;
   if(countEl) countEl.textContent = pending ? '· '+pending+' to review' : '';
-  const paths = fcs.map(f=>f.video_path);
+  const paths = fcs.map(f=>f.video_path).filter(Boolean).concat(fcs.map(f=>f.coach_video_path).filter(Boolean));
   const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
   const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
   wrap.innerHTML = fcs.map(f=>{
@@ -4444,22 +4444,49 @@ async function renderCoachFormChecks(clientId){
         <div style="font-size:14px;font-weight:700">${escapeHtml(f.exercise_name)}</div>
         <span style="font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 9px;border-radius:100px;${reviewed?'background:rgba(0,255,163,0.16);color:var(--accent)':'background:rgba(245,166,35,0.16);color:var(--amber)'}">${reviewed?'Reviewed':'Pending'}</span>
       </div>
-      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:320px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.video_path?(url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:320px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'):'<div style="font-size:11px;color:var(--muted)">You started this thread — no client video yet.</div>'}
       ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">Client: ${escapeHtml(f.client_note)}</div>`:''}
       <textarea id="fcfb-${f.id}" rows="2" placeholder="Technique feedback for the client..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:10px;font-size:13px;margin-top:8px;resize:vertical">${escapeHtml(f.coach_feedback||'')}</textarea>
-      <button class="btn btn-primary" style="margin-top:6px;font-size:13px;padding:9px 16px" onclick="saveFormCheckFeedback('${f.id}')"><i class="ti ti-send"></i> ${reviewed?'Update feedback':'Send feedback'}</button>
+      ${f.coach_video_path?`<div style="margin-top:8px">
+        <div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:4px"><i class="ti ti-video"></i> Your video reply</div>
+        ${urlMap[f.coach_video_path]?`<video src="${urlMap[f.coach_video_path]}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:280px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      </div>`:''}
+      <div style="display:flex;align-items:center;gap:7px;margin-top:8px">
+        <i class="ti ti-video-plus" style="color:var(--accent);font-size:17px"></i>
+        <input type="file" id="fcvid-${f.id}" accept="video/*" style="flex:1;font-size:11px;color:var(--text-soft)">
+      </div>
+      <button class="btn btn-primary" style="margin-top:8px;font-size:13px;padding:9px 16px" id="fcbtn-${f.id}" onclick="saveFormCheckFeedback('${f.id}','${escapeHtml(clientId)}')"><i class="ti ti-send"></i> ${reviewed?'Update reply':'Send reply'}</button>
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
     </div>`;
   }).join('');
 }
 
-async function saveFormCheckFeedback(id){
+async function saveFormCheckFeedback(id, clientId){
   const fb = document.getElementById('fcfb-'+id).value.trim();
-  if(!fb){ showToast('Write some feedback first'); return; }
-  const {error} = await sb.from('form_checks').update({coach_feedback:fb, status:'reviewed', reviewed_at:new Date().toISOString()}).eq('id', id);
-  if(error){ showToast('Error: '+error.message); return; }
-  showToast('Feedback sent to client');
-  if(viewingClient) renderCoachFormChecks(viewingClient.client_id);
+  const fileEl = document.getElementById('fcvid-'+id);
+  const file = fileEl && fileEl.files && fileEl.files[0];
+  if(!fb && !file){ showToast('Write feedback or attach a video first'); return; }
+  const btn = document.getElementById('fcbtn-'+id);
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending...'; }
+  try{
+    const patch = { coach_feedback: fb || null, status:'reviewed', reviewed_at:new Date().toISOString() };
+    if(file){
+      if(file.size > 100*1024*1024) throw new Error('Video is over 100 MB — please trim it');
+      const ext = (file.name.split('.').pop()||'mp4').toLowerCase();
+      const path = `${clientId}/coach-${id}-${Date.now()}.${ext}`;
+      const {error:upErr} = await sb.storage.from('form-checks').upload(path, file, {contentType:file.type||'video/mp4'});
+      if(upErr) throw upErr;
+      patch.coach_video_path = path;
+    }
+    const {error} = await sb.from('form_checks').update(patch).eq('id', id);
+    if(error) throw error;
+    notify({to:clientId, type:'form_review'});
+    showToast(file ? 'Video reply sent 🎥' : 'Feedback sent to client');
+    if(viewingClient) renderCoachFormChecks(viewingClient.client_id);
+  }catch(e){
+    showToast('Error: '+e.message);
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send reply'; }
+  }
 }
 
 // Strength progress chart for the client a coach is viewing (top 3 lifts, est. 1RM over time)
@@ -4833,8 +4860,8 @@ async function loadClientFormChecks(coachId){
   const wrap = document.getElementById('fc-list-'+coachId); if(!wrap) return;
   const {data:fcs} = await sb.from('form_checks').select('*').eq('client_id',currentUser.id).eq('coach_id',coachId).order('created_at',{ascending:false});
   if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">No form checks sent yet.</div>'; return; }
-  // Signed URLs for playback
-  const paths = fcs.map(f=>f.video_path);
+  // Signed URLs for playback — your videos plus any video reply from the coach
+  const paths = fcs.map(f=>f.video_path).filter(Boolean).concat(fcs.map(f=>f.coach_video_path).filter(Boolean));
   const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
   const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
   wrap.innerHTML = fcs.map(f=>{
@@ -4843,11 +4870,15 @@ async function loadClientFormChecks(coachId){
     return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div style="font-size:13px;font-weight:700">${escapeHtml(f.exercise_name)}</div>
-        <span style="font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:100px;${reviewed?'background:rgba(0,255,163,0.16);color:var(--accent)':'background:rgba(245,166,35,0.16);color:var(--amber)'}">${reviewed?'Reviewed':'Pending'}</span>
+        <span style="font-size:10px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:100px;${reviewed?'background:rgba(25,240,168,0.16);color:var(--aurora-1)':'background:rgba(245,166,35,0.16);color:var(--amber)'}">${!f.video_path?'Frá þjálfara':(reviewed?'Reviewed':'Pending')}</span>
       </div>
-      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:280px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.video_path?(url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:280px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'):'<div style="font-size:11px;color:var(--muted)">Þjálfarinn sendi þér þetta myndband.</div>'}
       ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">You: ${escapeHtml(f.client_note)}</div>`:''}
       ${f.coach_feedback?`<div style="font-size:13px;color:var(--text);margin-top:8px;border-left:2px solid var(--accent);padding-left:9px"><b style="color:var(--accent)">Coach:</b> ${escapeHtml(f.coach_feedback)}</div>`:''}
+      ${f.coach_video_path?`<div style="margin-top:8px;border-left:2px solid var(--accent);padding-left:9px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:5px"><i class="ti ti-video"></i> Myndbandssvar frá þjálfara</div>
+        ${urlMap[f.coach_video_path]?`<video src="${urlMap[f.coach_video_path]}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:280px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      </div>`:''}
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
     </div>`;
   }).join('');

@@ -92,3 +92,17 @@ Appið sendir tilkynningar þegar þjálfari/skjólstæðingur sendir skilaboð,
 **Ef lyklarnir þurfa að endurnýjast** (t.d. ef þeir leka): búðu til nýtt P-256 par, uppfærðu bæði `app_secrets` og `VAPID_PUBLIC_KEY` í `islandfit.html` — og athugaðu að **allar núverandi áskriftir verða ógildar**, notendur þurfa að kveikja aftur.
 
 **iPhone:** Safari styður push aðeins þegar appið hefur verið **bætt á heimaskjáinn** (Deila → Bæta á heimaskjá). Í vafranum sjálfum birtist enginn kveikja-hnappur.
+
+## 7. Myndbönd í báðar áttir (form checks)
+
+Form-check kerfið er tvíhliða myndbandssamtal milli þjálfara og skjólstæðings:
+
+- **Skjólstæðingur** hleður upp lyftu-myndbandi (Stillingar → þjálfari → Form check).
+- **Þjálfari** svarar með texta, **myndbandi**, eða hvoru tveggja — og getur líka **byrjað** samtal og sent myndband að fyrra bragði (t.d. tækni-demo).
+- Báðir sjá bæði myndböndin í sama þræði.
+
+**Geymsla og aðgangur:** öll myndbönd fara í lokaða `form-checks` geymslu undir möppu **skjólstæðingsins** (`<client_id>/…`), líka svör þjálfarans. Þannig gildir sama aðgangsregla fyrir bæði: eigandi möppunnar, eða þjálfari með **virka** tengingu. Aftengist þjálfari missir hann aðganginn strax. Spilun notar tímabundna undirritaða hlekki (1 klst.).
+
+**Vörn gegn breytingum:** trigger (`form_checks_guard`) tryggir að skjólstæðingur geti aðeins breytt sínum eigin reitum og þjálfari sínum — hvorugur getur breytt eða falsað efni hins.
+
+**Stærðarmörk:** 100 MB á myndband (viðmótið hafnar stærri skrám með skýrum skilaboðum). Athugið að Supabase free-tier gefur 1 GB geymslu — myndbönd fylla hana fljótt, sem er ein af ástæðunum fyrir að fara á Pro fyrir alvöru rekstur.

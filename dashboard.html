@@ -1230,10 +1230,18 @@ async function renderFormChecks(){
   const wrap = $('fc-wrap'); if(!wrap) return;
   const {data:fcs} = await sb.from('form_checks').select('*').eq('coach_id',me_.id).eq('client_id',c.client_id).order('created_at',{ascending:false});
   const countEl = $('fc-count');
-  if(!fcs || !fcs.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px">No form checks submitted yet.</div>'; if(countEl) countEl.textContent=''; return; }
+  const composer = `<div style="background:var(--surface2);border:1px dashed var(--border-bright);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--text-soft);margin-bottom:7px"><i class="ti ti-video-plus" style="color:var(--accent)"></i> Send a video to ${esc(c.profile.name||'this client')}</div>
+    <input id="cfc-name" class="sel" placeholder="What is it about? (e.g. Squat cue)" style="width:100%;margin-bottom:6px">
+    <textarea class="txta" id="cfc-note" rows="2" placeholder="Optional message..." style="margin-bottom:6px"></textarea>
+    <input type="file" id="cfc-file" accept="video/*" style="font-size:11px;color:var(--muted);margin-bottom:8px">
+    <button class="btn btn-primary" style="padding:9px 16px;font-size:13px" id="cfc-btn" onclick="coachSendVideo('${esc(c.client_id)}')"><i class="ti ti-send"></i> Send video</button>
+  </div>`;
+  if(!fcs || !fcs.length){ wrap.innerHTML = composer + '<div style="color:var(--muted);font-size:13px">No videos exchanged yet.</div>'; if(countEl) countEl.textContent=''; return; }
   const pending = fcs.filter(f=>f.status!=='reviewed' && !f.coach_feedback).length;
   if(countEl) countEl.textContent = pending ? '· '+pending+' to review' : '';
-  const paths = fcs.map(f=>f.video_path);
+  // sign the client's videos and any coach video replies in one call
+  const paths = fcs.map(f=>f.video_path).filter(Boolean).concat(fcs.map(f=>f.coach_video_path).filter(Boolean));
   const {data:signed} = await sb.storage.from('form-checks').createSignedUrls(paths, 3600);
   const urlMap = {}; (signed||[]).forEach((s,i)=>{ if(s && s.signedUrl) urlMap[paths[i]]=s.signedUrl; });
   wrap.innerHTML = fcs.map(f=>{
@@ -1244,23 +1252,83 @@ async function renderFormChecks(){
         <div style="font-size:14px;font-weight:700">${esc(f.exercise_name)}</div>
         <span class="pill ${reviewed?'pill-green':'pill-amber'}">${reviewed?'Reviewed':'Pending'}</span>
       </div>
-      ${url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:340px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      ${f.video_path?(url?`<video src="${url}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:340px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'):'<div style="font-size:11px;color:var(--muted)">You started this thread — no client video yet.</div>'}
       ${f.client_note?`<div style="font-size:12px;color:var(--text-soft);margin-top:6px;font-style:italic">Client: ${esc(f.client_note)}</div>`:''}
       <textarea class="txta" id="fcfb-${f.id}" rows="2" placeholder="Technique feedback for the client..." style="margin-top:8px">${esc(f.coach_feedback||'')}</textarea>
-      <button class="btn btn-primary" style="margin-top:6px;padding:9px 16px;font-size:13px" onclick="saveFormCheckFeedback('${f.id}')"><i class="ti ti-send"></i> ${reviewed?'Update feedback':'Send feedback'}</button>
+      ${f.coach_video_path?`<div style="margin-top:8px">
+        <div style="font-size:11px;color:var(--aurora-1);font-weight:700;margin-bottom:4px"><i class="ti ti-video"></i> Your video reply</div>
+        ${urlMap[f.coach_video_path]?`<video src="${urlMap[f.coach_video_path]}" controls preload="metadata" style="width:100%;border-radius:8px;background:#000;max-height:300px"></video>`:'<div style="font-size:12px;color:var(--muted)">Video unavailable</div>'}
+      </div>`:''}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text-soft);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <i class="ti ti-video-plus" style="color:var(--accent)"></i>
+          <span>${f.coach_video_path?'Replace video':'Attach video'}</span>
+          <input type="file" id="fcvid-${f.id}" accept="video/*" style="max-width:180px;font-size:11px;color:var(--muted)">
+        </label>
+      </div>
+      <button class="btn btn-primary" style="margin-top:8px;padding:9px 16px;font-size:13px" id="fcbtn-${f.id}" onclick="saveFormCheckFeedback('${f.id}','${esc(c.client_id)}')"><i class="ti ti-send"></i> ${reviewed?'Update reply':'Send reply'}</button>
       <div style="font-size:10px;color:var(--muted);margin-top:6px">${new Date(f.created_at).toLocaleString()}</div>
     </div>`;
   }).join('');
+  wrap.innerHTML = composer + wrap.innerHTML;
 }
 
-async function saveFormCheckFeedback(id){
+// Coach starts a video thread (no client clip yet).
+async function coachSendVideo(clientId){
+  const name = ($('cfc-name').value||'').trim();
+  const note = ($('cfc-note').value||'').trim();
+  const file = $('cfc-file').files && $('cfc-file').files[0];
+  if(!file){ toast('Pick a video first'); return; }
+  if(!name){ toast('Give it a title'); return; }
+  if(file.size > 100*1024*1024){ toast('Video is over 100 MB — please trim it'); return; }
+  const btn = $('cfc-btn'); btn.disabled = true; btn.innerHTML = '<span class="spin"><i class="ti ti-loader-2"></i></span> Uploading...';
+  try{
+    const ext = (file.name.split('.').pop()||'mp4').toLowerCase();
+    const path = `${clientId}/coach-${Date.now()}.${ext}`;
+    const {error:upErr} = await sb.storage.from('form-checks').upload(path, file, {contentType:file.type||'video/mp4'});
+    if(upErr) throw upErr;
+    const {error} = await sb.from('form_checks').insert({
+      client_id: clientId, coach_id: me_.id, exercise_name: name,
+      coach_video_path: path, coach_feedback: note || null,
+      status: 'reviewed', reviewed_at: new Date().toISOString()
+    });
+    if(error) throw error;
+    notify({to:clientId, type:'form_review'});
+    toast('Video sent 🎥');
+    renderFormChecks();
+  }catch(e){
+    toast('Error: '+e.message);
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send video';
+  }
+}
+
+async function saveFormCheckFeedback(id, clientId){
   const fb = $('fcfb-'+id).value.trim();
-  if(!fb){ toast('Write some feedback first'); return; }
-  const {error} = await sb.from('form_checks').update({coach_feedback:fb, status:'reviewed', reviewed_at:new Date().toISOString()}).eq('id', id);
-  if(error){ toast('Error: '+error.message); return; }
-  if(selected) notify({to:selected.client_id, type:'form_review'});
-  toast('Feedback sent to client');
-  renderFormChecks();
+  const fileEl = $('fcvid-'+id);
+  const file = fileEl && fileEl.files && fileEl.files[0];
+  if(!fb && !file){ toast('Write feedback or attach a video first'); return; }
+  const btn = $('fcbtn-'+id);
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin"><i class="ti ti-loader-2"></i></span> Sending...'; }
+  try{
+    const patch = { coach_feedback: fb || null, status:'reviewed', reviewed_at:new Date().toISOString() };
+    if(file){
+      if(file.size > 100*1024*1024) throw new Error('Video is over 100 MB — please trim it');
+      // stored under the client's folder so both sides can read it
+      const ext = (file.name.split('.').pop()||'mp4').toLowerCase();
+      const path = `${clientId}/coach-${id}-${Date.now()}.${ext}`;
+      const {error:upErr} = await sb.storage.from('form-checks').upload(path, file, {contentType:file.type||'video/mp4'});
+      if(upErr) throw upErr;
+      patch.coach_video_path = path;
+    }
+    const {error} = await sb.from('form_checks').update(patch).eq('id', id);
+    if(error) throw error;
+    if(selected) notify({to:selected.client_id, type:'form_review'});
+    toast(file ? 'Video reply sent to client' : 'Feedback sent to client');
+    renderFormChecks();
+  }catch(e){
+    toast('Error: '+e.message);
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i> Send reply'; }
+  }
 }
 
 // ── PROGRESS CHART (estimated 1RM over time) ──
