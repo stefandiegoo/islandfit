@@ -418,6 +418,20 @@ const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
   window.addEventListener('unhandledrejection', e=>report('unhandledrejection: '+(e.reason&&e.reason.message||e.reason), e.reason&&e.reason.stack));
 })();
 
+const PUSH_URL = SUPA_URL + '/functions/v1/push';
+// Fire-and-forget push; a failed notification must never break the action.
+async function notify(payload){
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session) return;
+    await fetch(PUSH_URL, {
+      method:'POST',
+      headers:{ 'content-type':'application/json', 'Authorization':'Bearer '+session.access_token, 'apikey':AI_APIKEY },
+      body: JSON.stringify(payload)
+    });
+  }catch(e){}
+}
+
 const AI_URL = SUPA_URL + '/functions/v1/ai';
 const AI_APIKEY = 'sb_publishable_d0nvL0hqYcdJuLhLCPqqVA_TSbxTnsL';
 
@@ -622,6 +636,7 @@ async function sendGroupMessage(){
   inp.value='';
   const {error}=await sb.from('group_messages').insert({group_id:grpOpenId, sender_id:me_.id, body});
   if(error){ toast('Error: '+error.message); inp.value=body; return; }
+  notify({type:'group_message', group_id:grpOpenId});
   loadGroupMessages();
 }
 
@@ -1243,6 +1258,7 @@ async function saveFormCheckFeedback(id){
   if(!fb){ toast('Write some feedback first'); return; }
   const {error} = await sb.from('form_checks').update({coach_feedback:fb, status:'reviewed', reviewed_at:new Date().toISOString()}).eq('id', id);
   if(error){ toast('Error: '+error.message); return; }
+  if(selected) notify({to:selected.client_id, type:'form_review'});
   toast('Feedback sent to client');
   renderFormChecks();
 }
@@ -1333,6 +1349,7 @@ async function sendMessage(){
   const {error} = await sb.from('coach_messages').insert({coach_id:me_.id, client_id:c.client_id, sender_id:me_.id, body});
   inp.disabled=false; inp.focus();
   if(error){ toast('Error: '+error.message); inp.value=body; return; }
+  notify({to:c.client_id, type:'message'});
   loadMessages();
 }
 
@@ -1358,6 +1375,7 @@ async function assignProgram(){
   const peak = ($('peak-date')||{}).value || null;
   const {error} = await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid, p_peak:peak});
   if(error){ toast('Error: '+error.message); return; }
+  notify({to:selected.client_id, type:'program'});
   toast(peak ? 'Program assigned · peaks '+peak : 'Program assigned!');
   selected.profile.program_id = pid;
   selected.profile.peak_date = peak;
