@@ -1820,6 +1820,31 @@ async function setUnits(u){
 
 // ── EPLEY ESTIMATED 1RM ──
 // 1RM ≈ weight × (1 + reps/30) (Boyd Epley). Reliable ~1–12 reps; cap reps so high-rep sets don't inflate it.
+// Reads whatever the athlete typed in the reps field: "12", "10 each", "6-8",
+// "8 min", "45 s", "1:30". Returns reps OR a duration — never guesses both.
+function parseSetEntry(raw){
+  const t=String(raw==null?'':raw).trim();
+  if(!t) return {reps:null,duration_sec:null};
+  let m=t.match(/^(\d+(?:[.,]\d+)?)\s*(min|m\u00edn)\b/i);
+  if(m) return {reps:null,duration_sec:Math.round(parseFloat(m[1].replace(',','.'))*60)};
+  m=t.match(/^(\d+(?:[.,]\d+)?)\s*(s|sec|sek)\b/i);
+  if(m) return {reps:null,duration_sec:Math.round(parseFloat(m[1].replace(',','.')))};
+  m=t.match(/^(\d+):([0-5]?\d)$/);
+  if(m) return {reps:null,duration_sec:(+m[1])*60+(+m[2])};
+  // Only a plain count is reps. Anything carrying a unit ("10m", "5 km", "200m")
+  // is a distance or similar and stays in entry_raw rather than being mis-stored.
+  m=t.match(/^(\d+)\s*(?:-\s*\d+)?\s*(?:each|reps?|x)?\s*$/i);
+  if(m) return {reps:parseInt(m[1],10),duration_sec:null};
+  return {reps:null,duration_sec:null};
+}
+// Human-readable summary of a stored set, whichever shape it took.
+function formatSet(s){
+  const load = (s.weight_kg==null) ? 'BW' : displayWeight(s.weight_kg)+' '+weightUnit();
+  const work = s.duration_sec!=null
+    ? (s.duration_sec>=60 ? (s.duration_sec%60===0 ? (s.duration_sec/60)+' min' : Math.floor(s.duration_sec/60)+'m '+(s.duration_sec%60)+'s') : s.duration_sec+'s')
+    : (s.reps!=null ? s.reps+' reps' : (s.entry_raw||'—'));
+  return (s.weight_kg==null) ? work + ' \u00b7 BW' : work + ' \u00b7 ' + load;
+}
 function epley1RM(weightKg,reps){
   const w=parseFloat(weightKg),r=parseInt(reps);
   if(!w||w<=0||!r||r<1) return 0;
@@ -3244,14 +3269,14 @@ async function openHistory(){
   document.getElementById('hist-title').textContent=ex.exercise_name;
   const body=document.getElementById('hist-body'); body.innerHTML='<div class="loading-wrap"><div class="spinner"></div></div>';
   document.getElementById('hist-ov').classList.add('show');
-  const {data}=await sb.from('workout_sets').select('reps,weight_kg,rpe,logged_at').eq('user_id',currentUser.id).eq('exercise_name',ex.exercise_name).order('logged_at',{ascending:false}).limit(50);
+  const {data}=await sb.from('workout_sets').select('reps,weight_kg,duration_sec,entry_raw,rpe,logged_at').eq('user_id',currentUser.id).eq('exercise_name',ex.exercise_name).order('logged_at',{ascending:false}).limit(50);
   if(!data||!data.length){ body.innerHTML='<div class="day-empty">No history yet for this exercise — log a set and it shows up here.</div>'; return; }
   const byDay={};
   data.forEach(s=>{ const k=dkey(new Date(s.logged_at)); (byDay[k]=byDay[k]||[]).push(s); });
   body.innerHTML=Object.keys(byDay).sort().reverse().map(k=>{
     const sets=byDay[k];
     const best=sets.reduce((m,s)=>Math.max(m,epley1RM(s.weight_kg,s.reps)),0);
-    const rows=sets.slice().reverse().map(s=>`${displayWeight(s.weight_kg)} ${weightUnit()} × ${s.reps} @ RPE ${s.rpe||'–'}`).join('<br>');
+    const rows=sets.slice().reverse().map(s=>`${formatSet(s)} @ RPE ${s.rpe||'–'}`).join('<br>');
     return `<div class="hist-day"><div class="hist-date">${formatDate(sets[0].logged_at)}${best>0?` · e1RM ${displayWeight(best)} ${weightUnit()}`:''}</div><div class="hist-sets">${rows}</div></div>`;
   }).join('');
 }
@@ -3476,17 +3501,27 @@ async function finishWorkout(){
       const setCount=ex.sets||1;
       for(let si=0;si<setCount;si++){
         const s=prog[si];
-        if(s?.done&&!isNaN(parseFloat(s.kg_display))){
-          const wkg=inputToKg(s.kg_display)||0;
-          const reps=parseInt(s.reps)||0;
-          totalKg+=wkg*reps; totalSets++;
+        // Every completed set is recorded, loaded or not. Bodyweight and time-based
+        // work stores weight_kg NULL / duration_sec, so sprint and mobility sessions
+        // still count towards the coach's RPE picture instead of vanishing.
+        if(s?.done){
+          const parsedW=parseFloat(s.kg_display);
+          const wkg=isNaN(parsedW)?null:(inputToKg(s.kg_display)||0);
+          const {reps, duration_sec}=parseSetEntry(s.reps);
+          if(wkg && reps) totalKg+=wkg*reps;
+          totalSets++;
           await sb.from('workout_sets').insert({
             user_id:currentUser.id,workout_id:workout.id,exercise_name:ex.exercise_name,
-            set_number:si+1,reps,weight_kg:wkg,rpe:parseFloat(s.rpe)||7
+            set_number:si+1,reps,weight_kg:wkg,duration_sec,
+            entry_raw:(s.reps==null?null:String(s.reps)),
+            rpe:parseFloat(s.rpe)||7
           });
-          const e=epley1RM(wkg,reps);
-          const b=bestByEx[ex.exercise_name];
-          if(e>0&&(!b||e>b.e1rm)) bestByEx[ex.exercise_name]={wkg,reps,e1rm:e};
+          // a 1RM can only come from a loaded set with a rep count
+          if(wkg>0 && reps>0){
+            const e=epley1RM(wkg,reps);
+            const b=bestByEx[ex.exercise_name];
+            if(e>0&&(!b||e>b.e1rm)) bestByEx[ex.exercise_name]={wkg,reps,e1rm:e};
+          }
         }
       }
     }
