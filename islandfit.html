@@ -233,7 +233,9 @@ body::before{
 .wp-meta{display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em}
 .wp-meta span:first-child{color:var(--accent)}
 
-.ex-block{padding:20px 18px 8px}
+.ex-block{padding:20px 18px 8px;position:relative;overflow:hidden}
+.ex-bg-img{position:absolute;top:-8px;right:-8px;width:56%;max-width:220px;height:auto;opacity:.65;object-fit:contain;pointer-events:none;z-index:0;-webkit-mask-image:linear-gradient(to left,#000 18%,transparent 90%);mask-image:linear-gradient(to left,#000 18%,transparent 90%)}
+.ex-counter,.ex-name,.ex-meta{position:relative;z-index:1}
 .ex-counter{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px}
 .ex-name{font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:1;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.01em}
 .rx-bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 18px 0}
@@ -952,6 +954,7 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     </div>
   </div>
   <div class="ex-block">
+    <img id="ex-bg-img" class="ex-bg-img" alt="" style="display:none">
     <div class="ex-counter" id="ex-counter">Main Lift</div>
     <div class="ex-name" id="ex-name">—</div>
     <div class="ex-meta" id="ex-meta">—</div>
@@ -3065,6 +3068,7 @@ function renderExercise(){
   const nb=document.getElementById('btn-next');
   if(nb){ nb.innerHTML=isLast?'Finish Workout 🔥':'Next →'; nb.onclick=isLast?finishWorkout:nextEx; }
   document.getElementById('ex-name').textContent=ex.exercise_name;
+  setExBgImage(ex.exercise_name);
   document.getElementById('ex-meta').textContent=`${ex.sets} sets · ${ex.reps} reps · ${isBW?'Bodyweight':(dispWeight+' '+weightUnit())} target`;
   document.getElementById('ex-cues').textContent=(ex.cues||'Focus on form')+(tp.note?` · ${tp.note}`:'');
   document.getElementById('ex-demo-icon').className=`ti ${ex.icon||'ti-barbell'} ex-demo-icon`;
@@ -3342,6 +3346,19 @@ let exDB=null, exByName={};
 // entry ("Barbell Squat"), so Demo how-to/images + Replace-by-muscle light up for the main lifts.
 // Sport drills (sprints, agility, mobility) intentionally have no alias → graceful cue/SUBS fallback.
 const EXDB_ALIAS={"back squat":"Barbell Squat","barbell squat":"Barbell Squat","high bar squat":"Barbell Squat","low bar squat":"Barbell Squat","front squat":"Front Squat (Clean Grip)","box squat":"Box Squat","overhead squat":"Overhead Squat","goblet squat":"Goblet Squat","split squat":"Split Squats","bulgarian split squat":"Split Squats","single leg squat":"Single-Leg High Box Squat","single-leg squat":"Single-Leg High Box Squat","deadlift":"Barbell Deadlift","conventional deadlift":"Barbell Deadlift","sumo deadlift":"Sumo Deadlift","romanian deadlift":"Romanian Deadlift","rdl":"Romanian Deadlift","stiff leg deadlift":"Stiff-Legged Barbell Deadlift","stiff-leg deadlift":"Stiff-Legged Barbell Deadlift","good morning":"Good Morning","hip thrust":"Barbell Hip Thrust","glute bridge":"Barbell Glute Bridge","kettlebell swing":"One-Arm Kettlebell Swings","trap bar deadlift":"Barbell Deadlift","bench press":"Barbell Bench Press - Medium Grip","barbell bench press":"Barbell Bench Press - Medium Grip","flat bench press":"Barbell Bench Press - Medium Grip","incline bench press":"Barbell Incline Bench Press - Medium Grip","incline bench":"Barbell Incline Bench Press - Medium Grip","decline bench press":"Decline Barbell Bench Press","dumbbell bench press":"Dumbbell Bench Press","close grip bench":"Close-Grip Barbell Bench Press","close-grip bench":"Close-Grip Barbell Bench Press","overhead press":"Standing Military Press","strict press":"Standing Military Press","military press":"Standing Military Press","shoulder press":"Barbell Shoulder Press","dumbbell shoulder press":"Dumbbell Shoulder Press","push press":"Push Press","landmine press":"Standing Military Press","barbell row":"Bent Over Barbell Row","bent over row":"Bent Over Barbell Row","bent-over row":"Bent Over Barbell Row","pendlay row":"Bent Over Barbell Row","dumbbell row":"Bent Over Two-Dumbbell Row","single arm row":"One-Arm Dumbbell Row","single-arm row":"One-Arm Dumbbell Row","one arm row":"One-Arm Dumbbell Row","chest-supported row":"Bent Over Two-Dumbbell Row","cable row":"Seated Cable Rows","pull-up":"Pullups","pull up":"Pullups","pull-ups":"Pullups","pullup":"Pullups","pullups":"Pullups","weighted pull-up":"Weighted Pull Ups","weighted pull up":"Weighted Pull Ups","chin-up":"Chin-Up","chin up":"Chin-Up","chin-ups":"Chin-Up","lat pulldown":"Wide-Grip Lat Pulldown","straight arm pulldown":"Straight-Arm Pulldown","face pull":"Face Pull","leg press":"Leg Press","leg curl":"Lying Leg Curls","hamstring curl":"Lying Leg Curls","leg extension":"Leg Extensions","calf raise":"Standing Calf Raises","standing calf raise":"Standing Calf Raises","seated calf raise":"Seated Calf Raise","walking lunge":"Barbell Walking Lunge","reverse lunge":"Dumbbell Rear Lunge","lunge":"Barbell Lunge","step-up":"Dumbbell Step Ups","step up":"Dumbbell Step Ups","push-up":"Pushups","push up":"Pushups","pushup":"Pushups","push-ups":"Pushups","dip":"Dips - Triceps Version","dips":"Dips - Triceps Version","weighted dip":"Weighted Bench Dip","lateral raise":"Side Lateral Raise","triceps extension":"Standing Dumbbell Triceps Extension","triceps pushdown":"Triceps Pushdown","tricep pushdown":"Triceps Pushdown","biceps curl":"Barbell Curl","bicep curl":"Barbell Curl","barbell curl":"Barbell Curl","dumbbell curl":"Dumbbell Bicep Curl","hammer curl":"Hammer Curls","wrist curl":"Seated Palm-Up Barbell Wrist Curl","reverse wrist curl":"Seated Palms-Down Barbell Wrist Curl","plank":"Plank","hanging leg raise":"Hanging Leg Raise","hanging knee raise":"Hanging Leg Raise","toes-to-bar":"Hanging Leg Raise","ab wheel":"Ab Roller","cable wood chop":"Standing Cable Wood Chop","cable woodchop":"Standing Cable Wood Chop","pallof press":"Cable Russian Twists","back extension":"Hyperextensions (Back Extensions)","hyperextension":"Hyperextensions (Back Extensions)","dead bug":"Dead Bug","side plank":"Side Bridge","clean & jerk":"Clean and Jerk","clean and jerk":"Clean and Jerk","power clean":"Power Clean","hang clean":"Hang Clean","hang power clean":"Hang Clean","clean":"Clean","clean pull":"Clean Pull","snatch":"Snatch","power snatch":"Power Snatch","hang snatch":"Hang Snatch","box jump":"Front Box Jump","broad jump":"Standing Long Jump","squat jump":"Freehand Jump Squat","jump squat":"Freehand Jump Squat","depth jump":"Depth Jump Leap","tuck jump":"Freehand Jump Squat","medicine ball slam":"One-Arm Medicine Ball Slam","med ball slam":"One-Arm Medicine Ball Slam"};
+// Illustration for the current lift, faded into the corner of the exercise header.
+// Silently stays hidden when the exercise has no match or the image fails to load.
+function setExBgImage(name){
+  const el=document.getElementById('ex-bg-img'); if(!el) return;
+  el.style.display='none';
+  const apply=()=>{
+    const cur=todayExercises[curEx]; if(!cur||cur.exercise_name!==name) return; // moved on while the DB loaded
+    let src=''; try{ const x=dbFor(name); if(x&&x.images&&x.images.length) src=EXDB_IMG_BASE+x.images[0]; }catch(e){}
+    if(src){ el.onerror=()=>{el.style.display='none'}; el.src=src; el.style.display=''; }
+    else { el.removeAttribute('src'); el.style.display='none'; }
+  };
+  if(exDB){ apply(); } else { loadExerciseDB().then(apply).catch(()=>{}); }
+}
 function dbFor(name){ const k=String(name||'').toLowerCase().trim(); return exByName[k] || (EXDB_ALIAS[k]?exByName[EXDB_ALIAS[k].toLowerCase()]:null) || null; }
 async function loadExerciseDB(){
   if(exDB) return exDB;
