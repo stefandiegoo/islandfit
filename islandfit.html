@@ -213,6 +213,10 @@ body::before{
 .wb-actions .wb-resume{background:var(--surface2);color:var(--muted)}
 
 /* Stats row */
+.daily-fuel{margin:30px 22px 10px;text-align:center;opacity:0;transform:translateY(10px);transition:opacity .7s ease,transform .7s ease}
+.daily-fuel.in{opacity:.32;transform:none}
+.daily-fuel-q{font-size:14px;line-height:1.6;color:var(--text-soft);font-style:italic;font-weight:500;max-width:320px;margin:0 auto}
+@media (prefers-reduced-motion:reduce){.daily-fuel{transition:none}.daily-fuel.in{transform:none}}
 .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 18px;margin-bottom:18px}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 10px;text-align:center}
 .stat-num{font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:1;background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2));-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:0.02em}
@@ -936,6 +940,10 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <div class="stat-card"><div class="stat-num" id="stat-workouts">0</div><div class="stat-label">Workouts</div></div>
     <div class="stat-card"><div class="stat-num" id="stat-volume">0</div><div class="stat-label" id="vol-label">Tons Lifted</div></div>
     <div class="stat-card"><div class="stat-num" id="stat-hours">0</div><div class="stat-label">Hours</div></div>
+  </div>
+
+  <div class="daily-fuel" id="daily-fuel">
+    <div class="daily-fuel-q">&ldquo;The magic that you are looking for is in the work that you are avoiding!&rdquo;</div>
   </div>
 </div>
 
@@ -2864,6 +2872,18 @@ async function renderHomePhases(){
       `<div style="font-size:12px;color:var(--muted)">${blocks.length} phases · ${cum} weeks total</div>`}
   </div>`;
 }
+
+// Daily fuel — the closing line on the home screen, revealed as you scroll to it.
+(function(){
+  function init(){
+    const el=document.getElementById('daily-fuel'); if(!el) return;
+    if(!('IntersectionObserver' in window)){ el.classList.add('in'); return; }
+    new IntersectionObserver((entries,obs)=>{
+      entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); obs.unobserve(e.target); } });
+    },{threshold:0.35}).observe(el);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
 
 // ── FLEXIBLE SCHEDULE: trained-today · rest day · ease back after a layoff (no calendar lock) ──
 let scheduleState={trainedToday:false, daysSinceLast:null};
