@@ -2796,12 +2796,42 @@ async function onLogin(user){
   loadWorkoutHistory();
 }
 
+// Which phase does a given programme week fall into? Phases run back to back;
+// past the end you stay in the last one.
+function phaseForWeek(blocks, week){
+  if(!blocks || !blocks.length) return null;
+  let cum=0;
+  for(const b of blocks){ const start=cum+1; cum+=(b.weeks||0); if(week>=start && week<=cum) return {block:b, start, end:cum}; }
+  const last=blocks[blocks.length-1];
+  return {block:last, start:cum-(last.weeks||0)+1, end:cum};
+}
+
+let currentPhase=null, phaseDayCount=0;
+
 async function loadProgramAndToday(){
   if(!currentProfile?.program_id) return;
-  const {data:program}=await sb.from('programs').select('*').eq('id',currentProfile.program_id).single();
+  const pid=currentProfile.program_id;
+  const {data:program}=await sb.from('programs').select('*').eq('id',pid).single();
   currentProgram=program;
+
+  // The programme changes with the phase, so resolve that before picking the day.
+  const {data:blocks}=await sb.from('program_blocks').select('*').eq('program_id',pid).order('sort_order');
+  currentPhase=phaseForWeek(blocks, currentProfile.current_week||1);
+
+  // This phase's own days first, then the shared "every phase" days appended after
+  // them. current_day walks this combined list, so day numbering can restart per
+  // phase without the two groups colliding.
+  let phaseDays=[];
+  if(currentPhase){
+    const {data}=await sb.from('program_workouts').select('*').eq('program_id',pid).eq('block_id',currentPhase.block.id).order('day_number');
+    phaseDays=data||[];
+  }
+  const {data:sharedDays}=await sb.from('program_workouts').select('*').eq('program_id',pid).is('block_id',null).order('day_number');
+  const wks=phaseDays.concat(sharedDays||[]);
+  phaseDayCount=wks.length;
+
   const day=currentProfile.current_day||1;
-  const {data:workout}=await sb.from('program_workouts').select('*').eq('program_id',currentProfile.program_id).eq('day_number',day).single();
+  const workout=wks[day-1] || wks[0] || null;
   todayWorkout=workout;
   if(workout){
     const {data:exercises}=await sb.from('program_exercises').select('*').eq('workout_id',workout.id).order('order_idx');
@@ -2818,11 +2848,11 @@ async function renderHomePhases(){
   const {data:blocks}=await sb.from('program_blocks').select('*').eq('program_id',currentProfile.program_id).order('sort_order');
   if(!blocks||!blocks.length) return;
   const week=(currentProfile.current_week||1);
-  // figure out which block the current week falls into (cumulative weeks)
-  let cum=0, curIdx=-1;
+  let cum=0;
   const ranges=blocks.map((b,i)=>{ const start=cum+1; cum+=(b.weeks||0); return {start,end:cum,b,i}; });
-  for(const r of ranges){ if(week>=r.start && week<=r.end){ curIdx=r.i; break; } }
-  if(curIdx<0 && week>cum) curIdx=blocks.length-1; // past the end → last block
+  // single source of truth, shared with the loader that picks today's workout
+  const ph=phaseForWeek(blocks, week);
+  const curIdx=ph?blocks.indexOf(ph.block):-1;
   const cur=curIdx>=0?ranges[curIdx]:null;
   el.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
     <div style="font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px"><i class="ti ti-timeline"></i> Training plan</div>
@@ -3557,7 +3587,7 @@ async function finishWorkout(){
 
   if(!customWorkout){   // a custom "Add workout" session does not advance the program day
     const nextDay=(currentProfile.current_day||1)+1;
-    const maxDay=currentProgram?.days_per_week||4;
+    const maxDay=phaseDayCount||currentProgram?.days_per_week||4;
     if(nextDay>maxDay){
       await sb.from('profiles').update({current_day:1,current_week:(currentProfile.current_week||1)+1,streak:(currentProfile.streak||0)+1}).eq('id',currentUser.id);
     } else {

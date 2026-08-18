@@ -106,3 +106,23 @@ Form-check kerfið er tvíhliða myndbandssamtal milli þjálfara og skjólstæ�
 **Vörn gegn breytingum:** trigger (`form_checks_guard`) tryggir að skjólstæðingur geti aðeins breytt sínum eigin reitum og þjálfari sínum — hvorugur getur breytt eða falsað efni hins.
 
 **Stærðarmörk:** 100 MB á myndband (viðmótið hafnar stærri skrám með skýrum skilaboðum). Athugið að Supabase free-tier gefur 1 GB geymslu — myndbönd fylla hana fljótt, sem er ein af ástæðunum fyrir að fara á Pro fyrir alvöru rekstur.
+
+## 8. Fasar sem breyta prógraminu
+
+Þjálfari getur skipt prógrami í fasa (blokkir) þar sem **æfingarnar sjálfar breytast** milli fasa, og stillt hversu margar vikur hver fasi varir.
+
+**Í prógram-smiðnum (mælaborðinu):**
+1. Bættu við fösum efst — flýtihnappar fyrir Volume / Intensity / Peak / Deload, eða frjáls blokk. Stilltu vikufjölda á hverjum.
+2. Dagarnir fyrir neðan raðast sjálfkrafa undir fasana. Hver fasi fær sinn „Day"-hnapp.
+3. **„Every phase"** hópurinn er fyrir daga sem eiga að endurtakast í öllum fösum (t.d. fast þolpúl). Þeir bætast aftan við daga hvers fasa.
+4. Færðu dag milli fasa með fellilistanum á dagakortinu.
+
+Heildarvikur prógramsins reiknast sjálfkrafa út frá fösunum.
+
+**Hvað skjólstæðingurinn upplifir:** appið reiknar hvaða fasa vikan hans fellur í og sækir æfingar þess fasa. Þegar hann fer úr viku 4 í viku 5 og nýr fasi tekur við breytist æfingaplanið sjálfkrafa. Tímalínan á heimaskjánum sýnir hvar hann er staddur.
+
+**Athugið:**
+- Fasar eru byggðir í **mælaborðinu** (dashboard.html), ekki í þjálfaragáttinni í símanum.
+- Prógröm án fasa virka óbreytt — dagar án fasa gilda alltaf.
+- Dagafjöldi má vera mismunandi eftir fösum; vikan rúllar á fjölda daga í virkum fasa.
+- Sé íþróttamaður kominn fram úr síðasta fasa heldur hann áfram í honum.

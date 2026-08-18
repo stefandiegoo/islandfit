@@ -164,6 +164,11 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .pb-day-focus-input{width:100%;background:transparent;border:none;color:var(--muted);font-size:12px;outline:none;padding:4px 15px 0}
 .pb-day-focus-input::placeholder{color:var(--muted2)}
 .pb-exs{padding:8px 12px}
+.pb-phase{border:1px solid var(--border);border-radius:12px;padding:10px 12px 4px;margin-bottom:12px;background:rgba(255,255,255,.015)}
+.pb-phase-head{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
+.pb-phase-name{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.pb-phase-sub{font-size:11px;color:var(--muted)}
+.pb-day-phase{background:var(--surface2);border:1px solid var(--border);color:var(--text-soft);font-size:11px;border-radius:7px;padding:4px 6px;max-width:130px}
 .pb-ex{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;background:var(--surface2);margin-bottom:6px;cursor:grab;user-select:none;border:1px solid transparent}
 .pb-ex:active{cursor:grabbing}
 .pb-ex.drag-over{border-color:var(--accent);background:rgba(0,255,163,0.07)}
@@ -1575,18 +1580,27 @@ function closeAiModal(){ $('ai-modal').classList.add('hidden'); aiResult=null; }
 let pbDays = [], pbEditId = null, pbDragSrc = null, pbBlocks = [];
 
 // Training-block editor (periodization stig A)
-function pbAddBlock(name,focus,weeks){ pbBlocks.push({name:name||'',focus:focus||'',weeks:weeks||4}); renderPbBlocks(); }
-function pbRemoveBlock(i){ pbBlocks.splice(i,1); renderPbBlocks(); }
+// Adding or removing a phase changes how the days below are grouped, so both
+// editors have to redraw together.
+function pbAddBlock(name,focus,weeks){ pbBlocks.push({name:name||'',focus:focus||'',weeks:weeks||4}); renderPbBlocks(); renderPb(); }
+function pbRemoveBlock(i){
+  pbBlocks.splice(i,1);
+  // days pointed at the removed phase fall back to "every phase"; later ones shift down
+  pbDays.forEach(d=>{ if(d.blockIdx===i) d.blockIdx=null; else if(d.blockIdx!=null && d.blockIdx>i) d.blockIdx--; });
+  renderPbBlocks(); renderPb();
+}
 function pbUpdateBlock(i,field,val){ if(pbBlocks[i]) pbBlocks[i][field]=field==='weeks'?(parseInt(val)||1):val; }
+// Redraw the day groups once the coach finishes typing a phase name or week count.
+function pbBlockCommit(){ renderPbBlocks(); renderPb(); }
 function renderPbBlocks(){
   const el=$('pb-blocks'); if(!el) return;
   if(!pbBlocks.length){ el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:2px 0 10px">No blocks — the program runs as one phase. Add blocks above to structure it (e.g. Volume → Intensity → Peak → Deload).</div>'; return; }
   const total=pbBlocks.reduce((a,b)=>a+(b.weeks||0),0);
   el.innerHTML=pbBlocks.map((b,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
     <span style="font-size:11px;color:var(--muted);font-weight:800;width:18px;text-align:center">${i+1}</span>
-    <input value="${esc(b.name)}" placeholder="Block name" oninput="pbUpdateBlock(${i},'name',this.value)" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600">
+    <input value="${esc(b.name)}" placeholder="Block name" oninput="pbUpdateBlock(${i},'name',this.value)" onchange="pbBlockCommit()" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;font-weight:600">
     <input value="${esc(b.focus)}" placeholder="Focus" oninput="pbUpdateBlock(${i},'focus',this.value)" style="flex:1.4;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px">
-    <input type="number" min="1" max="52" value="${b.weeks}" oninput="pbUpdateBlock(${i},'weeks',this.value)" title="weeks" style="width:56px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:13px">
+    <input type="number" min="1" max="52" value="${b.weeks}" oninput="pbUpdateBlock(${i},'weeks',this.value)" onchange="pbBlockCommit()" title="weeks" style="width:56px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:13px">
     <span style="font-size:11px;color:var(--muted)">wk</span>
     <button class="mini-btn" onclick="pbRemoveBlock(${i})" title="Remove"><i class="ti ti-x"></i></button>
   </div>`).join('')+`<div style="font-size:11px;color:var(--muted);margin:2px 0 10px">Total: <b style="color:var(--text-soft)">${total} weeks</b> across ${pbBlocks.length} block${pbBlocks.length>1?'s':''}</div>`;
@@ -1604,6 +1618,7 @@ async function openProgramBuilder(progId){
     if(prog){ $('pb-name').value=prog.name||''; $('pb-sport').value=prog.sport||''; $('pb-level').value=prog.level||'intermediate'; $('pb-days-wk').value=prog.days_per_week||4; }
     const {data:blocks} = await sb.from('program_blocks').select('*').eq('program_id',progId).order('sort_order');
     pbBlocks = (blocks||[]).map(b=>({name:b.name||'',focus:b.focus||'',weeks:b.weeks||4}));
+    const blockIdxById = {}; (blocks||[]).forEach((b,i)=>{ blockIdxById[b.id]=i; });
     const {data:wks} = await sb.from('program_workouts').select('*').eq('program_id',progId).order('day_number');
     if(wks){
       for(const w of wks){
@@ -1611,7 +1626,7 @@ async function openProgramBuilder(progId){
         const mapped=(exs||[]).map(e=>({ eid:e.id, name:e.exercise_name, sets:e.sets||3, reps:e.reps||'8', weight:e.target_weight||'—', rest:e.rest_seconds||90, ssg:e.superset_group||null }));
         // reconstruct the "linked with previous" flag: same non-null superset_group as the exercise above
         mapped.forEach((e,i)=>{ e.ss = i>0 && e.ssg && mapped[i-1].ssg===e.ssg; });
-        pbDays.push({ wid:w.id, title:w.title||'', focus:w.focus||'', exercises:mapped });
+        pbDays.push({ wid:w.id, title:w.title||'', focus:w.focus||'', exercises:mapped, blockIdx:(w.block_id!=null && blockIdxById[w.block_id]!==undefined)?blockIdxById[w.block_id]:null });
       }
     }
   }
@@ -1622,8 +1637,15 @@ async function openProgramBuilder(progId){
 }
 function closePb(){ $('pb-modal-bg').classList.add('hidden'); pbDays=[]; pbEditId=null; pbBlocks=[]; }
 
-function pbAddDay(){
-  pbDays.push({ title:'Day '+(pbDays.length+1), focus:'', exercises:[] });
+function pbAddDay(blockIdx){
+  const bi = (blockIdx===undefined||blockIdx===null||blockIdx==='') ? null : +blockIdx;
+  const n = pbDays.filter(d=>d.blockIdx===bi).length + 1;
+  pbDays.push({ title:'Day '+n, focus:'', exercises:[], blockIdx:bi });
+  renderPb();
+}
+// Moving a day between phases keeps everything in it.
+function pbSetDayBlock(di,val){
+  pbDays[di].blockIdx = (val==='') ? null : +val;
   renderPb();
 }
 function pbRemoveDay(di){ pbDays.splice(di,1); renderPb(); }
@@ -1637,20 +1659,50 @@ function pbUpdate(di, field, val){ pbDays[di][field]=val; }
 function pbUpdateEx(di,ei,field,val){ pbDays[di].exercises[ei][field]=val; }
 
 function renderPb(focusDi){
-  $('pb-body').innerHTML = pbDays.length ? pbDays.map((d,di)=>`
+  const dayCard = (d,di)=>`
     <div class="pb-day" id="pbday-${di}">
       <div class="pb-day-head">
         <i class="ti ti-grip-vertical" style="color:var(--muted2);font-size:16px"></i>
         <input class="pb-day-title-input" placeholder="Day ${di+1} title" value="${esc(d.title)}" oninput="pbUpdate(${di},'title',this.value)">
         <button class="mini-btn" onclick="pbAddExercise(${di})" title="Add exercise"><i class="ti ti-plus"></i></button>
+        ${pbBlocks.filter(b=>(b.name||'').trim()).length ? `<select class="pb-day-phase" onchange="pbSetDayBlock(${di},this.value)" title="Which phase this day belongs to">
+          ${pbBlocks.map((b,bi)=>(b.name||'').trim()?`<option value="${bi}"${d.blockIdx===bi?' selected':''}>${esc(b.name)}</option>`:'').join('')}
+          <option value=""${d.blockIdx==null?' selected':''}>Every phase</option>
+        </select>` : ''}
         <button class="mini-btn" onclick="pbRemoveDay(${di})" title="Remove day" style="color:var(--lava-1)"><i class="ti ti-trash"></i></button>
       </div>
       <input class="pb-day-focus-input" placeholder="Focus / notes (optional)" value="${esc(d.focus)}" oninput="pbUpdate(${di},'focus',this.value)">
       <div class="pb-exs" id="pb-exs-${di}">
         ${d.exercises.length ? d.exercises.map((e,ei)=>pbExHtml(di,ei,e)).join('') : '<div style="color:var(--muted);font-size:12px;padding:8px 6px">No exercises yet — click <b>+</b> to add</div>'}
       </div>
-    </div>`).join('')
-  : '<div style="color:var(--muted);text-align:center;padding:40px;font-size:14px">No days yet — click <b>Add Day</b> below to start building.</div>';
+    </div>`;
+
+  // With phases defined, each one owns its own days; "every phase" holds the shared ones.
+  const named = pbBlocks.map((b,i)=>({b,i})).filter(x=>(x.b.name||'').trim());
+  if(named.length){
+    const groups = named.map(({b,i})=>({
+      key:i,
+      label:`${esc(b.name)} · ${b.weeks||4} ${(b.weeks||4)===1?'week':'weeks'}`,
+      sub:(b.focus||'').trim()
+    }));
+    groups.push({ key:null, label:'Every phase', sub:'days repeated in all phases' });
+    $('pb-body').innerHTML = groups.map(g=>{
+      const mine = pbDays.map((d,di)=>({d,di})).filter(x=>x.d.blockIdx===g.key);
+      if(g.key===null && !mine.length) return '';
+      return `<div class="pb-phase">
+        <div class="pb-phase-head">
+          <span class="pb-phase-name">${g.label}</span>
+          ${g.sub?`<span class="pb-phase-sub">${esc(g.sub)}</span>`:''}
+          <button class="mini-btn" style="margin-left:auto" onclick="pbAddDay(${g.key===null?'null':g.key})"><i class="ti ti-plus"></i> Day</button>
+        </div>
+        ${mine.length ? mine.map(x=>dayCard(x.d,x.di)).join('')
+          : '<div style="color:var(--muted);font-size:12px;padding:6px 4px 10px">No days in this phase yet.</div>'}
+      </div>`;
+    }).join('');
+  } else {
+    $('pb-body').innerHTML = pbDays.length ? pbDays.map(dayCard).join('')
+      : '<div style="color:var(--muted);text-align:center;padding:40px;font-size:14px">No days yet — click <b>Add Day</b> below to start building.</div>';
+  }
   // Re-attach drag events
   $('pb-body').querySelectorAll('.pb-ex[draggable]').forEach(el => {
     el.addEventListener('dragstart', e=>{ pbDragSrc={di:+el.dataset.di,ei:+el.dataset.ei}; e.dataTransfer.effectAllowed='move'; el.style.opacity='0.4'; });
@@ -1685,7 +1737,9 @@ async function savePbProgram(assign){
   if(!name){ toast('Enter a program name'); return; }
   const sport = $('pb-sport').value.trim()||'General';
   const level = $('pb-level').value;
-  const dpw = +$('pb-days-wk').value || pbDays.length;
+  let dpw = +$('pb-days-wk').value;
+  if(!dpw){ const per={}; pbDays.forEach(d=>{const k=d.blockIdx==null?'_':d.blockIdx; per[k]=(per[k]||0)+1;});
+    dpw = Math.max(1, ...Object.values(per).length?Object.values(per):[pbDays.length||1]); }
   const btn=$('pb-save-btn'); btn.disabled=true; btn.innerHTML='<span class="spin"><i class="ti ti-loader-2"></i></span> Saving...';
   try{
     let pid = pbEditId;
@@ -1705,10 +1759,28 @@ async function savePbProgram(assign){
       if(pe) throw pe;
       pid = created.id;
     }
-    // Insert days + exercises
+    // Phases first, so each day can be filed under the right one.
+    await sb.from('program_blocks').delete().eq('program_id',pid);
+    const blockRows = pbBlocks.map((b,idx)=>({b,idx})).filter(x=>(x.b.name||'').trim());
+    const blockIdByIdx = {};
+    if(blockRows.length){
+      const {data:insBlocks,error:be} = await sb.from('program_blocks')
+        .insert(blockRows.map((x,order)=>({program_id:pid,name:x.b.name.trim(),focus:(x.b.focus||'').trim()||null,weeks:x.b.weeks||4,sort_order:order})))
+        .select('id,sort_order');
+      if(be) throw be;
+      (insBlocks||[]).forEach(r=>{ const src=blockRows[r.sort_order]; if(src) blockIdByIdx[src.idx]=r.id; });
+      const totalWeeks=blockRows.reduce((a,x)=>a+(x.b.weeks||0),0);
+      if(totalWeeks>0) await sb.from('programs').update({duration_weeks:totalWeeks}).eq('id',pid);
+    }
+
+    // Insert days + exercises. Day numbers restart within each phase.
+    const dayNoByBlock = {};
     for(let i=0;i<pbDays.length;i++){
       const d = pbDays[i];
-      const {data:wk,error:we} = await sb.from('program_workouts').insert({program_id:pid,day_number:i+1,title:d.title||('Day '+(i+1)),focus:d.focus||null,estimated_min:60}).select('id').single();
+      const bKey = (d.blockIdx==null) ? '_' : d.blockIdx;
+      const dayNo = (dayNoByBlock[bKey] = (dayNoByBlock[bKey]||0) + 1);
+      const blockId = (d.blockIdx==null) ? null : (blockIdByIdx[d.blockIdx] || null);
+      const {data:wk,error:we} = await sb.from('program_workouts').insert({program_id:pid,block_id:blockId,day_number:dayNo,title:d.title||('Day '+dayNo),focus:d.focus||null,estimated_min:60}).select('id').single();
       if(we) throw we;
       const named = d.exercises.filter(e=>e.name.trim());
       // assign superset groups: each maximal run linked by e.ss (length >= 2) shares one label
@@ -1721,14 +1793,6 @@ async function savePbProgram(assign){
       }
       const exs = named.map((e,idx)=>({workout_id:wk.id,order_idx:idx+1,exercise_name:e.name.trim(),sets:e.sets||3,reps:String(e.reps||'8'),target_weight:e.weight||'—',rest_seconds:e.rest||90,icon:'ti-barbell',superset_group:groupOf[idx]}));
       if(exs.length){ const {error:ee}=await sb.from('program_exercises').insert(exs); if(ee) throw ee; }
-    }
-    // Training blocks (periodization): replace any existing set
-    await sb.from('program_blocks').delete().eq('program_id',pid);
-    const blocks = pbBlocks.filter(b=>(b.name||'').trim()).map((b,idx)=>({program_id:pid,name:b.name.trim(),focus:(b.focus||'').trim()||null,weeks:b.weeks||4,sort_order:idx}));
-    if(blocks.length){
-      const {error:be}=await sb.from('program_blocks').insert(blocks); if(be) throw be;
-      const totalWeeks=blocks.reduce((a,b)=>a+(b.weeks||0),0);
-      if(totalWeeks>0) await sb.from('programs').update({duration_weeks:totalWeeks}).eq('id',pid);
     }
     if(assign && selected){
       await sb.rpc('coach_assign_program',{p_client:selected.client_id, p_program:pid});
