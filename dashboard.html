@@ -151,6 +151,9 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 
 /* ── PROGRAM BUILDER ── */
 .pb-modal-bg{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,0.8);display:flex;align-items:stretch;justify-content:flex-end;padding:0}
+/* Both of these open from inside the builder, so they must sit above it —
+   at the shared .modal-bg z-index they were rendered behind it and could not be clicked. */
+#expick-bg,#tmpl-modal-bg{z-index:120}
 .pb-modal{background:var(--bg);border-left:1px solid var(--border-bright);width:100%;max-width:760px;display:flex;flex-direction:column;overflow:hidden}
 .pb-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
 .pb-title{font-size:18px;font-weight:800;flex:1}
@@ -164,6 +167,15 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .pb-day-focus-input{width:100%;background:transparent;border:none;color:var(--muted);font-size:12px;outline:none;padding:4px 15px 0}
 .pb-day-focus-input::placeholder{color:var(--muted2)}
 .pb-exs{padding:8px 12px}
+.expick-cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.expick-cat{font-size:11px;font-weight:700;padding:5px 10px;border-radius:100px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;white-space:nowrap}
+.expick-cat.on{background:var(--accent);border-color:var(--accent);color:#1c0a04}
+.expick-list{max-height:52vh;overflow-y:auto}
+.expick-row{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:background .12s}
+.expick-row:hover{background:var(--surface2)}
+.expick-thumb{width:52px;height:38px;border-radius:7px;object-fit:cover;background:var(--surface3);flex-shrink:0}
+.expick-name{font-size:13px;font-weight:600}
+.expick-meta{font-size:11px;color:var(--muted);text-transform:capitalize}
 .pb-phase{border:1px solid var(--border);border-radius:12px;padding:10px 12px 4px;margin-bottom:12px;background:rgba(255,255,255,.015)}
 .pb-phase-head{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
 .pb-phase-name{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
@@ -378,6 +390,19 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
   </div>
 </div>
 
+<!-- Exercise Picker (library search) -->
+<div id="expick-bg" class="modal-bg hidden" onclick="if(event.target===this)closeExPick()">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-head">
+      <div class="modal-title"><i class="ti ti-barbell" style="color:var(--accent)"></i> Exercise library</div>
+      <button class="mini-btn" onclick="closeExPick()"><i class="ti ti-x"></i></button>
+    </div>
+    <input id="expick-q" class="sel" placeholder="Search 870+ exercises…" oninput="renderExPick()" style="width:100%;margin-bottom:8px">
+    <div id="expick-cats" class="expick-cats"></div>
+    <div id="expick-list" class="expick-list"></div>
+  </div>
+</div>
+
 <!-- Template Picker (inside builder) -->
 <div id="tmpl-modal-bg" class="modal-bg hidden" onclick="if(event.target===this)$('tmpl-modal-bg').classList.add('hidden')">
   <div class="modal" style="max-width:500px">
@@ -422,6 +447,17 @@ const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
   window.addEventListener('error', e=>report(e.message, e.error&&e.error.stack));
   window.addEventListener('unhandledrejection', e=>report('unhandledrejection: '+(e.reason&&e.reason.message||e.reason), e.reason&&e.reason.stack));
 })();
+
+// ── EXERCISE LIBRARY (same source the app uses for demos and stills) ──
+const EXDB_URL='https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/dist/exercises.json';
+const EXDB_IMG_BASE='https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/';
+let exDB=null, exDBLoading=null;
+function loadExDB(){
+  if(exDB) return Promise.resolve(exDB);
+  if(!exDBLoading) exDBLoading = fetch(EXDB_URL).then(r=>r.json()).then(d=>{ exDB=d; return d; })
+    .catch(()=>{ exDBLoading=null; return null; });
+  return exDBLoading;
+}
 
 const PUSH_URL = SUPA_URL + '/functions/v1/push';
 // Fire-and-forget push; a failed notification must never break the action.
@@ -1576,6 +1612,52 @@ async function saveAiProgram(assign){
 }
 function closeAiModal(){ $('ai-modal').classList.add('hidden'); aiResult=null; }
 
+// ── EXERCISE PICKER ──
+// Coaches were typing exercise names blind; anything that did not match the library
+// silently lost its demo video and still image. This inserts the exact library name.
+let exPickTarget=null, exPickCat='olympic weightlifting';
+const EXPICK_CATS=['olympic weightlifting','strength','powerlifting','plyometrics','strongman','stretching','cardio'];
+
+async function openExPick(di,ei){
+  exPickTarget={di,ei};
+  $('expick-bg').classList.remove('hidden');
+  $('expick-q').value='';
+  $('expick-list').innerHTML='<div style="color:var(--muted);font-size:13px;padding:14px;text-align:center">Loading library…</div>';
+  renderExCats();
+  await loadExDB();
+  renderExPick();
+  $('expick-q').focus();
+}
+function closeExPick(){ $('expick-bg').classList.add('hidden'); exPickTarget=null; }
+function setExCat(c){ exPickCat=c; renderExCats(); renderExPick(); }
+function renderExCats(){
+  $('expick-cats').innerHTML = ['all'].concat(EXPICK_CATS).map(c=>
+    `<button class="expick-cat${exPickCat===c?' on':''}" onclick="setExCat('${c}')">${c==='olympic weightlifting'?'Olympic':esc(c.charAt(0).toUpperCase()+c.slice(1))}</button>`).join('');
+}
+function renderExPick(){
+  const wrap=$('expick-list'); if(!wrap) return;
+  if(!exDB){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:14px;text-align:center">Library unavailable — type the name instead.</div>'; return; }
+  const q=($('expick-q').value||'').toLowerCase().trim();
+  let list=exDB.filter(x=>exPickCat==='all'||x.category===exPickCat);
+  if(q) list=list.filter(x=>x.name.toLowerCase().includes(q)
+    || (x.primaryMuscles||[]).some(m=>m.includes(q)) || (x.equipment||'').includes(q));
+  list.sort((a,b)=>a.name.localeCompare(b.name));
+  if(!list.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:14px;text-align:center">No match.</div>'; return; }
+  wrap.innerHTML = list.slice(0,160).map(x=>`
+    <div class="expick-row" onclick="pickExercise(${JSON.stringify(x.name).replace(/"/g,'&quot;')})">
+      ${x.images&&x.images.length?`<img class="expick-thumb" src="${EXDB_IMG_BASE}${x.images[0]}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<div class="expick-thumb"></div>'}
+      <div style="min-width:0">
+        <div class="expick-name">${esc(x.name)}</div>
+        <div class="expick-meta">${esc(x.equipment||'—')} · ${esc((x.primaryMuscles||[]).join(', ')||'—')}</div>
+      </div>
+    </div>`).join('')
+    + (list.length>160?`<div style="color:var(--muted);font-size:11px;padding:8px;text-align:center">${list.length-160} more — refine the search</div>`:'');
+}
+function pickExercise(name){
+  if(exPickTarget){ pbUpdateEx(exPickTarget.di, exPickTarget.ei, 'name', name); renderPb(exPickTarget.di); }
+  closeExPick();
+}
+
 // ── PROGRAM BUILDER ──
 let pbDays = [], pbEditId = null, pbDragSrc = null, pbBlocks = [];
 
@@ -1724,6 +1806,7 @@ function pbExHtml(di,ei,e){
     <i class="ti ti-grip-vertical pb-ex-grip"></i>
     ${linkBtn}
     <div class="pb-ex-name"><input placeholder="Exercise name" value="${esc(e.name)}" oninput="pbUpdateEx(${di},${ei},'name',this.value)"></div>
+    <button class="mini-btn" onclick="openExPick(${di},${ei})" title="Pick from the exercise library"><i class="ti ti-search"></i></button>
     <div class="pb-ex-cell"><input class="pb-ex-inp" type="number" min="1" value="${e.sets}" oninput="pbUpdateEx(${di},${ei},'sets',+this.value)"><div class="pb-ex-lbl">sets</div></div>
     <div class="pb-ex-cell"><input class="pb-ex-inp" value="${esc(e.reps)}" placeholder="8" oninput="pbUpdateEx(${di},${ei},'reps',this.value)"><div class="pb-ex-lbl">reps</div></div>
     <div class="pb-ex-cell"><input class="pb-ex-inp" value="${esc(e.weight)}" placeholder="kg" oninput="pbUpdateEx(${di},${ei},'weight',this.value)" style="width:52px"><div class="pb-ex-lbl">kg</div></div>
