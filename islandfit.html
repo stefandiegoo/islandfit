@@ -1140,6 +1140,7 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
 <div class="mt-overlay" id="repl-ov">
   <div class="mt-card">
     <div class="mt-title">Replace exercise</div>
+    <input type="text" id="repl-search" class="add-search" placeholder="Search name, muscle or equipment…" oninput="renderReplList()">
     <div id="repl-body" style="text-align:left;margin:10px 0 16px;max-height:55vh;overflow-y:auto"></div>
     <div class="mt-actions"><button class="btn btn-ghost" onclick="closeReplace()" style="grid-column:1/-1">Cancel</button></div>
   </div>
@@ -3362,14 +3363,45 @@ function similarExercises(name){
   for(const grp of SUBS){ if(grp.some(y=>y.toLowerCase()===lo)) return grp.filter(y=>y.toLowerCase()!==lo); }
   return ['Goblet Squat','Dumbbell Row','Push-up','Plank','Kettlebell Swing'];
 }
+// Empty search box → the muscle-matched suggestions. Typing searches the whole
+// library, so you can reach an exercise the suggestion list never proposes.
+let replOpts=[], replExName='';
 async function openReplace(){
   const ex=todayExercises[curEx]; if(!ex) return;
+  replExName=ex.exercise_name; replOpts=[];
+  const s=document.getElementById('repl-search');
+  if(s){ s.value=''; s.disabled=true; }
   document.getElementById('repl-body').innerHTML='<div class="loading-wrap"><div class="spinner"></div></div>';
   document.getElementById('repl-ov').classList.add('show');
-  await loadExerciseDB();
-  const opts=similarExercises(ex.exercise_name);
-  document.getElementById('repl-body').innerHTML=`<div class="day-empty" style="margin-bottom:12px">Swap <b style="color:var(--text)">${ex.exercise_name}</b> for a similar exercise:</div>`+
-    opts.map(n=>{ const xx=dbFor(n); const sub=xx?` <span class="add-sub">${(xx.primaryMuscles||[]).join(', ')}${xx.equipment?' · '+xx.equipment:''}</span>`:''; return `<button class="repl-opt" onclick="replaceExercise(decodeURIComponent('${encodeURIComponent(n)}'))">${n}${sub}</button>`; }).join('');
+  await loadExerciseList();
+  if(!document.getElementById('repl-ov').classList.contains('show')) return; // closed while loading
+  replOpts=similarExercises(replExName);
+  if(s) s.disabled=false;
+  renderReplList();
+}
+function replOptButtons(list){
+  return list.map(n=>{
+    const xx=dbFor(n);
+    const sub=xx?` <span class="add-sub">${(xx.primaryMuscles||[]).join(', ')}${xx.equipment?' · '+xx.equipment:''}</span>`:'';
+    return `<button class="repl-opt" onclick="replaceExercise(decodeURIComponent('${encodeURIComponent(n)}'))">${escapeHtml(n)}${sub}</button>`;
+  }).join('');
+}
+function renderReplList(){
+  const body=document.getElementById('repl-body'); if(!body) return;
+  const el=document.getElementById('repl-search');
+  const q=((el&&el.value)||'').toLowerCase().trim();
+  if(!q){
+    body.innerHTML=`<div class="day-empty" style="margin-bottom:12px">Swap <b style="color:var(--text)">${escapeHtml(replExName)}</b> for a similar exercise:</div>`+replOptButtons(replOpts);
+    return;
+  }
+  const cur=String(replExName||'').toLowerCase();
+  const list=(allExerciseNames||[]).filter(n=>{
+    if(n.toLowerCase()===cur) return false; // no point swapping a lift for itself
+    if(n.toLowerCase().includes(q)) return true;
+    const x=dbFor(n);
+    return x && ((x.primaryMuscles||[]).some(m=>m.includes(q)) || String(x.equipment||'').includes(q) || String(x.category||'').includes(q));
+  }).slice(0,300);
+  body.innerHTML=list.length?replOptButtons(list):'<div class="day-empty">No matches.</div>';
 }
 function replaceExercise(newName){
   const ex=todayExercises[curEx]; if(!ex) return;
