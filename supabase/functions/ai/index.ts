@@ -187,6 +187,69 @@ async function doActions(p: Record<string, unknown>) {
   try { return { data: JSON.parse(res.text || "{}") }; } catch { return { error: "Could not parse the AI response." }; }
 }
 
+// ── ACTION: in-season load plan — read the fixture calendar for pinch points ──
+// Deliberately shares the action vocabulary of doActions above, so anything it
+// proposes applies through the same client-side mechanism the athlete already
+// knows. 'hotspots' is the read-only half: weeks worth warning about.
+const LOADPLAN_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    verdict: { type: "string", description: "one line on how the next few weeks look" },
+    hotspots: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false,
+        properties: {
+          start: { type: "string", description: "ISO date the concern starts (YYYY-MM-DD)" },
+          level: { type: "string", enum: ["high", "watch"] },
+          title: { type: "string", description: "<=6 words" },
+          why: { type: "string", description: "one line, grounded in their calendar and training" },
+        },
+        required: ["start", "level", "title", "why"],
+      },
+    },
+    actions: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false,
+        properties: {
+          type: { type: "string", enum: ["deload", "swap", "load_adjust", "note"] },
+          exercise: { type: "string", description: "exact current exercise name (or empty)" },
+          to: { type: "string", description: "replacement exercise for a swap (or empty)" },
+          pct: { type: "integer", description: "load change for load_adjust, -15..+5 (else 0)" },
+          label: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["type", "exercise", "to", "pct", "label", "reason"],
+      },
+    },
+  },
+  required: ["verdict", "hotspots", "actions"],
+};
+async function doLoadPlan(p: Record<string, unknown>) {
+  const system =
+    "You are an in-season strength coach for a team-sport athlete. You are given their MATCH CALENDAR " +
+    "plus a training snapshot. Find the genuine pinch points in the next 6-8 weeks and say what to do about them.\n" +
+    "What counts as a pinch point: two or more matches inside seven days; a run of three-plus match weeks with no " +
+    "let-up; a key match arriving on the back of a heavy training block; a gap where load has been left too low for " +
+    "too long and there is room to build.\n" +
+    "The app ALREADY tapers automatically around each match (MD-1 light, MD-2 moderate, MD+1 recovery, congested " +
+    "weeks capped). Do NOT propose those routine per-match tapers — they are handled. Comment only on what that " +
+    "automatic rule cannot see: multi-week accumulation, a long fixture-free window worth loading up, an imbalance " +
+    "between match load and gym load.\n" +
+    "Say to ADD load as readily as to cut it — an athlete with a three-week fixture gap should be training harder, " +
+    "not coasting. Be specific and conservative; 0 to 4 actions, and an empty list is a fine answer. " +
+    "ALWAYS respect listed injuries. For unused fields use an empty string or 0. " +
+    langLine(String(p.lang || "en"));
+  const user =
+    "Match calendar (JSON):\n" + JSON.stringify(p.fixtures ?? [], null, 2) +
+    "\n\nTraining snapshot (JSON):\n" + JSON.stringify(p.context ?? {}, null, 2) +
+    "\n\nToday is " + String(p.today || "") + ". Analyse the load through the fixture list.";
+  const res = await callClaude(system, user, { maxTokens: 1200, schema: LOADPLAN_SCHEMA });
+  if (res.error) return res;
+  try { return { data: JSON.parse(res.text || "{}") }; } catch { return { error: "Could not parse the AI response." }; }
+}
+
 // ── ACTION: compose a full program (structured) ──
 const PROGRAM_SCHEMA = {
   type: "object", additionalProperties: false,
@@ -250,6 +313,7 @@ Deno.serve(async (req: Request) => {
     if (action === "explain") return json(await doExplain(p));
     if (action === "onboard") return json(await doOnboard(p));
     if (action === "actions") return json(await doActions(p));
+    if (action === "loadplan") return json(await doLoadPlan(p));
     if (action === "program") return json(await doProgram(p));
     return json({ error: "Unknown action: " + action }, 400);
   } catch (e) {

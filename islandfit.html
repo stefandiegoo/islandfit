@@ -352,6 +352,31 @@ body::before{
 .add-ex-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:none;border:1px dashed var(--border-bright);color:var(--text-soft);padding:12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px}
 .add-ex-btn i{color:var(--accent)}
 .add-search{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 12px;border-radius:9px;font-size:14px;font-family:inherit;margin-bottom:10px}
+/* Match calendar */
+.fx-toggle{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text-soft);cursor:pointer}
+.fx-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fx-form input,.fx-form select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 11px;border-radius:9px;font-size:13.5px;font-family:inherit;min-width:0}
+.fx-form input:focus,.fx-form select:focus{outline:none;border-color:var(--accent)}
+.fx-form button{grid-column:1/-1}
+.fx-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.fx-when{font-size:12px;color:var(--muted)}
+.fx-opp{font-size:14px;font-weight:600;color:var(--text);margin-top:2px}
+.fx-key{font-size:10px;font-weight:800;letter-spacing:.06em;background:var(--lava-1,#ff5421);color:#1a0b04;border-radius:4px;padding:2px 5px;margin-left:5px;vertical-align:1px}
+.fx-minor{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--muted);margin-left:5px}
+.fx-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;padding:4px 6px;line-height:1}
+.fx-del:hover{color:var(--lava-1,#ff5421)}
+.match-badge{display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:10px;font-size:12.5px;color:var(--text-soft)}
+.match-badge b{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px}
+.match-badge span{font-size:11.5px;color:var(--muted)}
+.match-badge.md{border-color:var(--lava-1,#ff5421)}
+.lp-verdict{font-size:14px;color:var(--text);line-height:1.5;margin-bottom:12px}
+.lp-spot{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:9px;padding:10px 12px;margin-bottom:8px}
+.lp-spot.high{border-left-color:var(--lava-1,#ff5421)}
+.lp-spot-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.lp-spot-top b{font-size:13.5px;color:var(--text)}
+.lp-spot-top span{font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.lp-why{font-size:12.5px;color:var(--text-soft);margin-top:3px;line-height:1.45}
+.lp-head{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
 .add-search:focus{outline:none;border-color:var(--accent)}
 .add-selected{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .add-chip{background:rgba(0,255,163,0.1);border:1px solid var(--accent);color:var(--accent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:14px;cursor:pointer}
@@ -1136,6 +1161,15 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
   </div>
 </div>
 
+<!-- LOAD PLAN (AI analysis over the fixture list) -->
+<div class="mt-overlay" id="lp-ov">
+  <div class="mt-card">
+    <div class="mt-title">Load around your matches</div>
+    <div id="lp-body" style="text-align:left;margin:10px 0 16px;max-height:60vh;overflow-y:auto"></div>
+    <div class="mt-actions"><button class="btn btn-ghost" onclick="closeLoadPlan()" style="grid-column:1/-1">Close</button></div>
+  </div>
+</div>
+
 <!-- REPLACE EXERCISE -->
 <div class="mt-overlay" id="repl-ov">
   <div class="mt-card">
@@ -1283,6 +1317,21 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <h3>Competition</h3>
     <div class="field"><label>Peak date</label><input type="date" id="set-peak" oninput="setPeakDate(this.value)"></div>
     <div id="peak-info" style="font-size:12px;color:var(--muted);margin-top:8px">No peak date set — using a repeating 4-week wave.</div>
+  </div>
+  <div class="settings-section">
+    <h3>Match calendar</h3>
+    <label class="fx-toggle"><input type="checkbox" id="fx-adapt" onchange="setFixtureAdapt(this.checked)" checked> Adapt training load to my matches</label>
+    <div id="fx-info" style="font-size:12px;color:var(--muted);margin:8px 0 12px">No matches yet — add your fixtures and training load will taper into them.</div>
+    <div class="fx-form">
+      <input type="date" id="fx-date" aria-label="Match date">
+      <input type="text" id="fx-opp" placeholder="Opponent" aria-label="Opponent">
+      <input type="text" id="fx-comp" placeholder="Competition" aria-label="Competition">
+      <select id="fx-ha" aria-label="Home or away"><option value="">H/A</option><option value="home">Home</option><option value="away">Away</option><option value="neutral">Neutral</option></select>
+      <select id="fx-imp" aria-label="Importance"><option value="normal">Normal</option><option value="key">Key match</option><option value="minor">Minor</option></select>
+      <button class="btn btn-primary btn-sm" onclick="addFixture()">Add match</button>
+    </div>
+    <div id="fx-list" style="margin-top:12px"></div>
+    <button class="btn btn-ghost btn-sm" onclick="openLoadPlan()" style="width:100%;margin-top:10px"><i class="ti ti-activity-heartbeat"></i> Analyse my load around these matches</button>
   </div>
   <div class="settings-section">
     <h3>Your coach</h3>
@@ -1437,6 +1486,18 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
       <button class="btn btn-ghost" style="padding:11px 14px;font-size:12px;white-space:nowrap" onclick="saveClientPeakDate()">Save date</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Set the client's game/meet/race date — the plan tapers and peaks into it. Saved automatically when you assign a program too.</div>
+
+    <!-- In-season fixture list for this client -->
+    <div style="font-size:12px;color:var(--muted);white-space:nowrap;margin-bottom:8px"><i class="ti ti-ball-football"></i> Match calendar</div>
+    <div class="fx-form" style="margin-bottom:8px">
+      <input type="date" id="cfx-date" aria-label="Match date">
+      <input type="text" id="cfx-opp" placeholder="Opponent" aria-label="Opponent">
+      <input type="text" id="cfx-comp" placeholder="Competition" aria-label="Competition">
+      <select id="cfx-imp" aria-label="Importance"><option value="normal">Normal</option><option value="key">Key match</option><option value="minor">Minor</option></select>
+      <button class="btn btn-ghost btn-sm" onclick="coachAddFixture()">Add match</button>
+    </div>
+    <div id="cfx-list" style="margin-bottom:8px"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Training load tapers into each match automatically (MD-1 light, MD+1 recovery, congested weeks capped).</div>
     <button id="btn-ai-program" class="btn btn-ghost" style="width:100%;margin-bottom:20px;border:1px dashed var(--accent);color:var(--accent)" onclick="suggestAiProgramForClient()"><i class="ti ti-sparkles"></i> AI Program Suggestion</button>
 
     <!-- Coach notes -->
@@ -1902,7 +1963,7 @@ function getPrescription(ex){
     // NSCA load chart sets the base %1RM for the rep target; periodization modulates it; RPE fine-tunes (±5%)
     const pm=Math.min(0.95, nscaPct(ex.reps)*ph.mod);   // base %1RM × week modulation, capped at 95%
     const eff=pm*lf;
-    let kg=e1*eff*readinessFactor()*coachFactor(ex);   // × AI coach deload / per-lift load adjustment
+    let kg=e1*eff*readinessFactor()*coachFactor(ex)*matchFactor();   // × AI coach deload / per-lift load adjustment × match week
     const adj=adjustments[ex.exercise_name];
     const fine=(adj&&typeof adj.pct==='number')?Math.max(-5,Math.min(5,adj.pct)):0;
     kg=Math.round(kg*(1+fine/100)/2.5)*2.5;
@@ -1910,7 +1971,7 @@ function getPrescription(ex){
   }
   // No estimated max yet → scale the program's prescribed weight to the athlete's level
   const base=getAdjustedWeight(ex);
-  const kg=isNaN(parseFloat(base))?base:Math.round(parseFloat(base)*lf*coachFactor(ex)/2.5)*2.5;
+  const kg=isNaN(parseFloat(base))?base:Math.round(parseFloat(base)*lf*coachFactor(ex)*matchFactor()/2.5)*2.5;
   return {kg,pct:null,phase:ph.label,deload:ph.deload,source:'rpe',fine:0};
 }
 // Triphasic-style tempo: emphasis shifts by phase (eccentric–pause–concentric seconds; X = explosive)
@@ -1966,6 +2027,206 @@ function updatePeakInfo(){
   el.textContent = wp===null ? 'No peak date set — using a repeating 4-week wave.'
     : wp<=0 ? '🎯 Peak is here — realization week.'
     : `🎯 ${wp} week${wp>1?'s':''} to peak — the plan tapers into it.`;
+}
+
+// ── IN-SEASON FIXTURES — training load planned around the match calendar ──
+// Standard MD-coding from team-sport S&C: the day of a match is MD, the day
+// before is MD-1, the day after MD+1. Gym load is trimmed going into a match and
+// eased back out of it; a congested week (two matches inside seven days) is
+// capped regardless of where in the week you are. A "key" match tapers deeper
+// than a "minor" one. Peak date handles a single competition; this handles a season.
+let fixtures=[];
+function fixtureAdaptOn(){ try{ return localStorage.getItem('if_fixture_adapt')!=='0'; }catch(e){ return true; } }
+function dayDiff(fromISO,toISO){ return Math.round((new Date(toISO+'T00:00:00')-new Date(fromISO+'T00:00:00'))/86400000); }
+function todayISO(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+
+// Pure — given a fixture list and a date, describe that date's place in the match week.
+function matchContext(list,dateISO){
+  const out={next:null,daysToNext:null,last:null,daysSinceLast:null,congested:false,
+             code:'open',factor:1,label:'',advice:'',skip:false};
+  const fx=(list||[]).filter(f=>f&&f.fixture_date);
+  if(!fx.length) return out;
+  for(const f of fx){
+    const d=dayDiff(dateISO,f.fixture_date);
+    if(d>=0){ if(out.next===null||d<out.daysToNext){ out.next=f; out.daysToNext=d; } }
+    else { const ago=-d; if(out.last===null||ago<out.daysSinceLast){ out.last=f; out.daysSinceLast=ago; } }
+  }
+  // Congestion has to look BACKWARD as well as forward: standing between a match
+  // you played on Saturday and one you play on Wednesday is the fatiguing case,
+  // and a forward-only window misses it entirely. Two matches within 7 days of
+  // each other, anywhere in the fortnight around this date, counts.
+  const near=fx.map(f=>dayDiff(dateISO,f.fixture_date)).filter(d=>d>=-6&&d<=6).sort((a,b)=>a-b);
+  out.congested = near.some((d,i)=> i>0 && (d-near[i-1])<=7 );
+  const imp=(out.next&&out.next.importance)||'normal', key=imp==='key', minor=imp==='minor';
+  const d=out.daysToNext, since=out.daysSinceLast;
+  if(d===0){ out.code='MD'; out.factor=0.5; out.skip=true; out.label='Match day';
+             out.advice='Play — nothing in the gym beyond a light activation.'; }
+  else if(d===1){ out.code='MD-1'; out.factor=key?0.50:(minor?0.70:0.55); out.label='Day before a match';
+             out.advice='Primer only — short and sharp, nothing that leaves you sore.'; }
+  else if(d===2){ out.code='MD-2'; out.factor=key?0.75:0.85; out.label='Two days out';
+             out.advice='Moderate load — keep it crisp.'; }
+  else if(since===1){ out.code='MD+1'; out.factor=0.60; out.label='Day after a match';
+             out.advice='Recovery — movement quality over load.'; }
+  else if(since===2){ out.code='MD+2'; out.factor=0.90; out.label='Two days after a match';
+             out.advice='Building back toward normal load.'; }
+  if(out.congested){
+    out.factor=Math.min(out.factor,0.85);
+    if(out.code==='open'){ out.code='congested'; out.label='Congested week';
+      out.advice='Two matches inside seven days — hold the volume down.'; }
+  }
+  return out;
+}
+// The multiplier getPrescription applies. Off → the calendar never touches your loads.
+function matchFactor(){ if(!fixtureAdaptOn()) return 1; return matchContext(fixtures,todayISO()).factor; }
+
+async function loadFixtures(){
+  fixtures=[];
+  if(!currentUser) return fixtures;
+  const from=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const to=new Date(Date.now()+240*86400000).toISOString().slice(0,10);
+  try{
+    const {data}=await sb.from('fixtures').select('*').eq('client_id',currentUser.id)
+      .gte('fixture_date',from).lte('fixture_date',to).order('fixture_date');
+    fixtures=data||[];
+  }catch(e){}
+  return fixtures;
+}
+function setFixtureAdapt(on){
+  try{ localStorage.setItem('if_fixture_adapt',on?'1':'0'); }catch(e){}
+  renderFixtures(); renderTodayCard();
+  if(document.getElementById('s-active')&&document.getElementById('s-active').classList.contains('active')) renderExercise();
+}
+function fxLabel(f){
+  const bits=[];
+  if(f.opponent) bits.push(f.opponent);
+  if(f.home_away) bits.push(f.home_away==='home'?'H':(f.home_away==='away'?'A':'N'));
+  if(f.competition) bits.push(f.competition);
+  return bits.join(' · ')||'Match';
+}
+// Badge on the home card: what today is in match terms, and what that did to the load.
+function matchBadgeHtml(){
+  if(!fixtures.length) return '';
+  const c=matchContext(fixtures,todayISO());
+  if(c.code==='open') {
+    if(c.daysToNext===null) return '';
+    return `<div class="match-badge"><i class="ti ti-ball-football"></i> Next match in ${c.daysToNext} days · ${escapeHtml(fxLabel(c.next))}</div>`;
+  }
+  const trim=fixtureAdaptOn()&&c.factor<1?` · loads ${Math.round((1-c.factor)*100)}% lighter`:'';
+  return `<div class="match-badge ${c.skip?'md':''}"><i class="ti ti-ball-football"></i> <b>${c.code}</b> · ${escapeHtml(c.label)}${trim}<span>${escapeHtml(c.advice)}</span></div>`;
+}
+function renderFixtures(){
+  const box=document.getElementById('fx-list'); if(!box) return;
+  const tgl=document.getElementById('fx-adapt'); if(tgl) tgl.checked=fixtureAdaptOn();
+  const info=document.getElementById('fx-info');
+  if(info){
+    if(!fixtures.length) info.textContent='No matches yet — add your fixtures and training load will taper into them.';
+    else if(!fixtureAdaptOn()) info.textContent='Adapting is off — your matches are listed but loads are left alone.';
+    else { const c=matchContext(fixtures,todayISO());
+      info.textContent = c.code==='open'
+        ? (c.daysToNext===null?'No upcoming matches on the calendar.':`Next match in ${c.daysToNext} days — normal load until then.`)
+        : `Today is ${c.code} — ${c.advice}`; }
+  }
+  const today=todayISO();
+  const up=fixtures.filter(f=>f.fixture_date>=today);
+  box.innerHTML = up.length ? up.map(f=>{
+    const d=dayDiff(today,f.fixture_date);
+    const when=d===0?'Today':(d===1?'Tomorrow':`in ${d} d`);
+    const imp=f.importance==='key'?'<span class="fx-key">KEY</span>':(f.importance==='minor'?'<span class="fx-minor">minor</span>':'');
+    return `<div class="fx-row"><div><div class="fx-when">${f.fixture_date} · ${when}</div><div class="fx-opp">${escapeHtml(fxLabel(f))} ${imp}</div></div>
+      <button class="fx-del" onclick="deleteFixture(decodeURIComponent('${encodeURIComponent(f.id)}'))" aria-label="Remove match"><i class="ti ti-trash"></i></button></div>`;
+  }).join('') : '<div class="day-empty">No upcoming matches.</div>';
+}
+async function addFixture(){
+  const date=(document.getElementById('fx-date')||{}).value||'';
+  if(!date){ showToast('Pick a date'); return; }
+  const row={ client_id:currentUser.id, fixture_date:date,
+    opponent:((document.getElementById('fx-opp')||{}).value||'').trim()||null,
+    competition:((document.getElementById('fx-comp')||{}).value||'').trim()||null,
+    home_away:(document.getElementById('fx-ha')||{}).value||null,
+    importance:(document.getElementById('fx-imp')||{}).value||'normal',
+    created_by:currentUser.id };
+  const {error}=await sb.from('fixtures').insert(row);
+  if(error){ showToast(/duplicate|unique/i.test(error.message)?'That match is already on the list':'Could not save'); return; }
+  ['fx-opp','fx-comp'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  await loadFixtures(); renderFixtures(); renderTodayCard(); showToast('Match added');
+}
+async function deleteFixture(id){
+  const {error}=await sb.from('fixtures').delete().eq('id',id);
+  if(error){ showToast('Could not remove'); return; }
+  await loadFixtures(); renderFixtures(); renderTodayCard(); showToast('Match removed');
+}
+
+// AI load analysis over the fixture list. The per-match taper is automatic and
+// deterministic; this looks for what that rule cannot see — multi-week pile-ups,
+// and gaps where there is room to push. Its actions apply through the same
+// mechanism as the existing coach actions, so nothing new to learn.
+async function openLoadPlan(){
+  const ov=document.getElementById('lp-ov'), body=document.getElementById('lp-body'); if(!ov) return;
+  ov.classList.add('show');
+  if(!fixtures.length){ body.innerHTML='<div class="day-empty">Add your matches first — the analysis reads your fixture list.</div>'; return; }
+  body.innerHTML='<div class="ai-coach-loading"><div class="spinner"></div><span>Reading your fixture list…</span></div>';
+  try{
+    const slim=fixtures.map(f=>({date:f.fixture_date,opponent:f.opponent||'',competition:f.competition||'',
+                                 home_away:f.home_away||'',importance:f.importance||'normal'}));
+    const {data}=await aiCall('loadplan',{fixtures:slim,context:aiSummaryPayload(),today:todayISO()});
+    coachActionList=(data&&data.actions)||[];
+    const spots=(data&&data.hotspots)||[];
+    let h = data&&data.verdict ? `<div class="lp-verdict">${escapeHtml(data.verdict)}</div>` : '';
+    h += spots.length ? spots.map(s=>`<div class="lp-spot ${s.level==='high'?'high':''}">
+        <div class="lp-spot-top"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.start||'')}</span></div>
+        <div class="lp-why">${escapeHtml(s.why||'')}</div></div>`).join('')
+      : '<div class="day-empty" style="margin:10px 0">No load hotspots in the weeks ahead.</div>';
+    h += coachActionList.length ? '<div class="lp-head">Recommended</div>'+coachActionList.map((a,i)=>{
+      const meta=a.type==='swap'?`${escapeHtml(a.exercise)} → ${escapeHtml(a.to)}`
+        :(a.type==='load_adjust'?`${escapeHtml(a.exercise)} ${a.pct>0?'+':''}${a.pct}%`
+        :(a.type==='deload'?'Whole week ~15% lighter':''));
+      const can=a.type!=='note';
+      return `<div class="act-card"><div class="act-label">${escapeHtml(a.label||a.type)}</div>${meta?`<div class="act-meta">${meta}</div>`:''}<div class="act-reason">${escapeHtml(a.reason||'')}</div>${can?`<button class="btn btn-primary btn-sm" onclick="applyCoachAction(${i},this)">Apply</button>`:''}</div>`;
+    }).join('') : '';
+    body.innerHTML=h;
+  }catch(e){ body.innerHTML=`<div class="ai-coach-err">${escapeHtml(e.message)}</div>`; }
+}
+function closeLoadPlan(){ document.getElementById('lp-ov').classList.remove('show'); }
+
+// ── COACH SIDE of the match calendar (per client, inside the client detail view) ──
+let coachFixtures=[];
+async function loadCoachFixtures(clientId){
+  const box=document.getElementById('cfx-list'); if(!box) return;
+  coachFixtures=[];
+  const from=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  try{
+    const {data}=await sb.from('fixtures').select('*').eq('client_id',clientId)
+      .gte('fixture_date',from).order('fixture_date');
+    coachFixtures=data||[];
+  }catch(e){}
+  const today=todayISO();
+  box.innerHTML = coachFixtures.length ? coachFixtures.map(f=>{
+    const d=dayDiff(today,f.fixture_date);
+    const when=d<0?`${-d} d ago`:(d===0?'Today':(d===1?'Tomorrow':`in ${d} d`));
+    const imp=f.importance==='key'?'<span class="fx-key">KEY</span>':(f.importance==='minor'?'<span class="fx-minor">minor</span>':'');
+    return `<div class="fx-row"><div><div class="fx-when">${f.fixture_date} · ${when}</div><div class="fx-opp">${escapeHtml(fxLabel(f))} ${imp}</div></div>
+      <button class="fx-del" onclick="coachDeleteFixture(decodeURIComponent('${encodeURIComponent(f.id)}'))" aria-label="Remove match"><i class="ti ti-trash"></i></button></div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--muted)">No matches on the calendar.</div>';
+}
+async function coachAddFixture(){
+  if(!viewingClient) return;
+  const date=(document.getElementById('cfx-date')||{}).value||'';
+  if(!date){ showToast('Pick a date'); return; }
+  const {error}=await sb.from('fixtures').insert({
+    client_id:viewingClient.client_id, fixture_date:date,
+    opponent:((document.getElementById('cfx-opp')||{}).value||'').trim()||null,
+    competition:((document.getElementById('cfx-comp')||{}).value||'').trim()||null,
+    importance:(document.getElementById('cfx-imp')||{}).value||'normal',
+    created_by:currentUser.id });
+  if(error){ showToast(/duplicate|unique/i.test(error.message)?'Already on the calendar':'Could not save'); return; }
+  ['cfx-opp','cfx-comp'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  loadCoachFixtures(viewingClient.client_id); showToast('Match added');
+}
+async function coachDeleteFixture(id){
+  const {error}=await sb.from('fixtures').delete().eq('id',id);
+  if(error){ showToast('Could not remove'); return; }
+  if(viewingClient) loadCoachFixtures(viewingClient.client_id);
+  showToast('Match removed');
 }
 
 // ── ADAPTIVE AI PROGRAMMING ──
@@ -2796,6 +3057,8 @@ async function onLogin(user){
   await loadProgramAndToday();
   await loadScheduleState();
   await loadAdjustments();
+  await loadFixtures();
+  renderFixtures();
   updateHomeUI();
   renderAIPreview();
   maybeOfferEaseBack();
@@ -2932,14 +3195,14 @@ function renderTodayCard(){
   const next=todayWorkout?todayWorkout.title:'—';
   if(scheduleState.trainedToday){
     card.classList.add('rest-day');
-    card.innerHTML=`<div class="today-content"><div class="today-label">✅ Done today</div><div class="today-name">Recovery</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-ghost" onclick="startWorkout()">Train again</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${matchBadgeHtml()}<div class="today-label">✅ Done today</div><div class="today-name">Recovery</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-ghost" onclick="startWorkout()">Train again</button></div></div>`;
   } else if(isRestToday()){
     card.classList.add('rest-day');
-    card.innerHTML=`<div class="today-content"><div class="today-label">💤 Rest day</div><div class="today-name">Recovering</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Train anyway →</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${matchBadgeHtml()}<div class="today-label">💤 Rest day</div><div class="today-name">Recovering</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Train anyway →</button></div></div>`;
   } else {
     card.classList.remove('rest-day');
     const lbl=todayWorkout?('Day '+todayWorkout.day_number+' · '+(todayWorkout.focus||'')):'Today';
-    card.innerHTML=`<div class="today-content"><div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button><button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${matchBadgeHtml()}<div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button><button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
   }
   renderAiProgramCard();
   maybeNudge();
@@ -4359,6 +4622,7 @@ async function openClientDetail(clientId){
   sel.innerHTML = '<option value="">— Select a program —</option>' + (progs||[]).map(pr=>`<option value="${pr.id}"${pr.id===p.program_id?' selected':''}>${escapeHtml(pr.name)}${pr.is_custom?' (custom)':''}</option>`).join('');
   // Peak date
   const peakEl = document.getElementById('coach-peak-date'); if(peakEl) peakEl.value = p.peak_date || '';
+  loadCoachFixtures(clientId);
   // Notes
   document.getElementById('coach-client-notes').value = p.coach_notes || '';
   // Workouts + adherence + RPE + session notes (all in parallel)

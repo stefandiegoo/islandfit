@@ -126,3 +126,49 @@ Heildarvikur prógramsins reiknast sjálfkrafa út frá fösunum.
 - Prógröm án fasa virka óbreytt — dagar án fasa gilda alltaf.
 - Dagafjöldi má vera mismunandi eftir fösum; vikan rúllar á fjölda daga í virkum fasa.
 - Sé íþróttamaður kominn fram úr síðasta fasa heldur hann áfram í honum.
+
+---
+
+## 9. In-season match calendar (leikjaplan)
+
+Lets an athlete (or their coach) enter the fixture list so training load is
+planned around matches instead of running blind through a season.
+
+### Database
+Run `migrations/19_fixtures.sql`. It creates the `fixtures` table with RLS:
+the athlete owns their calendar, and a coach can read **and write** it only
+while `coach_clients.status = 'active'` — disconnect and the access is gone.
+A trigger makes `client_id` and `created_by` immutable, so a fixture can never
+be moved onto someone else's calendar.
+
+### How the load adapts
+Standard MD-coding from team-sport S&C, applied as one more multiplier inside
+`getPrescription()` alongside the existing week phase, experience level and
+readiness factors:
+
+| Day | Code | Load |
+|---|---|---|
+| Day of the match | MD | 0.50 + "skip the gym" flag |
+| Day before | MD-1 | 0.55 (0.50 for a key match, 0.70 for a minor one) |
+| Two days before | MD-2 | 0.85 (0.75 for a key match) |
+| Day after | MD+1 | 0.60 |
+| Two days after | MD+2 | 0.90 |
+| Anything else | open | 1.00 |
+
+Two matches within seven days of each other caps the week at 0.85 regardless.
+The window looks **backward as well as forward** — standing between Saturday's
+match and Wednesday's is the fatiguing case.
+
+The athlete can turn the whole thing off in **Settings → Match calendar**;
+their fixtures stay listed but loads are left alone.
+
+### AI load analysis
+`Analyse my load around these matches` calls the `loadplan` action on the `ai`
+edge function. It is told the automatic per-match taper is already handled, so
+it comments only on what that rule cannot see — multi-week pile-ups, a key match
+landing on a heavy block, or a fixture-free gap worth training *harder* through.
+Its recommendations apply through the same mechanism as the existing coach
+actions, so there is nothing new for the athlete to learn.
+
+Redeploy the `ai` function after pulling this change, or the button returns
+"Unknown action: loadplan".
