@@ -209,6 +209,12 @@ Only the group owner manages staff. Sharing widens `is_group_coach()`, the
 single gate the group policies already route through, so members and chat follow
 automatically; `is_group_editor()` is the separate write gate.
 
+A coach who has a group shared with them does not coach those athletes
+individually, so the dashboard resolves roster and chat names through
+`group_people()` rather than from their own client list. Read-only staff have
+the member-removal, add-member and bulk-assign controls hidden as well as
+blocked, so the UI matches what the database will actually allow.
+
 ### Two traps this hit, worth remembering
 1. `coach_groups` and `coach_group_staff` policies that query each other cause
    `infinite recursion detected in policy`. Both sides must go through a

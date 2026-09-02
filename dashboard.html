@@ -614,23 +614,30 @@ async function openGroup(id){
 async function renderGroupModal(){
   const id=grpOpenId; const body=$('grp-modal-body');
   body.innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">Loading...</div>';
-  const [{data:members},{data:allProgs},{data:lb}]=await Promise.all([
+  const [{data:members},{data:allProgs},{data:lb},{data:people},{data:staff}]=await Promise.all([
     sb.from('group_members').select('client_id').eq('group_id',id),
     sb.from('programs').select('id,name,is_custom').order('name'),
-    sb.rpc('group_leaderboard',{g:id,days:7})
+    sb.rpc('group_leaderboard',{g:id,days:7}),
+    sb.rpc('group_people',{p_group:id}),
+    sb.rpc('group_staff',{p_group:id})
   ]);
   const isOwner=((groupsCache.find(x=>x.id===id)||{}).coach_id===me_.id);
+  // A coach who had this group shared with them does not have these athletes in
+  // their own client list, so names come from group_people, not from `clients`.
+  groupPeople={}; (people||[]).forEach(p=>{ groupPeople[p.user_id]={name:p.name,sport:p.sport}; });
+  const mine=(staff||[]).find(x=>x.coach_id===me_.id);
+  const canEdit = isOwner || (mine && mine.access==='full');
   const memIds=new Set((members||[]).map(m=>m.client_id));
+  const memberRows=[...memIds].map(cid=>({client_id:cid, name:(groupPeople[cid]||{}).name||'Member'}));
   const active=clients.filter(c=>c.status==='active');
-  const memberRows=active.filter(c=>memIds.has(c.client_id));
   const nonMembers=active.filter(c=>!memIds.has(c.client_id));
   body.innerHTML=`
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Members (${memberRows.length})</div>
-    <div style="margin-bottom:6px">${memberRows.length?memberRows.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:5px 10px;margin:0 6px 6px 0;font-size:12px">${esc(c.profile.name||'—')} <button class="mini-btn" style="padding:2px 5px" onclick="removeGroupMember('${c.client_id}')"><i class="ti ti-x"></i></button></span>`).join(''):'<span style="color:var(--muted);font-size:12px">No members yet.</span>'}</div>
-    ${nonMembers.length?`<div class="row-gap" style="margin-bottom:16px"><select id="grp-add-sel" class="sel" style="flex:1"><option value="">— Add a client —</option>${nonMembers.map(c=>`<option value="${c.client_id}">${esc(c.profile.name||'—')}</option>`).join('')}</select><button class="btn btn-ghost" style="padding:12px 16px" onclick="addGroupMember()">Add</button></div>`:'<div style="margin-bottom:16px"></div>'}
+    <div style="margin-bottom:6px">${memberRows.length?memberRows.map(c=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:5px 10px;margin:0 6px 6px 0;font-size:12px">${esc(c.name)} ${canEdit?`<button class="mini-btn" style="padding:2px 5px" onclick="removeGroupMember('${c.client_id}')"><i class="ti ti-x"></i></button>`:''}</span>`).join(''):'<span style="color:var(--muted);font-size:12px">No members yet.</span>'}</div>
+    ${(canEdit&&nonMembers.length)?`<div class="row-gap" style="margin-bottom:16px"><select id="grp-add-sel" class="sel" style="flex:1"><option value="">— Add a client —</option>${nonMembers.map(c=>`<option value="${c.client_id}">${esc(c.profile.name||'—')}</option>`).join('')}</select><button class="btn btn-ghost" style="padding:12px 16px" onclick="addGroupMember()">Add</button></div>`:'<div style="margin-bottom:16px"></div>'}
 
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Bulk-assign a program</div>
-    <div class="row-gap" style="margin-bottom:16px"><select id="grp-prog-sel" class="sel" style="flex:1"><option value="">— Select a program —</option>${(allProgs||[]).map(x=>`<option value="${x.id}">${esc(x.name)}${x.is_custom?' (custom)':''}</option>`).join('')}</select><button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="assignProgramToGroup()">Assign to all</button></div>
+    ${canEdit?`<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Bulk-assign a program</div>
+    <div class="row-gap" style="margin-bottom:16px"><select id="grp-prog-sel" class="sel" style="flex:1"><option value="">— Select a program —</option>${(allProgs||[]).map(x=>`<option value="${x.id}">${esc(x.name)}${x.is_custom?' (custom)':''}</option>`).join('')}</select><button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="assignProgramToGroup()">Assign to all</button></div>`:'<div style="font-size:11px;color:var(--muted);margin-bottom:16px">You have read-only access to this group.</div>'}
 
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Leaderboard · workouts (7d)</div>
     <div style="margin-bottom:16px">${(lb&&lb.length)?`<div class="pr-table">${lb.map((r,i)=>`<div class="pr-row"><span style="font-weight:600">${i+1}. ${esc(r.name||'—')}</span><span style="font-weight:800;color:var(--accent)">${r.workouts}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:12px">No members yet.</div>'}</div>
@@ -649,6 +656,7 @@ async function renderGroupModal(){
 // ── Coaches sharing a group ──
 // The owner adds a connected colleague at full or read-only access; the
 // database enforces the difference, this only reflects it.
+let groupPeople={};
 async function loadGroupStaff(){
   const box=$('grp-staff'), addBox=$('grp-staff-add'); if(!box) return;
   const id=grpOpenId;
@@ -715,7 +723,9 @@ async function loadGroupMessages(){
   const {data:msgs}=await sb.from('group_messages').select('*').eq('group_id',grpOpenId).order('created_at',{ascending:true}).limit(100);
   if(!msgs||!msgs.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No messages yet.</div>'; return; }
   // map sender ids to names (members + me)
-  const names={}; clients.forEach(c=>{names[c.client_id]=c.profile.name||'Client';}); names[me_.id]='You';
+  const names={}; clients.forEach(c=>{names[c.client_id]=c.profile.name||'Client';});
+  Object.keys(groupPeople).forEach(id=>{ names[id]=groupPeople[id].name||names[id]||'Member'; });
+  names[me_.id]='You';
   box.innerHTML=msgs.map(m=>{ const mine=m.sender_id===me_.id; return `<div class="msg ${mine?'msg-me':'msg-them'}">${mine?'':`<div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:2px">${esc(names[m.sender_id]||'Member')}</div>`}${esc(m.body)}</div>`; }).join('');
   box.scrollTop=box.scrollHeight;
 }

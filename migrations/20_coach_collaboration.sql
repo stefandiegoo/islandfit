@@ -365,3 +365,26 @@ revoke execute on function public.my_peers() from public, anon;
 revoke execute on function public.my_coaches() from public, anon;
 revoke execute on function public.client_coaches(uuid) from public, anon;
 revoke execute on function public.group_staff(uuid) from public, anon;
+
+-- ─────────────────── 9. names inside a shared group ───────────────────
+-- The dashboard used to resolve member and chat-sender names from the VIEWING
+-- coach's own client list, so a coach who had a group shared with them saw an
+-- anonymous roster and messages signed "Member". Gated on is_group_coach, and
+-- returns only display fields — never the athlete's health data.
+create or replace function group_people(p_group uuid)
+returns table (user_id uuid, name text, sport text, is_coach boolean)
+language sql stable security definer set search_path = public as $$
+  select m.client_id, pr.name, pr.sport, false
+    from group_members m join profiles pr on pr.id = m.client_id
+   where m.group_id = p_group and public.is_group_coach(p_group)
+  union
+  select g.coach_id, pr.name, null::text, true
+    from coach_groups g join profiles pr on pr.id = g.coach_id
+   where g.id = p_group and public.is_group_coach(p_group)
+  union
+  select s.coach_id, pr.name, null::text, true
+    from coach_group_staff s join profiles pr on pr.id = s.coach_id
+   where s.group_id = p_group and public.is_group_coach(p_group);
+$$;
+revoke execute on function public.group_people(uuid) from public, anon;
+grant execute on function public.group_people(uuid) to authenticated;
