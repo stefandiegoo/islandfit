@@ -172,3 +172,47 @@ actions, so there is nothing new for the athlete to learn.
 
 Redeploy the `ai` function after pulling this change, or the button returns
 "Unknown action: loadplan".
+
+---
+
+## 10. Coaches working together
+
+Run `migrations/20_coach_collaboration.sql`.
+
+### Colleague connections
+A coach connects with another coach by email (**Coach Portal → Colleagues**).
+Both sides consent: the invitee sees the request and accepts or declines. Only
+approved coaches can send or resolve an invitation, and the lookup returns just
+a user id — it cannot be used to enumerate athletes.
+
+### Sharing a client
+On a client, **Coaches on this client** shares them with a connected colleague
+at one of two levels:
+
+* **Full** — an equal coach: programs, phases, fixtures, nutrition targets,
+  form-check feedback.
+* **Read-only** — sees everything, changes nothing. Still able to message the
+  athlete, since a physio or head coach who cannot reply is useless.
+
+This reuses `coach_clients`, which was already `UNIQUE(coach_id, client_id)`, so
+every existing "active coach of this client" read policy started working for the
+second coach with no rewrite. The read-only restriction is enforced by RLS on
+the write paths (`coach_can_edit()`), not by hiding buttons.
+
+Per the product decision, the athlete is **not** asked to approve a co-coach.
+They instead get **Settings → Who can see my data**, listing every coach with
+access and at what level.
+
+### Sharing a group
+In the dashboard's group modal, **Coaches on this group** works the same way.
+Only the group owner manages staff. Sharing widens `is_group_coach()`, the
+single gate the group policies already route through, so members and chat follow
+automatically; `is_group_editor()` is the separate write gate.
+
+### Two traps this hit, worth remembering
+1. `coach_groups` and `coach_group_staff` policies that query each other cause
+   `infinite recursion detected in policy`. Both sides must go through a
+   SECURITY DEFINER helper, which bypasses RLS.
+2. A `FOR ALL` policy checks only `USING` on DELETE. A single policy with
+   `using(is_group_coach)` + `with check(is_group_editor)` let a read-only coach
+   delete group members. The member policies are split per command for this reason.

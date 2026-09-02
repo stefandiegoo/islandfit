@@ -586,13 +586,15 @@ async function loadAll(){
 let groupsCache=[], grpOpenId=null;
 async function loadGroups(){
   const wrap=$('groups-list'); if(!wrap) return;
-  const {data:groups}=await sb.from('coach_groups').select('*').eq('coach_id',me_.id).order('created_at');
+  // RLS already exposes groups shared with me as staff, so drop the coach_id
+  // filter and let the policies decide which groups I may see.
+  const {data:groups}=await sb.from('coach_groups').select('*').order('created_at');
   groupsCache=groups||[];
   if(!groupsCache.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:12px">No groups yet — create one to bulk-assign programs and run a leaderboard.</div>'; return; }
   const {data:mem}=await sb.from('group_members').select('group_id');
   const counts={}; (mem||[]).forEach(m=>{counts[m.group_id]=(counts[m.group_id]||0)+1;});
   wrap.innerHTML=groupsCache.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="openGroup('${g.id}')">
-    <div><div style="font-size:13px;font-weight:700">${esc(g.name)}</div><div style="font-size:11px;color:var(--muted)">${counts[g.id]||0} member${(counts[g.id]||0)===1?'':'s'}</div></div>
+    <div><div style="font-size:13px;font-weight:700">${esc(g.name)}${g.coach_id!==me_.id?' <span class="cc-tag">shared</span>':''}</div><div style="font-size:11px;color:var(--muted)">${counts[g.id]||0} member${(counts[g.id]||0)===1?'':'s'}</div></div>
     <i class="ti ti-chevron-right" style="color:var(--muted)"></i>
   </div>`).join('');
 }
@@ -617,6 +619,7 @@ async function renderGroupModal(){
     sb.from('programs').select('id,name,is_custom').order('name'),
     sb.rpc('group_leaderboard',{g:id,days:7})
   ]);
+  const isOwner=((groupsCache.find(x=>x.id===id)||{}).coach_id===me_.id);
   const memIds=new Set((members||[]).map(m=>m.client_id));
   const active=clients.filter(c=>c.status==='active');
   const memberRows=active.filter(c=>memIds.has(c.client_id));
@@ -635,9 +638,53 @@ async function renderGroupModal(){
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Group chat</div>
     <div id="grp-thread" class="msg-thread" style="max-height:200px"></div>
     <div class="row-gap" style="margin-top:8px"><input id="grp-msg" class="sel" style="flex:1" placeholder="Message the group..." onkeydown="if(event.key==='Enter')sendGroupMessage()"><button class="btn btn-primary" style="padding:12px 16px" onclick="sendGroupMessage()"><i class="ti ti-send"></i></button></div>
-    <div style="margin-top:14px;text-align:right"><button class="btn btn-ghost" style="color:var(--lava-1);font-size:12px;padding:8px 14px" onclick="deleteGroup()"><i class="ti ti-trash"></i> Delete group</button></div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Coaches on this group</div>
+    <div id="grp-staff" style="margin-bottom:8px"></div>
+    <div id="grp-staff-add"></div>
+    ${isOwner?`<div style="margin-top:14px;text-align:right"><button class="btn btn-ghost" style="color:var(--lava-1);font-size:12px;padding:8px 14px" onclick="deleteGroup()"><i class="ti ti-trash"></i> Delete group</button></div>`:''}
   `;
+  loadGroupStaff();
   loadGroupMessages();
+}
+// ── Coaches sharing a group ──
+// The owner adds a connected colleague at full or read-only access; the
+// database enforces the difference, this only reflects it.
+async function loadGroupStaff(){
+  const box=$('grp-staff'), addBox=$('grp-staff-add'); if(!box) return;
+  const id=grpOpenId;
+  const isOwner=((groupsCache.find(x=>x.id===id)||{}).coach_id===me_.id);
+  const [{data:staff},{data:peers}]=await Promise.all([
+    sb.rpc('group_staff',{p_group:id}),
+    isOwner ? sb.rpc('my_peers') : Promise.resolve({data:[]})
+  ]);
+  box.innerHTML=(staff||[]).map(c=>{
+    const tag=c.is_owner?'<span class="cc-tag">owner</span>'
+      :(c.access==='read'?'<span class="cc-tag read">read-only</span>':'<span class="cc-tag">full</span>');
+    const del=(isOwner && !c.is_owner)
+      ? `<button class="mini-btn" onclick="removeGroupStaff('${c.coach_id}')"><i class="ti ti-x"></i></button>` : '';
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:5px 10px;margin:0 6px 6px 0;font-size:12px">${esc(c.name||'Coach')} ${tag} ${del}</span>`;
+  }).join('')||'<span style="color:var(--muted);font-size:12px">Just you.</span>';
+  if(!addBox) return;
+  const avail=(peers||[]).filter(p=>p.status==='active' && !(staff||[]).some(s=>s.coach_id===p.peer_id));
+  addBox.innerHTML = !isOwner
+    ? '<div style="color:var(--muted);font-size:11px">Only the group owner can change who coaches this group.</div>'
+    : (avail.length
+      ? `<div class="row-gap"><select id="grp-staff-sel" class="sel" style="flex:1">${avail.map(p=>`<option value="${p.peer_id}">${esc(p.name||'Coach')}</option>`).join('')}</select>
+         <select id="grp-staff-acc" class="sel"><option value="full">Full</option><option value="read">Read-only</option></select>
+         <button class="btn btn-ghost" style="padding:12px 16px" onclick="addGroupStaff()">Share</button></div>`
+      : '<div style="color:var(--muted);font-size:11px">Connect with a colleague in the app to share this group.</div>');
+}
+async function addGroupStaff(){
+  const peer=$('grp-staff-sel')&&$('grp-staff-sel').value; if(!peer) return;
+  const access=($('grp-staff-acc')||{}).value||'full';
+  const {data,error}=await sb.rpc('group_add_staff',{p_group:grpOpenId,p_peer:peer,p_access:access});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Shared with '+(data||'coach')); loadGroupStaff();
+}
+async function removeGroupStaff(peer){
+  const {error}=await sb.rpc('group_remove_staff',{p_group:grpOpenId,p_peer:peer});
+  if(error){ toast('Error: '+error.message); return; }
+  loadGroupStaff();
 }
 async function addGroupMember(){
   const cid=$('grp-add-sel').value; if(!cid) return;

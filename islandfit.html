@@ -369,6 +369,8 @@ body::before{
 .match-badge b{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px}
 .match-badge span{font-size:11.5px;color:var(--muted)}
 .match-badge.md{border-color:var(--lava-1,#ff5421)}
+.cc-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--surface);border:1px solid var(--border);color:var(--text-soft);border-radius:4px;padding:2px 6px;vertical-align:1px}
+.cc-tag.read{border-color:var(--muted);color:var(--muted)}
 .lp-verdict{font-size:14px;color:var(--text);line-height:1.5;margin-bottom:12px}
 .lp-spot{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:9px;padding:10px 12px;margin-bottom:8px}
 .lp-spot.high{border-left-color:var(--lava-1,#ff5421)}
@@ -1319,6 +1321,11 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <div id="peak-info" style="font-size:12px;color:var(--muted);margin-top:8px">No peak date set — using a repeating 4-week wave.</div>
   </div>
   <div class="settings-section">
+    <h3>Who can see my data</h3>
+    <div id="my-coaches"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Your coach can bring in a colleague. Everyone with access is listed here.</div>
+  </div>
+  <div class="settings-section">
     <h3>Match calendar</h3>
     <label class="fx-toggle"><input type="checkbox" id="fx-adapt" onchange="setFixtureAdapt(this.checked)" checked> Adapt training load to my matches</label>
     <div id="fx-info" style="font-size:12px;color:var(--muted);margin:8px 0 12px">No matches yet — add your fixtures and training load will taper into them.</div>
@@ -1425,6 +1432,15 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
       <button class="btn btn-primary" style="padding:13px 18px;font-size:13px;white-space:nowrap" onclick="addClientByEmail()">Send Request</button>
     </div>
 
+    <!-- Colleagues -->
+    <div class="section-label">Colleagues</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input type="email" id="peer-add-email" placeholder="coach@email.com" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:10px;font-size:14px">
+      <button class="btn btn-ghost" style="padding:13px 18px;font-size:13px;white-space:nowrap" onclick="invitePeer()">Connect</button>
+    </div>
+    <div id="peer-list" style="margin-bottom:6px"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Connect with other coaches, then share individual clients or whole groups with them.</div>
+
     <!-- Client list -->
     <div class="section-label">My Clients <span id="coach-client-count" style="color:var(--muted)"></span></div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -1486,6 +1502,16 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
       <button class="btn btn-ghost" style="padding:11px 14px;font-size:12px;white-space:nowrap" onclick="saveClientPeakDate()">Save date</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Set the client's game/meet/race date — the plan tapers and peaks into it. Saved automatically when you assign a program too.</div>
+
+    <!-- Coaches on this client -->
+    <div style="font-size:12px;color:var(--muted);white-space:nowrap;margin-bottom:8px"><i class="ti ti-users"></i> Coaches on this client</div>
+    <div id="cc-list" style="margin-bottom:8px"></div>
+    <div id="cc-add" class="fx-form" style="margin-bottom:8px">
+      <select id="cc-peer" aria-label="Colleague"></select>
+      <select id="cc-access" aria-label="Access level"><option value="full">Full access</option><option value="read">Read-only</option></select>
+      <button class="btn btn-ghost btn-sm" onclick="addCoCoach()">Share this client</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Read-only coaches see everything but cannot change the plan. The athlete is shown who has access.</div>
 
     <!-- In-season fixture list for this client -->
     <div style="font-size:12px;color:var(--muted);white-space:nowrap;margin-bottom:8px"><i class="ti ti-ball-football"></i> Match calendar</div>
@@ -2187,6 +2213,116 @@ async function openLoadPlan(){
   }catch(e){ body.innerHTML=`<div class="ai-coach-err">${escapeHtml(e.message)}</div>`; }
 }
 function closeLoadPlan(){ document.getElementById('lp-ov').classList.remove('show'); }
+
+// ════════ COACHES WORKING TOGETHER ════════
+// A coach connects with a colleague (both sides consent), and can then share an
+// individual client or a whole group with them at one of two access levels.
+// 'full' is an equal coach; 'read' sees everything but changes nothing — that
+// restriction is enforced in the database, not just hidden in this UI.
+let myPeers=[];
+async function loadPeers(){
+  myPeers=[];
+  try{ const {data}=await sb.rpc('my_peers'); myPeers=data||[]; }catch(e){}
+  renderPeerList(); fillPeerSelect('cc-peer'); fillPeerSelect('gs-peer');
+  return myPeers;
+}
+function activePeers(){ return myPeers.filter(p=>p.status==='active'); }
+function fillPeerSelect(id){
+  const sel=document.getElementById(id); if(!sel) return;
+  const list=activePeers();
+  sel.innerHTML = list.length
+    ? list.map(p=>`<option value="${p.peer_id}">${escapeHtml(p.name||'Coach')}</option>`).join('')
+    : '<option value="">No connected colleagues</option>';
+}
+function renderPeerList(){
+  const box=document.getElementById('peer-list'); if(!box) return;
+  if(!myPeers.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted)">No colleagues connected yet.</div>'; return; }
+  box.innerHTML=myPeers.filter(p=>p.status!=='declined').map(p=>{
+    const pend=p.status==='pending';
+    const act = pend
+      ? (p.i_invited
+          ? '<span class="cc-tag">invite sent</span>'
+          : `<button class="btn btn-primary btn-sm" onclick="respondPeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'),true)">Accept</button>
+             <button class="fx-del" onclick="respondPeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'),false)" aria-label="Decline"><i class="ti ti-x"></i></button>`)
+      : `<button class="fx-del" onclick="removePeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'))" aria-label="Disconnect"><i class="ti ti-trash"></i></button>`;
+    return `<div class="fx-row"><div><div class="fx-opp">${escapeHtml(p.name||'Coach')}</div>
+      <div class="fx-when">${pend?(p.i_invited?'Waiting for them to accept':'Wants to connect with you'):'Connected'}</div></div>
+      <div style="display:flex;gap:6px;align-items:center">${act}</div></div>`;
+  }).join('')||'<div style="font-size:12px;color:var(--muted)">No colleagues connected yet.</div>';
+}
+async function invitePeer(){
+  const el=document.getElementById('peer-add-email');
+  const email=((el||{}).value||'').trim();
+  if(!email){ showToast('Enter their email'); return; }
+  // Resolve the email through the existing lookup, which only approved coaches may call.
+  let uid=null;
+  try{
+    const {data,error}=await sb.rpc('coach_lookup_by_email',{p_email:email});
+    if(error) throw error; uid=data;
+  }catch(e){ showToast(e.message||'Could not find that coach'); return; }
+  if(!uid){ showToast('No ÍslandFit coach with that email'); return; }
+  const {error}=await sb.from('coach_peers').insert({requester_id:currentUser.id,peer_id:uid});
+  if(error){ showToast(/duplicate|unique/i.test(error.message)?'Already connected or invited':(error.message||'Could not connect')); return; }
+  if(el) el.value='';
+  await loadPeers(); showToast('Invitation sent');
+}
+async function respondPeer(peerId,accept){
+  const {error}=await sb.from('coach_peers')
+    .update({status:accept?'active':'declined'})
+    .eq('requester_id',peerId).eq('peer_id',currentUser.id);
+  if(error){ showToast('Could not respond'); return; }
+  await loadPeers(); showToast(accept?'Connected':'Declined');
+}
+async function removePeer(peerId){
+  if(!confirm('Disconnect from this coach? Clients you shared with them stay shared until you remove those separately.')) return;
+  const {error}=await sb.from('coach_peers').delete()
+    .or(`and(requester_id.eq.${currentUser.id},peer_id.eq.${peerId}),and(requester_id.eq.${peerId},peer_id.eq.${currentUser.id})`);
+  if(error){ showToast('Could not disconnect'); return; }
+  await loadPeers(); showToast('Disconnected');
+}
+
+// ── Co-coaches on one client ──
+async function loadClientCoaches(clientId){
+  const box=document.getElementById('cc-list'); if(!box) return;
+  let rows=[];
+  try{ const {data}=await sb.rpc('client_coaches',{p_client:clientId}); rows=data||[]; }catch(e){}
+  box.innerHTML = rows.length ? rows.map(c=>{
+    const me=c.coach_id===currentUser.id;
+    const tag=c.access==='read'?'<span class="cc-tag read">read-only</span>':'<span class="cc-tag">full</span>';
+    const del=(!me && c.source==='cocoach')
+      ? `<button class="fx-del" onclick="removeCoCoach(decodeURIComponent('${encodeURIComponent(c.coach_id)}'))" aria-label="Remove"><i class="ti ti-trash"></i></button>` : '';
+    return `<div class="fx-row"><div><div class="fx-opp">${escapeHtml(c.name||'Coach')}${me?' (you)':''} ${tag}</div></div>${del}</div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--muted)">Just you.</div>';
+}
+async function addCoCoach(){
+  if(!viewingClient) return;
+  const peer=(document.getElementById('cc-peer')||{}).value||'';
+  if(!peer){ showToast('Connect with a colleague first'); return; }
+  const access=(document.getElementById('cc-access')||{}).value||'full';
+  const {data,error}=await sb.rpc('coach_add_cocoach',{p_client:viewingClient.client_id,p_peer:peer,p_access:access});
+  if(error){ showToast(error.message||'Could not share'); return; }
+  loadClientCoaches(viewingClient.client_id);
+  showToast('Shared with '+(data||'coach'));
+}
+async function removeCoCoach(peerId){
+  if(!viewingClient) return;
+  if(!confirm('Remove this coach from the client?')) return;
+  const {error}=await sb.rpc('coach_remove_cocoach',{p_client:viewingClient.client_id,p_peer:peerId});
+  if(error){ showToast(error.message||'Could not remove'); return; }
+  loadClientCoaches(viewingClient.client_id); showToast('Removed');
+}
+
+// ── The athlete's own view of who can see their data ──
+async function renderMyCoaches(){
+  const box=document.getElementById('my-coaches'); if(!box) return;
+  let rows=[];
+  try{ const {data}=await sb.rpc('my_coaches'); rows=data||[]; }catch(e){}
+  box.innerHTML = rows.length ? rows.map(c=>{
+    const tag=c.access==='read'?'<span class="cc-tag read">read-only</span>':'<span class="cc-tag">full access</span>';
+    return `<div class="fx-row"><div><div class="fx-opp">${escapeHtml(c.name||'Coach')} ${tag}</div>
+      <div class="fx-when">since ${String(c.since||'').slice(0,10)}</div></div></div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--muted)">No coach has access to your data.</div>';
+}
 
 // ── COACH SIDE of the match calendar (per client, inside the client detail view) ──
 let coachFixtures=[];
@@ -3059,6 +3195,7 @@ async function onLogin(user){
   await loadAdjustments();
   await loadFixtures();
   renderFixtures();
+  renderMyCoaches();
   updateHomeUI();
   renderAIPreview();
   maybeOfferEaseBack();
@@ -4434,6 +4571,7 @@ let viewingClient = null;
 
 async function loadCoachScreen(){
   document.getElementById('coach-clients-list').innerHTML = '<div style="color:var(--muted);font-size:14px;text-align:center;padding:24px">Loading...</div>';
+  loadPeers();
   // Load invite codes
   const {data:invites} = await sb.from('coach_invites').select('*').eq('coach_id', currentUser.id).eq('active', true).order('created_at',{ascending:false}).limit(1);
   if(invites && invites.length){
@@ -4623,6 +4761,7 @@ async function openClientDetail(clientId){
   // Peak date
   const peakEl = document.getElementById('coach-peak-date'); if(peakEl) peakEl.value = p.peak_date || '';
   loadCoachFixtures(clientId);
+  loadClientCoaches(clientId);
   // Notes
   document.getElementById('coach-client-notes').value = p.coach_notes || '';
   // Workouts + adherence + RPE + session notes (all in parallel)
