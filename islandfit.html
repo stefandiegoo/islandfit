@@ -1321,10 +1321,6 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,.10),tr
     <div id="peak-info" style="font-size:12px;color:var(--muted);margin-top:8px">No peak date set — using a repeating 4-week wave.</div>
   </div>
   <div class="settings-section">
-    <h3>Company</h3>
-    <div id="company-box"></div>
-  </div>
-  <div class="settings-section">
     <h3>Who can see my data</h3>
     <div id="my-coaches"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px">Your coach can bring in a colleague. Everyone with access is listed here.</div>
@@ -2316,65 +2312,6 @@ async function removeCoCoach(peerId){
   loadClientCoaches(viewingClient.client_id); showToast('Removed');
 }
 
-// ── COMPANY MEMBERSHIP (employee side) ──
-// The employer sees the roster and aggregate numbers only — never an
-// individual's training. That promise is enforced in the database; this panel
-// exists so the employee can see it stated plainly rather than take it on trust.
-let myCompanies=[];
-async function loadMyCompanies(){
-  myCompanies=[];
-  try{ const {data}=await sb.rpc('my_companies'); myCompanies=data||[]; }catch(e){}
-  renderCompanyBox();
-  return myCompanies;
-}
-function renderCompanyBox(){
-  const box=document.getElementById('company-box'); if(!box) return;
-  const join=`<div class="fx-form" style="grid-template-columns:1fr auto">
-      <input type="text" id="company-code" placeholder="Company code (FYRIR-XXXXX)" aria-label="Company code">
-      <button class="btn btn-ghost btn-sm" onclick="joinCompany()">Join</button>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">If your employer offers ÍslandFit, paste their code here.</div>`;
-  if(!myCompanies.length){ box.innerHTML=join; return; }
-  box.innerHTML = myCompanies.map(c=>`
-    <div class="fx-row" style="display:block">
-      <div class="fx-opp">${escapeHtml(c.name||'Company')}${c.department?` <span class="cc-tag">${escapeHtml(c.department)}</span>`:''}</div>
-      <div class="fx-when" style="margin-top:4px">Member since ${String(c.joined_at||'').slice(0,10)}</div>
-      <div style="font-size:11.5px;color:var(--text-soft);margin-top:8px;line-height:1.5">
-        Your employer sees <b style="color:var(--text)">how many people take part and how active the group is overall</b> —
-        never your workouts, weights or injuries, and never your name next to a number.
-      </div>
-      <label class="fx-toggle" style="margin-top:10px">
-        <input type="checkbox" ${c.on_leaderboard?'checked':''}
-               onchange="setCompanyLeaderboard(decodeURIComponent('${encodeURIComponent(c.company_id)}'),this.checked)">
-        Show my name on the company leaderboard
-      </label>
-      <button class="ai-ask-link" style="margin-top:10px" onclick="leaveCompany(decodeURIComponent('${encodeURIComponent(c.company_id)}'))">Leave ${escapeHtml(c.name||'company')}</button>
-    </div>`).join('') + join;
-}
-async function joinCompany(){
-  const el=document.getElementById('company-code');
-  const code=((el||{}).value||'').trim();
-  if(!code){ showToast('Enter the code'); return; }
-  const {data,error}=await sb.rpc('redeem_company_invite',{p_code:code});
-  if(error){ showToast(error.message||'Could not join'); return; }
-  if(el) el.value='';
-  await loadMyCompanies(); showToast('Joined '+(data||'your company'));
-}
-async function setCompanyLeaderboard(cid,on){
-  const {error}=await sb.from('company_members').update({show_on_leaderboard:on})
-    .eq('company_id',cid).eq('user_id',currentUser.id);
-  if(error){ showToast('Could not save'); return; }
-  await loadMyCompanies();
-  showToast(on?'You are on the leaderboard':'Removed from the leaderboard');
-}
-async function leaveCompany(cid){
-  if(!confirm('Leave this company? Your training data stays yours and is unaffected.')) return;
-  const {error}=await sb.from('company_members').update({status:'left'})
-    .eq('company_id',cid).eq('user_id',currentUser.id);
-  if(error){ showToast('Could not leave'); return; }
-  await loadMyCompanies(); showToast('You have left the company');
-}
-
 // ── The athlete's own view of who can see their data ──
 async function renderMyCoaches(){
   const box=document.getElementById('my-coaches'); if(!box) return;
@@ -3259,7 +3196,6 @@ async function onLogin(user){
   await loadFixtures();
   renderFixtures();
   renderMyCoaches();
-  loadMyCompanies();
   updateHomeUI();
   renderAIPreview();
   maybeOfferEaseBack();

@@ -1,14 +1,13 @@
 // ÍslandFit service worker — offline app shell + installability.
 // Strategy: never touch Supabase (always network); navigations are network-first
 // (so the app always updates after a deploy); static CDN assets are cache-first.
-const CACHE = 'islandfit-v34';
+const CACHE = 'islandfit-v36';
 const SHELL = [
   './',
   './index.html',
   './islandfit.html',
   './coaches.html',
   './dashboard.html',
-  './company.html',
   './privacy.html',
   './terms.html',
   './icon-192.png',

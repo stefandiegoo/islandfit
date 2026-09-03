@@ -104,6 +104,8 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 
 /* ── DETAIL ── */
 .detail-empty{text-align:center;color:var(--muted);padding:80px 20px;font-size:15px}
+.cc-tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:1px 5px;vertical-align:1px}
+.cc-tag.read{border-color:var(--muted2);color:var(--muted2)}
 .dstat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:20px}
 .dstat{background:var(--surface2);border-radius:12px;padding:14px 10px;text-align:center}
 .dstat-num{font-size:20px;font-weight:800;line-height:1}
@@ -330,6 +332,19 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
           <button class="btn btn-primary btn-block" onclick="saveExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
           <div id="ed-list" style="margin-top:10px"></div>
         </div>
+        <div class="panel" id="org-panel">
+          <div class="panel-title">Organisation <span style="text-transform:none;color:var(--muted2);font-weight:600">· your gym, club or coaching business</span></div>
+          <div id="org-body"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Colleagues <span style="text-transform:none;color:var(--muted2);font-weight:600">· coaches you work with</span></div>
+          <div class="row-gap" style="margin-bottom:10px">
+            <input id="peer-email" class="sel" style="flex:1" placeholder="coach@email.com">
+            <button class="btn btn-ghost" style="padding:12px 16px" onclick="invitePeerDash()">Connect</button>
+          </div>
+          <div id="peer-list-dash"></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">Coaches in the same organisation are colleagues automatically — you only need this for someone outside it.</div>
+        </div>
         <div class="panel">
           <div class="panel-title">Groups <span style="text-transform:none;color:var(--muted2);font-weight:600">· bulk-assign, leaderboard, chat</span></div>
           <div class="row-gap" style="margin-bottom:10px"><input id="grp-name" class="sel" style="flex:1" placeholder="New group (e.g. Competition squad)"><button class="btn btn-primary" style="padding:12px 16px" onclick="createGroup()"><i class="ti ti-plus"></i></button></div>
@@ -531,6 +546,8 @@ async function loadAll(){
   $('client-list').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Loading...</div>';
   // Invite code
   loadInvite();
+  loadOrgs();
+  loadPeersDash();
   // Links + profiles
   const {data:links} = await sb.from('coach_clients').select('client_id,status,source,created_at').eq('coach_id', me_.id).order('created_at',{ascending:false});
   const ids = (links||[]).map(l=>l.client_id);
@@ -653,6 +670,196 @@ async function renderGroupModal(){
   loadGroupStaff();
   loadGroupMessages();
 }
+// ════════ ORGANISATION — a gym, club or coaching business ════════
+// The coaches who work there are its members. Two coaches in the same
+// organisation are colleagues automatically (are_peers() checks same_org), so
+// every co-coaching and group-sharing path already built works between them
+// without anyone sending an invitation.
+let myOrgs=[], orgCur=null, orgTeams=[], orgRosterCache=[];
+
+async function loadOrgs(){
+  const {data}=await sb.rpc('my_orgs');
+  myOrgs=data||[];
+  if(myOrgs.length && !myOrgs.some(o=>o.org_id===orgCur)) orgCur=myOrgs[0].org_id;
+  await renderOrg();
+}
+function orgMine(){ return myOrgs.find(o=>o.org_id===orgCur)||null; }
+function orgIsAdmin(){ const o=orgMine(); return !!o && (o.role==='owner'||o.role==='admin'); }
+
+async function renderOrg(){
+  const box=$('org-body'); if(!box) return;
+  if(!myOrgs.length){
+    box.innerHTML=`
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Create one for your gym or club, or join with a code from whoever runs it.</div>
+      <div class="row-gap" style="margin-bottom:8px">
+        <input id="org-new-name" class="sel" style="flex:1" placeholder="Name (e.g. Kraftlyftingafélagið)">
+        <input id="org-new-seats" class="sel" style="width:110px" placeholder="Seats" type="number" min="1">
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-bottom:14px" onclick="createOrg()"><i class="ti ti-building"></i> Create organisation</button>
+      <div class="row-gap">
+        <input id="org-join-code" class="sel" style="flex:1" placeholder="TEAM-XXXXX">
+        <button class="btn btn-ghost" style="padding:12px 16px" onclick="joinOrg()">Join</button>
+      </div>`;
+    return;
+  }
+  const o=orgMine();
+  const seats = o.seats==null ? `${o.seats_used} coaches` : `${o.seats_used} / ${o.seats} seats`;
+  const full = o.seats!=null && Number(o.seats_used)>=Number(o.seats);
+  const [{data:roster},{data:teams}]=await Promise.all([
+    sb.rpc('org_roster',{p_org:orgCur}), sb.rpc('org_team_list',{p_org:orgCur})
+  ]);
+  orgRosterCache=roster||[]; orgTeams=teams||[];
+  const switcher = myOrgs.length>1
+    ? `<select class="sel" style="width:100%;margin-bottom:10px" onchange="orgCur=this.value;renderOrg()">${myOrgs.map(x=>`<option value="${x.org_id}"${x.org_id===orgCur?' selected':''}>${esc(x.name)}</option>`).join('')}</select>` : '';
+  box.innerHTML = switcher + `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:800">${esc(o.name)}</div>
+      <span class="cc-tag">${esc(o.role)}</span>
+    </div>
+    <div style="font-size:12px;color:${full?'var(--lava-1)':'var(--muted)'};margin-bottom:12px">${seats}${full?' · full':''}</div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Coaches</div>
+    <div style="margin-bottom:14px">${(orgRosterCache||[]).map(r=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-size:13px;font-weight:600">${esc(r.name||'Coach')} <span class="cc-tag">${esc(r.role)}</span></div>
+          <div style="font-size:11px;color:var(--muted)">${r.clients} client${Number(r.clients)===1?'':'s'}</div></div>
+        ${orgIsAdmin()&&r.user_id!==me_.id?`<button class="mini-btn" onclick="removeOrgMember('${r.user_id}')"><i class="ti ti-x"></i></button>`:''}
+      </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">Just you.</div>'}</div>
+
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Teams</div>
+    <div style="margin-bottom:10px">${(orgTeams||[]).map(t=>`
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:13px;font-weight:700">${esc(t.name)}</div>
+            <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}</div></div>
+          <button class="mini-btn" onclick="toggleTeam('${t.team_id}')"><i class="ti ti-chevron-down"></i></button>
+        </div>
+        <div id="team-${t.team_id}" class="hidden" style="margin-top:8px"></div>
+      </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No teams yet.</div>'}</div>
+    ${orgIsAdmin()?`<div class="row-gap" style="margin-bottom:14px">
+      <input id="team-new" class="sel" style="flex:1" placeholder="New team (e.g. Strength staff)">
+      <button class="btn btn-ghost" style="padding:12px 16px" onclick="createTeam()"><i class="ti ti-plus"></i></button></div>`:''}
+
+    ${orgIsAdmin()?`<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Invite a coach</div>
+      <div class="row-gap" style="margin-bottom:8px">
+        <select id="org-inv-role" class="sel" style="flex:1"><option value="coach">Coach</option><option value="admin">Admin</option></select>
+        <button class="btn btn-primary" style="padding:12px 16px" onclick="newOrgInvite()">Create code</button>
+      </div><div id="org-invites"></div>`:''}`;
+  if(orgIsAdmin()) loadOrgInvites();
+}
+
+async function createOrg(){
+  const name=($('org-new-name')||{}).value?.trim();
+  const seats=parseInt(($('org-new-seats')||{}).value)||null;
+  if(!name){ toast('Name the organisation'); return; }
+  const {error}=await sb.rpc('org_create',{p_name:name,p_seats:seats});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Organisation created'); loadOrgs();
+}
+async function joinOrg(){
+  const code=($('org-join-code')||{}).value?.trim();
+  if(!code){ toast('Enter the code'); return; }
+  const {data,error}=await sb.rpc('redeem_org_invite',{p_code:code});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Joined '+(data||'the organisation')); loadOrgs();
+}
+async function loadOrgInvites(){
+  const box=$('org-invites'); if(!box) return;
+  const {data}=await sb.from('org_invites').select('*').eq('org_id',orgCur).eq('active',true).order('created_at',{ascending:false});
+  box.innerHTML=(data||[]).map(r=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-family:ui-monospace,monospace;font-size:14px;font-weight:700;color:var(--accent)">${esc(r.code)}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(r.role)} · used ${r.used_count}</div></div>
+      <div class="row-gap">
+        <button class="mini-btn" onclick="navigator.clipboard.writeText('${esc(r.code)}').then(()=>toast('Copied'))"><i class="ti ti-copy"></i></button>
+        <button class="mini-btn" onclick="killOrgInvite('${r.id}')"><i class="ti ti-x"></i></button></div>
+    </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No active codes.</div>';
+}
+async function newOrgInvite(){
+  const role=($('org-inv-role')||{}).value||'coach';
+  const {data,error}=await sb.rpc('org_create_invite',{p_org:orgCur,p_role:role});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Code: '+data); loadOrgInvites();
+}
+async function killOrgInvite(id){ await sb.from('org_invites').update({active:false}).eq('id',id); loadOrgInvites(); }
+async function removeOrgMember(uid){
+  if(!confirm('Remove this coach from the organisation? Clients they hold stay with them.')) return;
+  const {error}=await sb.from('org_members').update({status:'left'}).eq('org_id',orgCur).eq('user_id',uid);
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Removed'); renderOrg();
+}
+async function createTeam(){
+  const name=($('team-new')||{}).value?.trim(); if(!name){ toast('Name the team'); return; }
+  const {error}=await sb.from('org_teams').insert({org_id:orgCur,name,created_by:me_.id});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Team created'); renderOrg();
+}
+async function toggleTeam(tid){
+  const box=$('team-'+tid); if(!box) return;
+  if(!box.classList.contains('hidden')){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const {data:members}=await sb.rpc('team_coaches',{p_team:tid});
+  const inTeam=new Set((members||[]).map(m=>m.user_id));
+  const avail=(orgRosterCache||[]).filter(r=>!inTeam.has(r.user_id));
+  box.innerHTML=`${(members||[]).map(m=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px 9px;margin:0 5px 5px 0;font-size:11.5px">${esc(m.name||'Coach')} ${orgIsAdmin()?`<button class="mini-btn" style="padding:1px 4px" onclick="removeFromTeam('${tid}','${m.user_id}')"><i class="ti ti-x"></i></button>`:''}</span>`).join('')||'<span style="font-size:11.5px;color:var(--muted)">No coaches on this team.</span>'}
+    ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:8px">
+      <select id="team-add-${tid}" class="sel" style="flex:1">${avail.map(r=>`<option value="${r.user_id}">${esc(r.name||'Coach')}</option>`).join('')}</select>
+      <button class="btn btn-ghost" style="padding:10px 14px" onclick="addToTeam('${tid}')">Add</button></div>`:''}`;
+}
+async function addToTeam(tid){
+  const sel=$('team-add-'+tid); if(!sel||!sel.value) return;
+  const {error}=await sb.from('org_team_members').insert({team_id:tid,user_id:sel.value});
+  if(error){ toast('Error: '+error.message); return; }
+  toggleTeam(tid); toggleTeam(tid); renderOrg();
+}
+async function removeFromTeam(tid,uid){
+  const {error}=await sb.from('org_team_members').delete().eq('team_id',tid).eq('user_id',uid);
+  if(error){ toast('Error: '+error.message); return; }
+  toggleTeam(tid); toggleTeam(tid); renderOrg();
+}
+
+// ── Colleagues, on the coach website ──
+let peersDash=[];
+async function loadPeersDash(){
+  const {data}=await sb.rpc('my_peers');
+  peersDash=data||[];
+  const box=$('peer-list-dash'); if(!box) return;
+  box.innerHTML=peersDash.filter(p=>p.status!=='declined').map(p=>{
+    const pend=p.status==='pending';
+    const act=pend
+      ? (p.i_invited ? '<span class="cc-tag">invite sent</span>'
+        : `<button class="btn btn-primary" style="padding:7px 12px;font-size:12px" onclick="respondPeerDash('${p.peer_id}',true)">Accept</button>
+           <button class="mini-btn" onclick="respondPeerDash('${p.peer_id}',false)"><i class="ti ti-x"></i></button>`)
+      : `<button class="mini-btn" onclick="removePeerDash('${p.peer_id}')"><i class="ti ti-trash"></i></button>`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:13px;font-weight:600">${esc(p.name||'Coach')}</div>
+        <div style="font-size:11px;color:var(--muted)">${pend?(p.i_invited?'Waiting for them to accept':'Wants to connect with you'):'Connected'}</div></div>
+      <div class="row-gap">${act}</div></div>`;
+  }).join('')||'<div style="font-size:12px;color:var(--muted)">No colleagues connected yet.</div>';
+}
+async function invitePeerDash(){
+  const email=($('peer-email')||{}).value?.trim();
+  if(!email){ toast('Enter their email'); return; }
+  const {data:uid,error:e1}=await sb.rpc('coach_lookup_by_email',{p_email:email});
+  if(e1){ toast(e1.message); return; }
+  if(!uid){ toast('No ÍslandFit coach with that email'); return; }
+  const {error}=await sb.from('coach_peers').insert({requester_id:me_.id,peer_id:uid});
+  if(error){ toast(/duplicate|unique/i.test(error.message)?'Already connected or invited':error.message); return; }
+  $('peer-email').value=''; toast('Invitation sent'); loadPeersDash();
+}
+async function respondPeerDash(pid,accept){
+  const {error}=await sb.from('coach_peers').update({status:accept?'active':'declined'})
+    .eq('requester_id',pid).eq('peer_id',me_.id);
+  if(error){ toast('Error: '+error.message); return; }
+  toast(accept?'Connected':'Declined'); loadPeersDash();
+}
+async function removePeerDash(pid){
+  if(!confirm('Disconnect from this coach?')) return;
+  await sb.from('coach_peers').delete()
+    .or(`and(requester_id.eq.${me_.id},peer_id.eq.${pid}),and(requester_id.eq.${pid},peer_id.eq.${me_.id})`);
+  loadPeersDash();
+}
+
 // ── Coaches sharing a group ──
 // The owner adds a connected colleague at full or read-only access; the
 // database enforces the difference, this only reflects it.
@@ -993,6 +1200,12 @@ async function renderDetail(){
       </div>
     </div>
 
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:8px">Coaches on this client</div>
+      <div id="dc-coaches" style="margin-bottom:8px"></div>
+      <div id="dc-share"></div>
+    </div>
+
     <div class="dstat-row">
       <div class="dstat"><div class="dstat-num">${c.workouts.length}</div><div class="dstat-lbl">Workouts</div></div>
       <div class="dstat"><div class="dstat-num" style="color:${adhCol}">${c.adherence}%</div><div class="dstat-lbl">Adherence</div></div>
@@ -1076,6 +1289,61 @@ async function renderDetail(){
   renderBody();
   renderNutrition();
   renderLifestyle();
+  renderClientCoaches();
+}
+
+// ── Who else coaches this client, and sharing them with a colleague or a team ──
+// Colleagues here are anyone are_peers() accepts, which now includes everyone in
+// the same organisation — so an org's coaches appear without an invitation.
+async function renderClientCoaches(){
+  const box=$('dc-coaches'), share=$('dc-share');
+  if(!box||!selected) return;
+  const cid=selected.client_id;
+  const [{data:coaches},{data:peers}]=await Promise.all([
+    sb.rpc('client_coaches',{p_client:cid}),
+    sb.rpc('my_peers')
+  ]);
+  const on=new Set((coaches||[]).map(c=>c.coach_id));
+  box.innerHTML=(coaches||[]).map(c=>{
+    const me=c.coach_id===me_.id;
+    const tag=c.access==='read'?'<span class="cc-tag read">read-only</span>':'<span class="cc-tag">full</span>';
+    const del=(!me && c.source==='cocoach')
+      ? `<button class="mini-btn" onclick="removeClientCoach('${c.coach_id}')"><i class="ti ti-x"></i></button>` : '';
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:5px 10px;margin:0 6px 6px 0;font-size:12px">${esc(c.name||'Coach')}${me?' (you)':''} ${tag} ${del}</span>`;
+  }).join('')||'<span style="font-size:12px;color:var(--muted)">Just you.</span>';
+
+  const avail=(peers||[]).filter(p=>p.status==='active' && !on.has(p.peer_id));
+  const teams=(orgTeams||[]);
+  share.innerHTML = `
+    ${avail.length?`<div class="row-gap" style="margin-bottom:6px">
+      <select id="dc-peer" class="sel" style="flex:1">${avail.map(p=>`<option value="${p.peer_id}">${esc(p.name||'Coach')}</option>`).join('')}</select>
+      <select id="dc-access" class="sel"><option value="full">Full</option><option value="read">Read-only</option></select>
+      <button class="btn btn-ghost" style="padding:12px 16px" onclick="shareClientWithCoach()">Share</button></div>`
+      : '<div style="font-size:11.5px;color:var(--muted)">No colleagues available to share with.</div>'}
+    ${teams.length?`<div class="row-gap">
+      <select id="dc-team" class="sel" style="flex:1">${teams.map(t=>`<option value="${t.team_id}">${esc(t.name)} · ${t.coaches} coach${Number(t.coaches)===1?'':'es'}</option>`).join('')}</select>
+      <select id="dc-team-access" class="sel"><option value="full">Full</option><option value="read">Read-only</option></select>
+      <button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="shareClientWithTeam()">Share with team</button></div>`:''}`;
+}
+async function shareClientWithCoach(){
+  const peer=($('dc-peer')||{}).value, access=($('dc-access')||{}).value||'full';
+  if(!peer) return;
+  const {data,error}=await sb.rpc('coach_add_cocoach',{p_client:selected.client_id,p_peer:peer,p_access:access});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Shared with '+(data||'coach')); renderClientCoaches();
+}
+async function shareClientWithTeam(){
+  const team=($('dc-team')||{}).value, access=($('dc-team-access')||{}).value||'full';
+  if(!team) return;
+  const {data,error}=await sb.rpc('share_client_with_team',{p_client:selected.client_id,p_team:team,p_access:access});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Shared with '+(data||0)+' coach'+(Number(data)===1?'':'es')); renderClientCoaches();
+}
+async function removeClientCoach(pid){
+  if(!confirm('Remove this coach from the client?')) return;
+  const {error}=await sb.rpc('coach_remove_cocoach',{p_client:selected.client_id,p_peer:pid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Removed'); renderClientCoaches();
 }
 
 // ── CLIENT PROGRESS REPORT (printable / shareable summary) ──
