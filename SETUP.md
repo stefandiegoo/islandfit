@@ -222,3 +222,44 @@ blocked, so the UI matches what the database will actually allow.
 2. A `FOR ALL` policy checks only `USING` on DELETE. A single policy with
    `using(is_group_coach)` + `with check(is_group_editor)` let a read-only coach
    delete group members. The member policies are split per command for this reason.
+
+---
+
+## 11. Corporate accounts
+
+Run `migrations/22_companies.sql`. HR uses **company.html**; employees see a
+Company section in the app's settings.
+
+### The privacy line — this is the whole design
+Training data is a special category under GDPR art. 9 and lög nr. 90/2018, and
+in an employment relationship consent is legally weak because an employee cannot
+freely refuse their employer. So the employer's view is built to be *incapable*
+of showing individual health data, not merely configured not to:
+
+| HR can see | HR can never see |
+|---|---|
+| Roster: name, department, join date | Any workout, weight, injury or record |
+| Participation %, total sessions, average activity | Any named person's activity — not even "last active" |
+| Per-department aggregates | Anything for a group of fewer than 5 |
+
+`company_roster()` deliberately has **no activity column**. `company_stats()` and
+`company_department_stats()` suppress below **5 participants**, because a
+three-person department's average is one person's data with a hat on; they return
+a `suppressed` flag so the UI explains the gap instead of showing a misleading zero.
+Leaderboards are **opt-in per employee** (`show_on_leaderboard`, default false),
+since a ranked list of names is itself identifying, and they are readable by
+fellow employees — not by HR.
+
+Verified by test rather than asserted: with an employee carrying seeded workouts,
+body metrics and an injury note, HR reading `workouts`, `workout_sets`,
+`body_metrics`, `personal_records` and `profiles` for that employee returns
+**zero rows** every time.
+
+### Joining
+HR generates a code (`FYRIR-XXXXX`, optionally tied to a department) and the
+employee pastes it into Settings → Company. Same shape as the coach invite code.
+
+### Coaching
+Runs through the coach collaboration in section 10: the company attaches a coach
+to a group, the coach sees individuals with the athlete's own consent, HR still
+sees only aggregates. Responsibility stays separated.

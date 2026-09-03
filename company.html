@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0e0c0b">
+<title>ÍslandFit · Fyrirtæki</title>
+<meta name="description" content="Stjórnborð fyrirtækja í ÍslandFit — þátttaka og virkni starfsmanna í samtölum.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0e0c0b; --surface:#1b1817; --surface2:#242020; --border:#2a2521;
+  --aurora-1:#19f0a8; --aurora-2:#2bd6ee; --aurora-3:#a78bfa;
+  --lava-1:#ff5421; --amber:#f5a623;
+  --text:#f6f2ef; --text-soft:#cdc4bd; --muted:#978c84; --accent:var(--lava-1);
+}
+html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+button{cursor:pointer;font-family:inherit;border:none;background:none;color:inherit}
+input,select{font-family:inherit}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at 12% 0%,rgba(0,255,163,.08),transparent 45%),radial-gradient(ellipse at 88% 5%,rgba(167,139,250,.06),transparent 45%)}
+.hidden{display:none!important}
+.gradient{background:linear-gradient(135deg,var(--aurora-1),var(--aurora-2),var(--aurora-3));-webkit-background-clip:text;background-clip:text;color:transparent}
+.wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:26px 20px 80px}
+.login-wrap{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:40px 32px;width:100%;max-width:420px}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:34px;line-height:.95;text-transform:uppercase}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-bottom:6px}
+.field input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:13px 14px;border-radius:11px;font-size:15px}
+.field input:focus{outline:none;border-color:var(--accent)}
+.btn{padding:13px 18px;border-radius:11px;font-size:14px;font-weight:700}
+.btn-primary{background:var(--accent);color:#160702}
+.btn-ghost{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:26px 0 10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.stat .n{font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent)}
+.stat .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--border)}
+td{padding:10px;border-bottom:1px solid var(--border);color:var(--text-soft)}
+tr:last-child td{border-bottom:none}
+.tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 6px}
+.privacy{background:rgba(25,240,168,.06);border:1px solid rgba(25,240,168,.28);border-radius:14px;padding:16px 18px;font-size:13px;color:var(--text-soft);line-height:1.6}
+.privacy b{color:var(--text)}
+.suppressed{color:var(--amber);font-size:12px}
+.row-gap{display:flex;gap:10px;flex-wrap:wrap}
+.sel{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:12px 13px;border-radius:10px;font-size:14px}
+.code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:19px;font-weight:700;color:var(--accent);letter-spacing:.06em}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 18px;font-size:13.5px;z-index:99;opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+.muted{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login-wrap">
+  <div class="login-card">
+    <div class="logo" style="text-align:center"><span class="gradient">ÍSLAND</span>FIT</div>
+    <div style="text-align:center;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:6px 0 22px">Fyrirtækjaaðgangur</div>
+    <div class="field"><label>Netfang</label><input type="email" id="email" autocomplete="username"></div>
+    <div class="field"><label>Lykilorð</label><input type="password" id="pw" autocomplete="current-password"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="signIn()">Skrá inn</button>
+    <div id="login-err" style="color:var(--lava-1);font-size:12.5px;margin-top:12px;text-align:center"></div>
+    <div class="muted" style="margin-top:18px;text-align:center">Notaðu sama reikning og í appinu.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="wrap hidden">
+  <div class="top">
+    <div>
+      <div class="logo"><span class="gradient">ÍSLAND</span>FIT</div>
+      <div class="muted" id="who"></div>
+    </div>
+    <div class="row-gap">
+      <select id="company-sel" class="sel" onchange="loadAll()"></select>
+      <select id="range" class="sel" onchange="loadAll()">
+        <option value="30">Síðustu 30 daga</option>
+        <option value="7">Síðustu 7 daga</option>
+        <option value="90">Síðustu 90 daga</option>
+      </select>
+      <button class="btn btn-ghost" onclick="signOut()">Útskrá</button>
+    </div>
+  </div>
+
+  <!-- No company yet -->
+  <div id="none" class="card hidden">
+    <div style="font-size:16px;font-weight:800;margin-bottom:6px">Stofna fyrirtæki</div>
+    <div class="muted" style="margin-bottom:16px">Þú verður stjórnandi þess og færð boðskóða fyrir starfsfólkið.</div>
+    <div class="field"><label>Nafn fyrirtækis</label><input type="text" id="new-name" placeholder="Fyrirtæki ehf."></div>
+    <div class="field"><label>Kennitala (valfrjálst)</label><input type="text" id="new-kt" placeholder="000000-0000"></div>
+    <div class="field"><label>Tengiliður (valfrjálst)</label><input type="email" id="new-contact" placeholder="hr@fyrirtaeki.is"></div>
+    <button class="btn btn-primary" onclick="createCompany()">Stofna</button>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="privacy">
+      <b>Hvað þú sérð — og hvað ekki.</b><br>
+      Þú sérð hverjir taka þátt og <b>samtölur um virkni hópsins</b>. Þú sérð aldrei æfingar, þyngd,
+      meiðsli eða virkni einstaks starfsmanns — appið getur það ekki, óháð stillingum.
+      Tölur fyrir hóp með <b>færri en 5 þátttakendur eru faldar</b>, því annars mætti lesa einstakling út úr þeim.
+    </div>
+
+    <div class="eyebrow">Yfirlit</div>
+    <div class="stats" id="stats"></div>
+    <div id="stats-note" class="suppressed" style="margin-top:10px"></div>
+
+    <div class="eyebrow">Eftir deildum</div>
+    <div class="card" style="padding:6px 8px"><table id="dept"><tbody></tbody></table></div>
+
+    <div class="eyebrow">Starfsmenn</div>
+    <div class="card" style="padding:6px 8px"><table id="roster"><tbody></tbody></table></div>
+    <div class="muted" style="margin-top:8px">Listinn er starfsmannahald — hann sýnir enga virkni.</div>
+
+    <div class="eyebrow">Boðskóðar</div>
+    <div class="card">
+      <div class="row-gap" style="margin-bottom:14px">
+        <input type="text" id="inv-dept" class="sel" placeholder="Deild (valfrjálst)" style="flex:1;min-width:180px">
+        <button class="btn btn-primary" onclick="newInvite()">Búa til kóða</button>
+      </div>
+      <div id="invites"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPA_URL = 'https://dlizuycilevrekjvltlq.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsaXp1eWNpbGV2cmVranZsdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjY4NDgsImV4cCI6MjA5NDk0Mjg0OH0.FoZzZt12hVCkFr_j0kTVfmgwAbRiONoSh0hSXKf35m4';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let me_=null, companies=[];
+
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+
+async function signIn(){
+  $('login-err').textContent='';
+  const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('pw').value});
+  if(error){ $('login-err').textContent=error.message; return; }
+  boot();
+}
+async function signOut(){ await sb.auth.signOut(); location.reload(); }
+
+async function boot(){
+  const {data:{user}}=await sb.auth.getUser();
+  if(!user){ $('login').classList.remove('hidden'); $('app').classList.add('hidden'); return; }
+  me_=user;
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  const {data:prof}=await sb.from('profiles').select('name').eq('id',user.id).maybeSingle();
+  $('who').textContent=(prof&&prof.name)||user.email;
+  // Only companies where I am an admin — membership alone does not open this page.
+  const {data:adm}=await sb.from('company_admins').select('company_id').eq('user_id',user.id);
+  const ids=(adm||[]).map(a=>a.company_id);
+  if(!ids.length){ companies=[]; $('none').classList.remove('hidden'); $('main').classList.add('hidden'); $('company-sel').classList.add('hidden'); return; }
+  const {data:cs}=await sb.from('companies').select('id,name').in('id',ids).order('name');
+  companies=cs||[];
+  $('company-sel').classList.remove('hidden');
+  $('company-sel').innerHTML=companies.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('none').classList.add('hidden'); $('main').classList.remove('hidden');
+  loadAll();
+}
+
+async function createCompany(){
+  const name=$('new-name').value.trim();
+  if(!name){ toast('Sláðu inn nafn'); return; }
+  const {error}=await sb.rpc('company_create',{p_name:name,p_kennitala:$('new-kt').value.trim()||null,p_contact:$('new-contact').value.trim()||null});
+  if(error){ toast('Villa: '+error.message); return; }
+  toast('Fyrirtæki stofnað'); boot();
+}
+
+function cid(){ return $('company-sel').value; }
+function days(){ return parseInt($('range').value)||30; }
+
+async function loadAll(){
+  if(!cid()) return;
+  const [{data:st},{data:dept},{data:roster},{data:inv}]=await Promise.all([
+    sb.rpc('company_stats',{p_company:cid(),p_days:days()}),
+    sb.rpc('company_department_stats',{p_company:cid(),p_days:days()}),
+    sb.rpc('company_roster',{p_company:cid()}),
+    sb.from('company_invites').select('*').eq('company_id',cid()).eq('active',true).order('created_at',{ascending:false})
+  ]);
+  renderStats((st||[])[0]||{});
+  renderDept(dept||[]);
+  renderRoster(roster||[]);
+  renderInvites(inv||[]);
+}
+
+function renderStats(s){
+  if(s.suppressed){
+    $('stats').innerHTML=`<div class="stat"><div class="n">${s.members??0}</div><div class="l">Skráðir</div></div>`;
+    $('stats-note').textContent='Of fáir þátttakendur til að birta tölur — þær opnast við 5 skráða. Þetta er til að ekki megi lesa einstakling út úr samtölunum.';
+    return;
+  }
+  $('stats-note').textContent='';
+  $('stats').innerHTML=`
+    <div class="stat"><div class="n">${s.members}</div><div class="l">Skráðir</div></div>
+    <div class="stat"><div class="n">${s.active_members}</div><div class="l">Virkir á tímabilinu</div></div>
+    <div class="stat"><div class="n">${s.participation_pct}%</div><div class="l">Þátttaka</div></div>
+    <div class="stat"><div class="n">${s.total_workouts}</div><div class="l">Æfingar alls</div></div>
+    <div class="stat"><div class="n">${s.avg_workouts_per_active}</div><div class="l">Að meðaltali á virkan</div></div>`;
+}
+function renderDept(rows){
+  const b=$('dept').querySelector('tbody');
+  if(!rows.length){ b.innerHTML='<tr><td class="muted">Engar deildir skráðar.</td></tr>'; return; }
+  b.innerHTML='<tr><th>Deild</th><th>Skráðir</th><th>Virkir</th><th>Æfingar að meðaltali</th></tr>'+
+    rows.map(r=>`<tr><td>${esc(r.department)}</td><td>${r.members}</td>`+
+      (r.suppressed
+        ? `<td colspan="2" class="suppressed">falið — færri en 5</td>`
+        : `<td>${r.active_members}</td><td>${r.avg_workouts}</td>`)+`</tr>`).join('');
+}
+function renderRoster(rows){
+  const b=$('roster').querySelector('tbody');
+  if(!rows.length){ b.innerHTML='<tr><td class="muted">Enginn skráður enn — deildu boðskóða.</td></tr>'; return; }
+  b.innerHTML='<tr><th>Nafn</th><th>Deild</th><th>Skráðist</th><th></th></tr>'+
+    rows.map(r=>`<tr><td>${esc(r.name||'—')}</td><td>${r.department?esc(r.department):'<span class="tag">engin</span>'}</td>
+      <td>${String(r.joined_at||'').slice(0,10)}</td>
+      <td style="text-align:right"><button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="removeMember('${r.user_id}')">Fjarlægja</button></td></tr>`).join('');
+}
+function renderInvites(rows){
+  $('invites').innerHTML = rows.length ? rows.map(r=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div><div class="code">${esc(r.code)}</div>
+        <div class="muted">${r.department?esc(r.department)+' · ':''}${r.used_count} notkun${r.used_count===1?'':'ir'}${r.expires_at?' · rennur út '+String(r.expires_at).slice(0,10):''}</div></div>
+      <div class="row-gap">
+        <button class="btn btn-ghost" style="padding:8px 12px;font-size:12px" onclick="copyCode('${esc(r.code)}')">Afrita</button>
+        <button class="btn btn-ghost" style="padding:8px 12px;font-size:12px" onclick="killInvite('${r.id}')">Loka</button>
+      </div>
+    </div>`).join('') : '<div class="muted">Enginn virkur kóði. Búðu til einn og sendu á starfsfólkið.</div>';
+}
+async function newInvite(){
+  const {data,error}=await sb.rpc('company_create_invite',{p_company:cid(),p_department:$('inv-dept').value.trim()||null});
+  if(error){ toast('Villa: '+error.message); return; }
+  $('inv-dept').value=''; toast('Kóði búinn til: '+data); loadAll();
+}
+async function killInvite(id){
+  const {error}=await sb.from('company_invites').update({active:false}).eq('id',id);
+  if(error){ toast('Villa'); return; }
+  loadAll();
+}
+function copyCode(c){ navigator.clipboard.writeText(c).then(()=>toast('Afritað')); }
+async function removeMember(uid){
+  if(!confirm('Fjarlægja þennan starfsmann úr fyrirtækinu? Æfingagögnin hans eru hans eign og haldast óbreytt.')) return;
+  const {error}=await sb.from('company_members').delete().eq('company_id',cid()).eq('user_id',uid);
+  if(error){ toast('Villa: '+error.message); return; }
+  toast('Fjarlægt'); loadAll();
+}
+
+boot();
+</script>
+</body>
+</html>
