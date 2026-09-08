@@ -716,14 +716,17 @@ async function renderOrg(){
       <div style="font-size:15px;font-weight:800">${esc(o.name)}</div>
       <span class="cc-tag">${esc(o.role)}</span>
     </div>
-    <div style="font-size:12px;color:${full?'var(--lava-1)':'var(--muted)'};margin-bottom:12px">${seats}${full?' · full':''}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:12px;color:${full?'var(--lava-1)':'var(--muted)'}">${seats}${full?' · full':''}</div>
+      <button class="mini-btn" style="font-size:11px;padding:3px 8px" onclick="leaveOrg()">Leave</button>
+    </div>
 
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Coaches</div>
     <div style="margin-bottom:14px">${(orgRosterCache||[]).map(r=>`
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
         <div><div style="font-size:13px;font-weight:600">${esc(r.name||'Coach')} <span class="cc-tag">${esc(r.role)}</span></div>
           <div style="font-size:11px;color:var(--muted)">${r.clients} client${Number(r.clients)===1?'':'s'}</div></div>
-        ${orgIsAdmin()&&r.user_id!==me_.id?`<button class="mini-btn" onclick="removeOrgMember('${r.user_id}')"><i class="ti ti-x"></i></button>`:''}
+        ${orgIsAdmin()&&r.user_id!==me_.id?`<button class="mini-btn" onclick="removeOrgMember('${r.user_id}','${esc((r.name||'this coach').replace(/'/g,""))}')"><i class="ti ti-x"></i></button>`:''}
       </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">Just you.</div>'}</div>
 
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Teams</div>
@@ -740,12 +743,43 @@ async function renderOrg(){
       <input id="team-new" class="sel" style="flex:1" placeholder="New team (e.g. Strength staff)">
       <button class="btn btn-ghost" style="padding:12px 16px" onclick="createTeam()"><i class="ti ti-plus"></i></button></div>`:''}
 
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Clients of the organisation</div>
+    <div id="org-clients" style="margin-bottom:14px"></div>
+
     ${orgIsAdmin()?`<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Invite a coach</div>
       <div class="row-gap" style="margin-bottom:8px">
         <select id="org-inv-role" class="sel" style="flex:1"><option value="coach">Coach</option><option value="admin">Admin</option></select>
         <button class="btn btn-primary" style="padding:12px 16px" onclick="newOrgInvite()">Create code</button>
       </div><div id="org-invites"></div>`:''}`;
   if(orgIsAdmin()) loadOrgInvites();
+  loadOrgClients();
+}
+
+// The gym's client roster. Removing one here withdraws every DELEGATED link
+// held by a coach of this organisation; the coach who brought the client in
+// keeps them, because that relationship is with the athlete, not the gym.
+async function loadOrgClients(){
+  const box=$('org-clients'); if(!box) return;
+  const {data}=await sb.rpc('org_client_list',{p_org:orgCur});
+  box.innerHTML=(data||[]).map(c=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:13px;font-weight:600">${esc(c.name||'Client')}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(c.sport||'—')} · ${c.coaches} coach${Number(c.coaches)===1?'':'es'} here</div></div>
+      ${orgIsAdmin()?`<button class="mini-btn" onclick="removeOrgClient('${c.client_id}','${esc((c.name||'this client').replace(/'/g,""))}')"><i class="ti ti-x"></i></button>`:''}
+    </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No clients on the roster yet — share one with a team, or add them from their page.</div>';
+}
+async function removeOrgClient(cid,name){
+  if(!confirm(`Remove ${name} from the organisation?\n\nEvery coach here who was GIVEN this client loses them. Whoever brought them in keeps them — that relationship is with the athlete, not the gym.`)) return;
+  const {data,error}=await sb.rpc('org_remove_client',{p_org:orgCur,p_client:cid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Removed · '+(data||0)+' delegated link'+(Number(data)===1?'':'s')+' withdrawn');
+  loadOrgClients(); if(selected) renderClientCoaches();
+}
+async function addClientToOrg(){
+  if(!selected||!orgCur){ toast('Join an organisation first'); return; }
+  const {error}=await sb.rpc('org_add_client',{p_org:orgCur,p_client:selected.client_id});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Added to the organisation'); loadOrgClients(); renderClientCoaches();
 }
 
 async function createOrg(){
@@ -782,11 +816,20 @@ async function newOrgInvite(){
   toast('Code: '+data); loadOrgInvites();
 }
 async function killOrgInvite(id){ await sb.from('org_invites').update({active:false}).eq('id',id); loadOrgInvites(); }
-async function removeOrgMember(uid){
-  if(!confirm('Remove this coach from the organisation? Clients they hold stay with them.')) return;
-  const {error}=await sb.from('org_members').update({status:'left'}).eq('org_id',orgCur).eq('user_id',uid);
+async function removeOrgMember(uid,name){
+  if(!confirm(`Remove ${name||'this coach'} from the organisation?\n\nThey lose every client the gym gave them. Clients they signed up themselves stay theirs.`)) return;
+  const {data,error}=await sb.rpc('org_remove_member',{p_org:orgCur,p_user:uid});
   if(error){ toast('Error: '+error.message); return; }
-  toast('Removed'); renderOrg();
+  toast('Removed · '+(data||0)+' delegated client'+(Number(data)===1?'':'s')+' withdrawn');
+  renderOrg(); if(selected) renderClientCoaches();
+}
+async function leaveOrg(){
+  const o=orgMine(); if(!o) return;
+  if(!confirm(`Leave ${o.name}?\n\nYou lose every client the gym gave you. Clients you signed up yourself stay yours.`)) return;
+  const {data,error}=await sb.rpc('org_leave',{p_org:orgCur});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('You have left · '+(data||0)+' delegated client'+(Number(data)===1?'':'s')+' withdrawn');
+  orgCur=null; loadOrgs(); loadAll();
 }
 async function createTeam(){
   const name=($('team-new')||{}).value?.trim(); if(!name){ toast('Name the team'); return; }
@@ -1320,6 +1363,7 @@ async function renderClientCoaches(){
       <select id="dc-access" class="sel"><option value="full">Full</option><option value="read">Read-only</option></select>
       <button class="btn btn-ghost" style="padding:12px 16px" onclick="shareClientWithCoach()">Share</button></div>`
       : '<div style="font-size:11.5px;color:var(--muted)">No colleagues available to share with.</div>'}
+    ${(orgCur&&!teams.length)?`<button class="btn btn-ghost" style="padding:10px 14px;font-size:12px;margin-top:6px" onclick="addClientToOrg()">Add to the organisation</button>`:''}
     ${teams.length?`<div class="row-gap">
       <select id="dc-team" class="sel" style="flex:1">${teams.map(t=>`<option value="${t.team_id}">${esc(t.name)} · ${t.coaches} coach${Number(t.coaches)===1?'':'es'}</option>`).join('')}</select>
       <select id="dc-team-access" class="sel"><option value="full">Full</option><option value="read">Read-only</option></select>

@@ -289,3 +289,31 @@ verdict, so the athlete can judge whether the app has it right.
 clean. Declining hides the offer for that day without switching anything on, and
 an accepted recovery day can be switched back to the normal session at any time
 from the same card.
+
+### Removing coaches and clients
+
+Migration 23 shipped an incomplete removal: ending a coach's membership only set
+`status='left'`, so every client the gym had shared with them stayed in their
+list — a coach could leave and keep coaching the gym's roster. Clients also had
+no relationship to an organisation, so there was nothing to remove them from.
+Migration 24 closes both.
+
+**The rule: delegated access ends when the basis for the delegation ends.** A
+`coach_clients` row with `source='cocoach'` exists because someone in the
+organisation handed it over, so it is withdrawn when the coach leaves or the
+client comes off the roster. A link the coach won themselves — their own invite
+code, a client they added by email — is never touched, because the athlete
+agreed to *that* relationship directly.
+
+* `org_clients` is the gym's client roster. `share_client_with_team()` now adds
+  to it automatically, since sharing a client with the gym's staff is what makes
+  them a client of the gym.
+* `org_remove_member(org, coach)` — admin only. Ends membership and withdraws
+  that coach's delegated links to this organisation's clients. Delegated links
+  to clients *outside* the roster (a private one-to-one share) survive.
+* `org_remove_client(org, client)` — admin only. Withdraws every org coach's
+  delegated link; the coach who brought them in keeps them.
+* `org_leave(org)` — a coach leaving of their own accord clears exactly the same
+  access, so walking out is not a way to keep the gym's clients.
+* Both refuse to strip the last owner, and both return the number of links
+  withdrawn so the UI can say what actually happened.
