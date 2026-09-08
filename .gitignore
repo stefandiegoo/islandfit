@@ -4,3 +4,7 @@
 node_modules/
 .env
 .env.*
+
+# local test harness output
+serve.log
+relay.log
