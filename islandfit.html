@@ -369,6 +369,11 @@ body::before{
 .match-badge b{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px}
 .match-badge span{font-size:11.5px;color:var(--muted)}
 .match-badge.md{border-color:var(--lava-1,#ff5421)}
+.match-badge.rec{border-color:var(--aurora-2,#2bd6ee)}
+.match-badge.rec a{color:var(--aurora-2,#2bd6ee)}
+.rec-btn{border:1px solid var(--border);border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer}
+.rec-btn.yes{background:var(--aurora-2,#2bd6ee);color:#06232a;border-color:transparent}
+.rec-btn.no{background:transparent;color:var(--text-soft)}
 .cc-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--surface);border:1px solid var(--border);color:var(--text-soft);border-radius:4px;padding:2px 6px;vertical-align:1px}
 .cc-tag.read{border-color:var(--muted);color:var(--muted)}
 .lp-verdict{font-size:14px;color:var(--text);line-height:1.5;margin-bottom:12px}
@@ -1989,7 +1994,7 @@ function getPrescription(ex){
     // NSCA load chart sets the base %1RM for the rep target; periodization modulates it; RPE fine-tunes (±5%)
     const pm=Math.min(0.95, nscaPct(ex.reps)*ph.mod);   // base %1RM × week modulation, capped at 95%
     const eff=pm*lf;
-    let kg=e1*eff*readinessFactor()*coachFactor(ex)*matchFactor();   // × AI coach deload / per-lift load adjustment × match week
+    let kg=e1*eff*readinessFactor()*coachFactor(ex)*matchFactor()*recoveryFactor();   // × AI coach deload / per-lift load adjustment × match week × recovery day
     const adj=adjustments[ex.exercise_name];
     const fine=(adj&&typeof adj.pct==='number')?Math.max(-5,Math.min(5,adj.pct)):0;
     kg=Math.round(kg*(1+fine/100)/2.5)*2.5;
@@ -1997,7 +2002,7 @@ function getPrescription(ex){
   }
   // No estimated max yet → scale the program's prescribed weight to the athlete's level
   const base=getAdjustedWeight(ex);
-  const kg=isNaN(parseFloat(base))?base:Math.round(parseFloat(base)*lf*coachFactor(ex)*matchFactor()/2.5)*2.5;
+  const kg=isNaN(parseFloat(base))?base:Math.round(parseFloat(base)*lf*coachFactor(ex)*matchFactor()*recoveryFactor()/2.5)*2.5;
   return {kg,pct:null,phase:ph.label,deload:ph.deload,source:'rpe',fine:0};
 }
 // Triphasic-style tempo: emphasis shifts by phase (eccentric–pause–concentric seconds; X = explosive)
@@ -3195,6 +3200,7 @@ async function onLogin(user){
   await loadAdjustments();
   await loadFixtures();
   renderFixtures();
+  await loadRecentRpe();
   renderMyCoaches();
   updateHomeUI();
   renderAIPreview();
@@ -3309,6 +3315,79 @@ function restToday(){
   showToast('Resting today 💤 — your next session stays put');
   renderTodayCard();
 }
+// ── RECOVERY DAY ──
+// A suggestion, never an imposition. The app watches for the usual fatigue
+// signals and offers an easier session; the athlete accepts or trains as
+// planned. When it is on, loads are eased AND the set-to-set progression stops
+// pushing — a recovery day that still adds 2.5 kg every set is not a recovery
+// day. It is scoped to a single date, so tomorrow starts clean.
+function recoveryOn(){ try{ return localStorage.getItem('if_recovery_'+todayKey())==='1'; }catch(e){ return false; } }
+function recoveryDeclined(){ try{ return localStorage.getItem('if_recovery_no_'+todayKey())==='1'; }catch(e){ return false; } }
+function recoveryFactor(){ return recoveryOn()?0.7:1; }
+function setRecoveryDay(on){
+  try{
+    if(on){ localStorage.setItem('if_recovery_'+todayKey(),'1'); localStorage.removeItem('if_recovery_no_'+todayKey()); }
+    else { localStorage.removeItem('if_recovery_'+todayKey()); }
+  }catch(e){}
+  renderTodayCard();
+  if(document.getElementById('s-active') && document.getElementById('s-active').classList.contains('active')) renderExercise();
+  showToast(on?'Recovery day on — lighter loads, no progression':'Back to your normal session');
+}
+function declineRecovery(){
+  try{ localStorage.setItem('if_recovery_no_'+todayKey(),'1'); }catch(e){}
+  renderTodayCard(); showToast('Training as planned');
+}
+// How many days in a row have ended with a completed session, today included.
+function consecutiveTrainingDays(){
+  let n=0; const d=new Date();
+  for(let i=0;i<14;i++){ if(trainedDates.has(dkey(d))) { n++; d.setDate(d.getDate()-1); } else break; }
+  return n;
+}
+let recentRpeAvg=null;   // filled by loadRecentRpe(), null until then
+async function loadRecentRpe(){
+  recentRpeAvg=null;
+  if(!currentUser) return null;
+  try{
+    const {data}=await sb.from('workout_sets').select('rpe,logged_at').eq('user_id',currentUser.id)
+      .not('rpe','is',null).order('logged_at',{ascending:false}).limit(20);
+    const v=(data||[]).map(x=>parseFloat(x.rpe)).filter(x=>!isNaN(x));
+    if(v.length>=5) recentRpeAvg=Math.round(v.reduce((a,b)=>a+b,0)/v.length*10)/10;
+  }catch(e){}
+  return recentRpeAvg;
+}
+// Pure: given the day's signals, should a recovery day be offered, and why?
+function recoverySuggestion(sig){
+  const s=sig||{
+    readiness: readinessFactor(),
+    streak: consecutiveTrainingDays(),
+    matchCode: fixtures.length?matchContext(fixtures,todayISO()).code:'open',
+    deload: weekPhase(currentProfile&&currentProfile.current_week).deload,
+    rpe: recentRpeAvg
+  };
+  const why=[];
+  if(s.readiness<1) why.push('you logged low readiness today');
+  if(s.streak>=3) why.push(s.streak+' days in a row trained');
+  if(s.matchCode==='MD+1') why.push('you played yesterday');
+  if(s.deload) why.push('this is a deload week');
+  if(s.rpe!=null && s.rpe>=8.5) why.push('your recent sets have been averaging RPE '+s.rpe);
+  return {suggest: why.length>0, why};
+}
+function recoveryBannerHtml(){
+  if(recoveryOn()){
+    return `<div class="match-badge rec"><i class="ti ti-battery-charging"></i> <b>Recovery day</b> · loads eased ~30%, no progression
+      <span>Chosen by you — <a href="#" onclick="event.preventDefault();setRecoveryDay(false)">train as planned instead</a></span></div>`;
+  }
+  if(recoveryDeclined()) return '';
+  const r=recoverySuggestion();
+  if(!r.suggest) return '';
+  return `<div class="match-badge rec"><i class="ti ti-battery-charging"></i> <b>Recovery day suggested</b>
+    <span>${escapeHtml(r.why.join(' · '))}</span>
+    <span style="margin-top:6px;display:flex;gap:8px">
+      <button class="rec-btn yes" onclick="setRecoveryDay(true)">Take a recovery day</button>
+      <button class="rec-btn no" onclick="declineRecovery()">Train as planned</button>
+    </span></div>`;
+}
+
 function easeBackActive(){ try{ const u=localStorage.getItem('if_easeback_until'); return !!u && new Date(u)>new Date(); }catch(e){ return false; } }
 function easeFactor(){ return easeBackActive()?0.88:1; }
 function startEaseBack(){
@@ -3332,14 +3411,14 @@ function renderTodayCard(){
   const next=todayWorkout?todayWorkout.title:'—';
   if(scheduleState.trainedToday){
     card.classList.add('rest-day');
-    card.innerHTML=`<div class="today-content">${matchBadgeHtml()}<div class="today-label">✅ Done today</div><div class="today-name">Recovery</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-ghost" onclick="startWorkout()">Train again</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">✅ Done today</div><div class="today-name">Recovery</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-ghost" onclick="startWorkout()">Train again</button></div></div>`;
   } else if(isRestToday()){
     card.classList.add('rest-day');
-    card.innerHTML=`<div class="today-content">${matchBadgeHtml()}<div class="today-label">💤 Rest day</div><div class="today-name">Recovering</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Train anyway →</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">💤 Rest day</div><div class="today-name">Recovering</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Train anyway →</button></div></div>`;
   } else {
     card.classList.remove('rest-day');
     const lbl=todayWorkout?('Day '+todayWorkout.day_number+' · '+(todayWorkout.focus||'')):'Today';
-    card.innerHTML=`<div class="today-content">${matchBadgeHtml()}<div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button><button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button><button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
   }
   renderAiProgramCard();
   maybeNudge();
@@ -3589,6 +3668,16 @@ function recommendForNextSet(i, ex){
   const rpe=parseFloat(s.rpe)||8, rir=Math.max(0,10-rpe);
   const kg=parseFloat(inputToKg(s.kg_display));
   const next=workoutProgress[curEx][ni]=workoutProgress[curEx][ni]||{};   // write to state (next set may not be in the DOM)
+
+  // On a recovery day the whole point is not to chase more, so hold what the
+  // last set did rather than recommending a heavier load or extra reps.
+  if(recoveryOn()){
+    next.kg_display=s.kg_display; next.reps=s.reps;
+    const ek=document.getElementById(`kg-${ni}`); if(ek) ek.value=s.kg_display==null?'':s.kg_display;
+    const er=document.getElementById(`reps-${ni}`); if(er && s.reps!=null) er.value=s.reps;
+    showToast('Recovery day — holding at the same effort');
+    return;
+  }
 
   // WEIGHTED → recommend the next set's weight
   if(kg>0){

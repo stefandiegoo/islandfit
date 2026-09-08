@@ -264,3 +264,28 @@ The dashboard gains an **Organisation** panel (roster, teams, seats, invite
 codes) and a **Colleagues** panel for connecting to a coach outside the
 organisation. Every client now shows **Coaches on this client** with sharing to
 either a colleague or a whole team.
+
+---
+
+## 12. Recovery day
+
+A suggestion, never an imposition. The app watches the usual fatigue signals and
+offers an easier session; the athlete accepts it or trains as planned. Nothing is
+forced and nothing is silent.
+
+**When it is offered** — any of: low readiness logged today · three or more days
+trained in a row · the day after a match (MD+1) · a programme deload week ·
+recent sets averaging RPE 8.5 or higher. The reasons are shown, not just the
+verdict, so the athlete can judge whether the app has it right.
+
+**What it changes when accepted**
+* `recoveryFactor()` eases prescribed loads to 70%, applied in `getPrescription()`
+  alongside the week phase, readiness, match week and coach adjustments.
+* `recommendForNextSet()` stops progressing. This is the point of the feature: a
+  recovery day that still adds 2.5 kg every set is not a recovery day, so the
+  next set holds the same load and reps instead.
+
+**Scope and escape hatches** — stored against a single date, so tomorrow starts
+clean. Declining hides the offer for that day without switching anything on, and
+an accepted recovery day can be switched back to the normal session at any time
+from the same card.
