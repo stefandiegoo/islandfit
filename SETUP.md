@@ -317,3 +317,22 @@ agreed to *that* relationship directly.
   access, so walking out is not a way to keep the gym's clients.
 * Both refuse to strip the last owner, and both return the number of links
   withdrawn so the UI can say what actually happened.
+
+---
+
+## 13. Cancelling and recalling
+
+Four things could be created but never undone. Migration 25 and the surrounding
+interface close all four.
+
+| What | Where | Rule |
+|---|---|---|
+| A client request the person never accepted | Coach website, on the Pending row | `cancel_client_request()` only touches `status='pending'`, so a mis-click cannot sever a live coaching relationship — that is what the separate disconnect is for |
+| A colleague invitation | Coach website **and** the app's coach portal | Only removes a `pending` row; an accepted connection is untouched |
+| A client invite code | Coach website, under Live codes | The portal used to show only the newest code while older ones stayed redeemable. It now lists every live code, each revocable. Clients who already joined with a revoked code stay connected |
+| A coach application that is not approved | Admin panel in the app | `admin_delete_coach_application()` removes the row and clears `coach_status`, so the person can apply again from scratch. It refuses on an approved coach — withdrawing coaching status is the review action's job, not a delete's |
+
+The admin delete needs a function because admins deliberately hold only SELECT on
+`coach_applications`. The other three were already permitted by RLS (both parties
+can delete a `coach_clients` or `coach_peers` row, and a coach owns their own
+invites), so they needed interface rather than schema.

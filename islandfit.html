@@ -2246,7 +2246,7 @@ function renderPeerList(){
     const pend=p.status==='pending';
     const act = pend
       ? (p.i_invited
-          ? '<span class="cc-tag">invite sent</span>'
+          ? `<span class="cc-tag">invite sent</span> <button class="fx-del" onclick="recallPeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'))" aria-label="Recall invitation"><i class="ti ti-x"></i></button>`
           : `<button class="btn btn-primary btn-sm" onclick="respondPeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'),true)">Accept</button>
              <button class="fx-del" onclick="respondPeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'),false)" aria-label="Decline"><i class="ti ti-x"></i></button>`)
       : `<button class="fx-del" onclick="removePeer(decodeURIComponent('${encodeURIComponent(p.peer_id)}'))" aria-label="Disconnect"><i class="ti ti-trash"></i></button>`;
@@ -2277,6 +2277,13 @@ async function respondPeer(peerId,accept){
     .eq('requester_id',peerId).eq('peer_id',currentUser.id);
   if(error){ showToast('Could not respond'); return; }
   await loadPeers(); showToast(accept?'Connected':'Declined');
+}
+async function recallPeer(peerId){
+  if(!confirm('Recall this invitation? They have not accepted it, so nothing is shared yet.')) return;
+  const {error}=await sb.from('coach_peers').delete()
+    .eq('requester_id',currentUser.id).eq('peer_id',peerId).eq('status','pending');
+  if(error){ showToast('Could not recall'); return; }
+  await loadPeers(); showToast('Invitation recalled');
 }
 async function removePeer(peerId){
   if(!confirm('Disconnect from this coach? Clients you shared with them stay shared until you remove those separately.')) return;
@@ -5887,10 +5894,10 @@ async function disconnectCoach(coachId){
 // ── ADMIN PANEL ──
 async function loadAdminScreen(){
   document.getElementById('admin-apps-list').innerHTML='<div style="color:var(--muted);text-align:center;padding:24px;font-size:14px">Loading...</div>';
-  const {data:apps} = await sb.from('coach_applications').select('*').eq('status','pending').order('submitted_at');
+  const {data:apps} = await sb.from('coach_applications').select('*').in('status',['pending','rejected']).order('submitted_at');
   const appEl = document.getElementById('admin-apps-list');
   if(!apps || !apps.length){ appEl.innerHTML='<div style="color:var(--muted);font-size:14px;text-align:center;padding:16px">No pending applications.</div>'; }
-  else { appEl.innerHTML = apps.map(a=>`<div class="admin-app-card"><h4>${escapeHtml(a.full_name||'—')}</h4><div class="cert-line">${escapeHtml(a.certification||'—')} · ${escapeHtml(a.cert_org||'—')}${a.cert_year?' · '+a.cert_year:''}</div>${a.proof_url?`<div style="margin-bottom:8px"><a href="${escapeHtml(a.proof_url)}" target="_blank" style="color:var(--accent);font-size:12px"><i class="ti ti-external-link"></i> View Certificate</a></div>`:''}${a.bio?`<div class="bio">${escapeHtml(a.bio)}</div>`:''}<div id="admin-review-note-${a.user_id}" style="margin-bottom:8px"><input type="text" placeholder="Optional review note" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px"></div><div class="admin-actions"><button class="btn-approve" onclick="adminReview('${a.user_id}',true,'admin-review-note-${a.user_id}')"><i class="ti ti-check"></i> Approve</button><button class="btn-reject" onclick="adminReview('${a.user_id}',false,'admin-review-note-${a.user_id}')"><i class="ti ti-x"></i> Reject</button></div></div>`).join(''); }
+  else { appEl.innerHTML = apps.map(a=>`<div class="admin-app-card"><h4>${escapeHtml(a.full_name||'—')}</h4><div class="cert-line">${escapeHtml(a.certification||'—')} · ${escapeHtml(a.cert_org||'—')}${a.cert_year?' · '+a.cert_year:''}</div>${a.proof_url?`<div style="margin-bottom:8px"><a href="${escapeHtml(a.proof_url)}" target="_blank" style="color:var(--accent);font-size:12px"><i class="ti ti-external-link"></i> View Certificate</a></div>`:''}${a.bio?`<div class="bio">${escapeHtml(a.bio)}</div>`:''}<div id="admin-review-note-${a.user_id}" style="margin-bottom:8px"><input type="text" placeholder="Optional review note" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px"></div><div class="admin-actions"><button class="btn-approve" onclick="adminReview('${a.user_id}',true,'admin-review-note-${a.user_id}')"><i class="ti ti-check"></i> Approve</button><button class="btn-reject" onclick="adminReview('${a.user_id}',false,'admin-review-note-${a.user_id}')"><i class="ti ti-x"></i> Reject</button><button class="btn-reject" style="opacity:.75" onclick="adminDeleteApplication('${a.user_id}','${escapeHtml((a.full_name||'this application').replace(/'/g,''))}')"><i class="ti ti-trash"></i> Delete</button></div>${a.status==='rejected'?'<div style="font-size:11px;color:var(--muted);margin-top:6px">Rejected — deleting lets them apply again from scratch.</div>':''}</div>`).join(''); }
   // Approved coaches
   const {data:coaches} = await sb.from('profiles').select('id, name, coach_status').eq('coach_status','approved').order('name');
   const coEl = document.getElementById('admin-coaches-list');
@@ -5906,6 +5913,19 @@ async function adminReview(userId, approve, noteElId){
     showToast(approve ? 'Coach approved!' : 'Application rejected');
     await loadAdminScreen();
   } catch(e){ showToast('Error: ' + e.message); }
+}
+
+// Remove an application entirely, so a rejected applicant gets a clean slate.
+// Refuses on an approved coach — withdrawing coaching status is a different
+// decision and belongs to the review action, not to a delete.
+async function adminDeleteApplication(userId, name){
+  if(!confirm('Delete the application from '+name+'?\n\nThey will be able to apply again from scratch.')) return;
+  try{
+    const {error}=await sb.rpc('admin_delete_coach_application',{p_user:userId});
+    if(error) throw error;
+    showToast('Application deleted');
+    await loadAdminScreen();
+  }catch(e){ showToast('Error: '+e.message); }
 }
 
 // ── CUSTOM PROGRAM BUILDER ──

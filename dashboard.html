@@ -310,7 +310,9 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
               <button class="mini-btn" style="padding:0 14px" onclick="copyInvite()"><i class="ti ti-copy"></i></button>
               <button class="mini-btn" style="padding:0 14px" onclick="newInvite()"><i class="ti ti-refresh"></i></button>
             </div>
-            <div id="invite-expire" style="font-size:11px;color:var(--muted);margin-bottom:16px"></div>
+            <div id="invite-expire" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+            <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:4px">Live codes</div>
+            <div id="invite-others" style="margin-bottom:16px"></div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Or add by email</div>
             <div class="row-gap">
               <input type="email" id="add-email" placeholder="client@email.com" class="sel" style="flex:1">
@@ -870,7 +872,7 @@ async function loadPeersDash(){
   box.innerHTML=peersDash.filter(p=>p.status!=='declined').map(p=>{
     const pend=p.status==='pending';
     const act=pend
-      ? (p.i_invited ? '<span class="cc-tag">invite sent</span>'
+      ? (p.i_invited ? `<span class="cc-tag">invite sent</span><button class="mini-btn" title="Recall this invitation" onclick="recallPeerInvite('${p.peer_id}','${esc((p.name||'this coach').replace(/'/g,""))}')"><i class="ti ti-x"></i></button>`
         : `<button class="btn btn-primary" style="padding:7px 12px;font-size:12px" onclick="respondPeerDash('${p.peer_id}',true)">Accept</button>
            <button class="mini-btn" onclick="respondPeerDash('${p.peer_id}',false)"><i class="ti ti-x"></i></button>`)
       : `<button class="mini-btn" onclick="removePeerDash('${p.peer_id}')"><i class="ti ti-trash"></i></button>`;
@@ -895,6 +897,12 @@ async function respondPeerDash(pid,accept){
     .eq('requester_id',pid).eq('peer_id',me_.id);
   if(error){ toast('Error: '+error.message); return; }
   toast(accept?'Connected':'Declined'); loadPeersDash();
+}
+async function recallPeerInvite(pid,name){
+  if(!confirm(`Recall the invitation to ${name}?\n\nThey have not accepted it, so nothing is shared yet.`)) return;
+  const {error}=await sb.from('coach_peers').delete().eq('requester_id',me_.id).eq('peer_id',pid).eq('status','pending');
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Invitation recalled'); loadPeersDash();
 }
 async function removePeerDash(pid){
   if(!confirm('Disconnect from this coach?')) return;
@@ -1026,12 +1034,36 @@ async function deleteExerciseDemo(id){
 }
 
 async function loadInvite(){
-  const {data} = await sb.from('coach_invites').select('*').eq('coach_id',me_.id).eq('active',true).order('created_at',{ascending:false}).limit(1);
+  // Every live code, not just the newest. A code you cannot see is a code you
+  // cannot revoke, and an old one stays redeemable until it expires.
+  const {data} = await sb.from('coach_invites').select('*').eq('coach_id',me_.id).eq('active',true).order('created_at',{ascending:false});
   if(data && data.length){
     $('invite-code').textContent = data[0].code;
     const exp = data[0].expires_at ? new Date(data[0].expires_at) : null;
     $('invite-expire').textContent = (exp?'Expires '+exp.toLocaleDateString()+' · ':'') + 'Used '+data[0].used_count+'/'+data[0].max_uses;
   } else { $('invite-code').textContent='—'; $('invite-expire').textContent='Generate a code to share'; }
+  const box=$('invite-others'); if(!box) return;
+  box.innerHTML=(data||[]).map(r=>{
+    const exp=r.expires_at?new Date(r.expires_at).toLocaleDateString():'no expiry';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div><span style="font-family:ui-monospace,monospace;font-size:12.5px;font-weight:700">${esc(r.code)}</span>
+        <span style="font-size:11px;color:var(--muted)"> · used ${r.used_count}/${r.max_uses} · ${exp}</span></div>
+      <button class="mini-btn" title="Revoke this code" onclick="revokeInvite('${r.id}','${esc(r.code)}')"><i class="ti ti-x"></i></button>
+    </div>`;}).join('')||'<div style="font-size:11.5px;color:var(--muted)">No live codes.</div>';
+}
+async function revokeInvite(id,code){
+  if(!confirm(`Revoke ${code}?\n\nAnyone holding it can no longer use it. Clients who already joined with it stay connected.`)) return;
+  const {error}=await sb.from('coach_invites').update({active:false}).eq('id',id);
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Code revoked'); loadInvite();
+}
+async function cancelClientRequest(cid,name){
+  if(!confirm(`Withdraw the request to ${name}?\n\nThey have not accepted it yet, so nothing of theirs is affected.`)) return;
+  const {data,error}=await sb.rpc('cancel_client_request',{p_client:cid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast(data?'Request withdrawn':'That request was already answered');
+  if(selected && selected.client_id===cid) selected=null;
+  loadAll();
 }
 
 // ── RENDER: ALERTS (clients needing attention) ──
@@ -1186,7 +1218,7 @@ function renderClientList(){
         <div class="client-name">${esc(c.profile.name||'—')}${risk}</div>
         <div class="client-meta">${esc(c.profile.sport||'—')} · ${last}</div>
       </div>
-      ${pend?'<span class="pill pill-pending">Pending</span>':`<span class="pill ${col}">${c.adherence}%</span>`}
+      ${pend?`<span class="pill pill-pending">Pending</span><button class="mini-btn" title="Withdraw this request" onclick="event.stopPropagation();cancelClientRequest('${c.client_id}','${esc((c.profile.name||'this person').replace(/'/g,""))}')"><i class="ti ti-x"></i></button>`:`<span class="pill ${col}">${c.adherence}%</span>`}
     </div>`;
   }).join('');
 }
