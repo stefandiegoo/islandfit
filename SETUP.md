@@ -318,6 +318,25 @@ agreed to *that* relationship directly.
 * Both refuse to strip the last owner, and both return the number of links
   withdrawn so the UI can say what actually happened.
 
+### Deleting a team (migration 26)
+`org_delete_team(team)` and `org_rename_team(team, name)` are admin-only.
+Deleting dissolves the staff group and its memberships (the `org_team_members`
+foreign key cascades) and returns how many coaches were unassigned.
+
+It deliberately does **not** touch `coach_clients`. A client shared through a
+team was shared with those coaches, not with the team object, and a coach may
+hold the same client through another team or their own invite code — so
+deleting a team must not silently cut athletes off from their coach. Ending
+client access stays with `org_remove_client` and `org_remove_member`, and the
+confirmation dialog says so.
+
+> Migration 26 also revokes the `anon` EXECUTE on `same_org(a, b)`. Unlike the
+> other helpers it takes user ids as parameters rather than reading
+> `auth.uid()`, so an anonymous caller could probe whether two ids work at the
+> same gym. Checked first that no RLS policy references it — only `team_org` is,
+> by `org_team_members_read`/`_write`, and that keeps its grant. See the warning
+> in section 10 about what revoking a policy-referenced function does.
+
 ---
 
 ## 13. Cancelling and recalling

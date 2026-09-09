@@ -737,7 +737,11 @@ async function renderOrg(){
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div><div style="font-size:13px;font-weight:700">${esc(t.name)}</div>
             <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}</div></div>
-          <button class="mini-btn" onclick="toggleTeam('${t.team_id}')"><i class="ti ti-chevron-down"></i></button>
+          <div style="display:flex;gap:5px">
+            ${orgIsAdmin()?`<button class="mini-btn" title="Rename" onclick="renameTeam('${t.team_id}','${esc((t.name||'').replace(/'/g,""))}')"><i class="ti ti-pencil"></i></button>
+            <button class="mini-btn" title="Delete team" onclick="deleteTeam('${t.team_id}','${esc((t.name||'this team').replace(/'/g,""))}')"><i class="ti ti-trash"></i></button>`:''}
+            <button class="mini-btn" onclick="toggleTeam('${t.team_id}')"><i class="ti ti-chevron-down"></i></button>
+          </div>
         </div>
         <div id="team-${t.team_id}" class="hidden" style="margin-top:8px"></div>
       </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No teams yet.</div>'}</div>
@@ -838,6 +842,21 @@ async function createTeam(){
   const {error}=await sb.from('org_teams').insert({org_id:orgCur,name,created_by:me_.id});
   if(error){ toast('Error: '+error.message); return; }
   toast('Team created'); renderOrg();
+}
+// Deleting a team dissolves the staff group only. Coaches keep the clients they
+// were given through it — that access is between them and the athlete, and is
+// withdrawn from the client roster or by removing the coach, not from here.
+async function deleteTeam(tid,name){
+  if(!confirm('Delete the team "'+name+'"?\n\nThe coaches stay in the organisation and keep the clients already shared with them.')) return;
+  const {data,error}=await sb.rpc('org_delete_team',{p_team:tid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Team deleted'+(data?' · '+data+' coach'+(Number(data)===1?'':'es')+' unassigned':'')); renderOrg();
+}
+async function renameTeam(tid,cur){
+  const name=prompt('Team name',cur); if(name===null) return;
+  const {error}=await sb.rpc('org_rename_team',{p_team:tid,p_name:name});
+  if(error){ toast('Error: '+error.message); return; }
+  renderOrg();
 }
 async function toggleTeam(tid){
   const box=$('team-'+tid); if(!box) return;
