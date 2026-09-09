@@ -3421,11 +3421,11 @@ function renderTodayCard(){
     card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">✅ Done today</div><div class="today-name">Recovery</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-ghost" onclick="startWorkout()">Train again</button></div></div>`;
   } else if(isRestToday()){
     card.classList.add('rest-day');
-    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">💤 Rest day</div><div class="today-name">Recovering</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Train anyway →</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">💤 Rest day</div><div class="today-name">Recovering</div><div class="today-sub">Next up · ${next}</div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Train anyway →</button>${recoveryOn()?'':`<button class="td-btn td-ghost" onclick="setRecoveryDay(true)">Recovery day</button>`}</div></div>`;
   } else {
     card.classList.remove('rest-day');
     const lbl=todayWorkout?('Day '+todayWorkout.day_number+' · '+(todayWorkout.focus||'')):'Today';
-    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button><button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
+    card.innerHTML=`<div class="today-content">${recoveryBannerHtml()}${matchBadgeHtml()}<div class="today-label">${lbl}</div><div class="today-name">${next}</div><div class="today-stats"><div class="today-stat"><i class="ti ti-barbell"></i> ${todayExercises.length} exercises</div><div class="today-stat"><i class="ti ti-clock"></i> ${todayWorkout?todayWorkout.estimated_min:'—'} min</div></div><div class="today-actions"><button class="td-btn td-primary" onclick="startWorkout()">Start Workout →</button>${recoveryOn()?'':`<button class="td-btn td-ghost" onclick="setRecoveryDay(true)">Recovery day</button>`}<button class="td-btn td-ghost" onclick="restToday()">Rest today</button></div></div>`;
   }
   renderAiProgramCard();
   maybeNudge();
