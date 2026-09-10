@@ -355,3 +355,50 @@ The admin delete needs a function because admins deliberately hold only SELECT o
 `coach_applications`. The other three were already permitted by RLS (both parties
 can delete a `coach_clients` or `coach_peers` row, and a coach owns their own
 invites), so they needed interface rather than schema.
+
+---
+
+## 14. Comments on a single exercise (migration 27)
+
+A coach reading a session wants to say something about **one lift**, not the
+workout as a whole. `coach_workout_notes` is the private per-session note; this
+is the opposite — a message the athlete actually receives.
+
+Rather than a second messaging table, `coach_messages` gained an optional
+reference (`ref_type`, `ref_id`, `ref_label`). Threads stay one list, and a
+message with no reference renders exactly as it always did. A second inbox
+nobody checks would be worse than no feature.
+
+* **Posting** — coach website, session detail: expand *Sets*, then the speech
+  bubble beside any exercise. `coach_comment_exercise()` gates on
+  `coach_can_edit()`, the same check used everywhere else, so a **read-only
+  co-coach cannot post**. Empty bodies are refused.
+* **Reading** — the exercise name appears as a small label above the message
+  bubble, in both the coach website thread and the athlete's app.
+* The athlete gets the normal `message` push notification.
+
+---
+
+## 15. Main coach and assistants in a group (migration 28)
+
+`org_team_members` recorded only *that* a coach belongs to a group. A club needs
+to say **who runs it**. The role lives on the join row, not on the coach, because
+the same person can lead one group and assist in another.
+
+* `role` is `lead` or `assistant`, defaulting to `assistant`.
+* A partial unique index (`org_team_members_one_lead`) states "at most one lead
+  per group" as a database fact rather than something the app must remember.
+  `org_team_set_lead()` demotes the incumbent and promotes the new lead in a
+  single UPDATE — verified safe, because Postgres checks a unique index at end
+  of statement, so the swap never trips it.
+* `org_team_clear_lead()` steps the lead down without removing them.
+* `team_coaches()` gained `team_role` and orders the lead first;
+  `org_team_list()` gained `lead_name`. Both **gain a column**, and
+  `create or replace` cannot change a function's return type — they must be
+  dropped and rebuilt, which drops their grants too, so the migration reissues
+  them. Watch for this whenever an RPC's shape changes.
+
+> **This is not an access grant.** `share_client_with_team()` gives every coach
+> in the group the same access to a shared athlete. Who leads is responsibility
+> and display order; tying access to it would silently change who can edit an
+> athlete's program.

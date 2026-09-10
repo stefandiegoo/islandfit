@@ -149,6 +149,7 @@ main{max-width:1400px;margin:0 auto;padding:28px}
 .msg-them{align-self:flex-start;background:var(--surface3);border-bottom-left-radius:4px}
 .msg-me{align-self:flex-end;background:linear-gradient(135deg,rgba(0,255,163,0.18),rgba(34,211,238,0.12));border:1px solid rgba(0,255,163,0.25);border-bottom-right-radius:4px}
 .msg-time{font-size:10px;color:var(--muted);margin-top:3px;opacity:0.8}
+.msg-ref{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.75;margin-bottom:4px}
 .msg-empty{color:var(--muted);font-size:13px;text-align:center;padding:14px}
 
 /* ── PROGRAM BUILDER ── */
@@ -736,7 +737,7 @@ async function renderOrg(){
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div><div style="font-size:13px;font-weight:700">${esc(t.name)}</div>
-            <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}</div></div>
+            <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}${t.lead_name?' · led by '+esc(t.lead_name):''}</div></div>
           <div style="display:flex;gap:5px">
             ${orgIsAdmin()?`<button class="mini-btn" title="Rename" onclick="renameTeam('${t.team_id}','${esc((t.name||'').replace(/'/g,""))}')"><i class="ti ti-pencil"></i></button>
             <button class="mini-btn" title="Delete team" onclick="deleteTeam('${t.team_id}','${esc((t.name||'this team').replace(/'/g,""))}')"><i class="ti ti-trash"></i></button>`:''}
@@ -865,10 +866,26 @@ async function toggleTeam(tid){
   const {data:members}=await sb.rpc('team_coaches',{p_team:tid});
   const inTeam=new Set((members||[]).map(m=>m.user_id));
   const avail=(orgRosterCache||[]).filter(r=>!inTeam.has(r.user_id));
-  box.innerHTML=`${(members||[]).map(m=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px 9px;margin:0 5px 5px 0;font-size:11.5px">${esc(m.name||'Coach')} ${orgIsAdmin()?`<button class="mini-btn" style="padding:1px 4px" onclick="removeFromTeam('${tid}','${m.user_id}')"><i class="ti ti-x"></i></button>`:''}</span>`).join('')||'<span style="font-size:11.5px;color:var(--muted)">No coaches on this team.</span>'}
+  box.innerHTML=`${(members||[]).map(m=>{
+      const lead=m.team_role==='lead';
+      return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid ${lead?'var(--accent)':'var(--border)'};border-radius:100px;padding:4px 9px;margin:0 5px 5px 0;font-size:11.5px">${lead?'<i class="ti ti-star-filled" style="color:var(--accent)" title="Main coach"></i> ':''}${esc(m.name||'Coach')} ${orgIsAdmin()?`<button class="mini-btn" style="padding:1px 4px" title="${lead?'Step down as main coach':'Make main coach'}" onclick="${lead?`clearTeamLead('${tid}')`:`setTeamLead('${tid}','${m.user_id}')`}"><i class="ti ti-star${lead?'-off':''}"></i></button><button class="mini-btn" style="padding:1px 4px" onclick="removeFromTeam('${tid}','${m.user_id}')"><i class="ti ti-x"></i></button>`:''}</span>`;
+    }).join('')||'<span style="font-size:11.5px;color:var(--muted)">No coaches on this team.</span>'}
     ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:8px">
       <select id="team-add-${tid}" class="sel" style="flex:1">${avail.map(r=>`<option value="${r.user_id}">${esc(r.name||'Coach')}</option>`).join('')}</select>
       <button class="btn btn-ghost" style="padding:10px 14px" onclick="addToTeam('${tid}')">Add</button></div>`:''}`;
+}
+// The main coach owns the group's programming; the rest assist. This is
+// responsibility and display order, NOT access — every coach in the group keeps
+// exactly the access they already had to a shared athlete.
+async function setTeamLead(tid,uid){
+  const {error}=await sb.rpc('org_team_set_lead',{p_team:tid,p_user:uid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Main coach set'); await toggleTeam(tid); await toggleTeam(tid); renderOrg();
+}
+async function clearTeamLead(tid){
+  const {error}=await sb.rpc('org_team_clear_lead',{p_team:tid});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Group has no main coach'); await toggleTeam(tid); await toggleTeam(tid); renderOrg();
 }
 async function addToTeam(tid){
   const sel=$('team-add-'+tid); if(!sel||!sel.value) return;
@@ -1856,7 +1873,8 @@ async function loadMessages(){
   if(!msgs || !msgs.length){ box.innerHTML='<div class="msg-empty">No messages yet — say hi to '+esc(c.profile.name||'your client')+'.</div>'; return; }
   box.innerHTML = msgs.map(m=>{
     const mine = m.sender_id===me_.id;
-    return `<div class="msg ${mine?'msg-me':'msg-them'}">${esc(m.body)}<div class="msg-time">${msgTime(m.created_at)}</div></div>`;
+    const ref = m.ref_label?`<div class="msg-ref"><i class="ti ti-barbell"></i> ${esc(m.ref_label)}</div>`:'';
+    return `<div class="msg ${mine?'msg-me':'msg-them'}">${ref}${esc(m.body)}<div class="msg-time">${msgTime(m.created_at)}</div></div>`;
   }).join('');
   box.scrollTop = box.scrollHeight;
   // Mark client→coach messages as read
@@ -1907,9 +1925,27 @@ async function toggleSets(wid){
   data.forEach(r=>{ (byEx[r.exercise_name]=byEx[r.exercise_name]||[]).push(r); });
   box.innerHTML = Object.keys(byEx).map(name=>`
     <div style="margin-top:7px">
-      <div style="font-size:12px;font-weight:700;color:var(--text-soft)">${esc(name)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text-soft)">${esc(name)}</div>
+        <button class="mini-btn" title="Comment on this exercise" onclick="commentOnExercise('${wid}','${esc(name.replace(/'/g,"\\'"))}')"><i class="ti ti-message-circle"></i></button>
+      </div>
       ${byEx[name].map(r=>`<div style="font-size:12px;color:var(--muted);padding-left:8px">${r.set_number}. ${esc(fmtSet(r))}${r.rpe!=null?` · RPE ${(+r.rpe)}`:''}</div>`).join('')}
     </div>`).join('');
+}
+
+// A comment about ONE lift. It goes into the same thread the athlete already
+// reads — a second inbox nobody checks would be worse than no feature — but it
+// carries the exercise name so it arrives with its subject attached.
+async function commentOnExercise(wid, name){
+  if(!selected) return;
+  const body = prompt('Comment to '+(selected.profile.name||'your athlete')+' about "'+name+'"');
+  if(body===null) return;
+  const {error} = await sb.rpc('coach_comment_exercise',
+    {p_client:selected.client_id, p_body:body, p_exercise:name, p_workout:wid});
+  if(error){ toast('Error: '+error.message); return; }
+  notify({to:selected.client_id, type:'message'});
+  toast('Comment sent about '+name);
+  loadMessages();
 }
 
 function wkHtml(w, note){

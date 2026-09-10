@@ -559,6 +559,7 @@ body::before{
 .cc-them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
 .cc-me{align-self:flex-end;background:linear-gradient(135deg,rgba(0,255,163,0.18),rgba(34,211,238,0.12));border:1px solid rgba(0,255,163,0.25);border-bottom-right-radius:4px}
 .cc-time{font-size:10px;color:var(--muted);margin-top:3px;opacity:0.8}
+.cc-ref{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.75;margin-bottom:4px}
 /* weekly check-in */
 .ci-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
 .ci-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -5451,7 +5452,8 @@ async function loadCoachMessages(coachId){
   if(!msgs || !msgs.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No messages yet — say hi to your coach.</div>'; return; }
   box.innerHTML = msgs.map(m=>{
     const mine = m.sender_id===currentUser.id;
-    return `<div class="cc-msg ${mine?'cc-me':'cc-them'}">${escapeHtml(m.body)}<div class="cc-time">${ccMsgTime(m.created_at)}</div></div>`;
+    const ref = m.ref_label?`<div class="cc-ref"><i class="ti ti-barbell"></i> ${escapeHtml(m.ref_label)}</div>`:'';
+    return `<div class="cc-msg ${mine?'cc-me':'cc-them'}">${ref}${escapeHtml(m.body)}<div class="cc-time">${ccMsgTime(m.created_at)}</div></div>`;
   }).join('');
   box.scrollTop = box.scrollHeight;
   const unread = msgs.filter(m=>m.sender_id!==currentUser.id && !m.read_at).map(m=>m.id);
