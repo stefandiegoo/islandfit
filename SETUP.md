@@ -402,3 +402,39 @@ the same person can lead one group and assist in another.
 > in the group the same access to a shared athlete. Who leads is responsibility
 > and display order; tying access to it would silently change who can edit an
 > athlete's program.
+
+---
+
+## 16. Athletes in a group, and one program for the squad (migration 29)
+
+`org_teams` had meant a team of **coaches** since migration 23. A club also
+wants the other kind of group — "U18", "Meet prep" — a **squad of athletes** on
+the same plan. Rather than a second kind of group with its own name, one
+`org_teams` row now holds both: the coaches who run it, and the athletes they
+run it for.
+
+> **Membership grants nothing.** `org_team_athletes` is a roster, not an access
+> rule. `share_client_with_team()` is still the only thing that hands a coach
+> access to an athlete, so putting someone in a squad cannot quietly widen who
+> can read their data.
+
+* `org_team_add_athlete()` requires the athlete to already be on the **club
+  roster** (`org_clients`), so a squad can never reach someone the club has no
+  relationship with. Admin only, as is removal.
+* `org_team_athlete_list()` returns each athlete's **current program** and a
+  `can_edit` flag, so the coach sees who is about to be overwritten *before*
+  assigning rather than after.
+* `team_assign_program(team, program, peak, only)` puts one program on the whole
+  squad. Each athlete goes through `coach_assign_program()` — the same call the
+  per-client Assign button makes — so peak dates, day resets and its permission
+  check behave identically. **An athlete the caller cannot edit is skipped, not
+  failed**: a partial success with an honest count is more useful on a squad of
+  twenty than an all-or-nothing error. It returns `(assigned, skipped)` and the
+  panel reports both.
+* `org_team_list()` gained `athletes`. That is its **second** redefinition
+  (migration 28 added `lead_name`), so it is dropped and rebuilt again — see the
+  return-type note in section 15.
+
+In the coach website this is the lower half of an expanded group: the athlete
+list with each one's program, add/remove, and *Assign to all* with a count of
+how many will actually be changed.

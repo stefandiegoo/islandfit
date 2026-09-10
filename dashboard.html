@@ -737,7 +737,7 @@ async function renderOrg(){
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div><div style="font-size:13px;font-weight:700">${esc(t.name)}</div>
-            <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}${t.lead_name?' · led by '+esc(t.lead_name):''}</div></div>
+            <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}${Number(t.athletes)?' · '+t.athletes+' athlete'+(Number(t.athletes)===1?'':'s'):''}${t.lead_name?' · led by '+esc(t.lead_name):''}</div></div>
           <div style="display:flex;gap:5px">
             ${orgIsAdmin()?`<button class="mini-btn" title="Rename" onclick="renameTeam('${t.team_id}','${esc((t.name||'').replace(/'/g,""))}')"><i class="ti ti-pencil"></i></button>
             <button class="mini-btn" title="Delete team" onclick="deleteTeam('${t.team_id}','${esc((t.name||'this team').replace(/'/g,""))}')"><i class="ti ti-trash"></i></button>`:''}
@@ -872,7 +872,67 @@ async function toggleTeam(tid){
     }).join('')||'<span style="font-size:11.5px;color:var(--muted)">No coaches on this team.</span>'}
     ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:8px">
       <select id="team-add-${tid}" class="sel" style="flex:1">${avail.map(r=>`<option value="${r.user_id}">${esc(r.name||'Coach')}</option>`).join('')}</select>
-      <button class="btn btn-ghost" style="padding:10px 14px" onclick="addToTeam('${tid}')">Add</button></div>`:''}`;
+      <button class="btn btn-ghost" style="padding:10px 14px" onclick="addToTeam('${tid}')">Add</button></div>`:''}
+    <div id="squad-${tid}" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px"></div>`;
+  renderSquad(tid);
+}
+
+// The other half of a group: the ATHLETES it trains. Membership here is a
+// roster, not an access rule — share_client_with_team() is still the only thing
+// that hands a coach access, so putting someone in a squad cannot quietly widen
+// who can read their data.
+async function renderSquad(tid){
+  const box=$('squad-'+tid); if(!box) return;
+  const [{data:squad},{data:roster},{data:progs}]=await Promise.all([
+    sb.rpc('org_team_athlete_list',{p_team:tid}),
+    sb.rpc('org_client_list',{p_org:orgCur}),
+    sb.from('programs').select('id,name,is_custom').order('name')
+  ]);
+  const inSquad=new Set((squad||[]).map(a=>a.client_id));
+  const avail=(roster||[]).filter(c=>!inSquad.has(c.client_id));
+  const editable=(squad||[]).filter(a=>a.can_edit).length;
+  box.innerHTML=`
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Athletes</div>
+    ${(squad||[]).map(a=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0">
+        <div style="min-width:0"><div style="font-size:12.5px;font-weight:600">${esc(a.name||'Athlete')}${a.can_edit?'':' <span class="cc-tag">read-only</span>'}</div>
+          <div style="font-size:11px;color:var(--muted)">${esc(a.sport||'—')} · ${a.program_name?esc(a.program_name):'no program'}</div></div>
+        ${orgIsAdmin()?`<button class="mini-btn" onclick="removeSquadAthlete('${tid}','${a.client_id}')"><i class="ti ti-x"></i></button>`:''}
+      </div>`).join('')||'<div style="font-size:11.5px;color:var(--muted)">No athletes in this group yet.</div>'}
+    ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:8px">
+      <select id="squad-add-${tid}" class="sel" style="flex:1">${avail.map(c=>`<option value="${c.client_id}">${esc(c.name||'Athlete')}</option>`).join('')}</select>
+      <button class="btn btn-ghost" style="padding:10px 14px" onclick="addSquadAthlete('${tid}')">Add</button></div>`
+      :(orgIsAdmin()?'<div style="font-size:11px;color:var(--muted);margin-top:6px">Everyone on the club roster is already in this group. Add more from a client\'s page.</div>':'')}
+    ${(squad||[]).length?`<div class="row-gap" style="margin-top:10px">
+      <select id="squad-prog-${tid}" class="sel" style="flex:1"><option value="">— Assign a program to this group —</option>${(progs||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.is_custom?' (custom)':''}</option>`).join('')}</select>
+      <button class="btn btn-primary" style="padding:10px 14px;white-space:nowrap" onclick="assignProgramToSquad('${tid}')">Assign to all</button></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">Overwrites the current program for ${editable} of ${(squad||[]).length} athlete${(squad||[]).length===1?'':'s'}${editable<(squad||[]).length?' — the read-only ones are skipped':''}.</div>`:''}`;
+}
+async function addSquadAthlete(tid){
+  const sel=$('squad-add-'+tid); if(!sel||!sel.value) return;
+  const {error}=await sb.rpc('org_team_add_athlete',{p_team:tid,p_client:sel.value});
+  if(error){ toast('Error: '+error.message); return; }
+  renderSquad(tid); renderOrg();
+}
+async function removeSquadAthlete(tid,cid){
+  const {error}=await sb.rpc('org_team_remove_athlete',{p_team:tid,p_client:cid});
+  if(error){ toast('Error: '+error.message); return; }
+  renderSquad(tid); renderOrg();
+}
+// One program to a whole squad. Each athlete goes through coach_assign_program,
+// the same call the per-client Assign button makes, and anyone the caller cannot
+// edit is skipped rather than failing the batch — a partial success with an
+// honest count beats an all-or-nothing error on a squad of twenty.
+async function assignProgramToSquad(tid){
+  const sel=$('squad-prog-'+tid); if(!sel||!sel.value){ toast('Select a program first'); return; }
+  const name=sel.options[sel.selectedIndex].text;
+  if(!confirm('Assign "'+name+'" to every athlete in this group?\n\nThis replaces the program each of them is on now.')) return;
+  const {data,error}=await sb.rpc('team_assign_program',{p_team:tid,p_program:sel.value,p_peak:null,p_only:null});
+  if(error){ toast('Error: '+error.message); return; }
+  const r=(data&&data[0])||{assigned:0,skipped:0};
+  toast('Assigned to '+r.assigned+' athlete'+(r.assigned===1?'':'s')+(r.skipped?' · '+r.skipped+' skipped':''));
+  renderSquad(tid);
+  if(selected) renderDetail();
 }
 // The main coach owns the group's programming; the rest assist. This is
 // responsibility and display order, NOT access — every coach in the group keeps
