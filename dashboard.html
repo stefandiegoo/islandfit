@@ -335,6 +335,20 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
           <button class="btn btn-primary btn-block" onclick="saveExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
           <div id="ed-list" style="margin-top:10px"></div>
         </div>
+        <div class="panel" id="load-panel">
+          <div class="panel-title">Load board <span style="text-transform:none;color:var(--muted2);font-weight:600">· the last fortnight, per athlete</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Facts, not a verdict — what counts as too much depends on the sport and the athlete. Volume is split into this week and last week because the <em>jump</em> between them is the part that matters.</div>
+          <div class="row-gap" style="margin-bottom:10px">
+            <button class="btn btn-ghost" style="flex:1" onclick="loadBoard()"><i class="ti ti-refresh"></i> Refresh</button>
+            <button class="btn btn-primary" style="flex:1" onclick="askAssistantAboutLoad()"><i class="ti ti-sparkles"></i> Ask the assistant</button>
+          </div>
+          <div id="load-advice" style="margin-bottom:12px"></div>
+          <div id="load-board"><div style="font-size:12px;color:var(--muted)">Press Refresh to read the board.</div></div>
+        </div>
+        <div class="panel" id="fixtures-panel">
+          <div class="panel-title">Match schedule <span style="text-transform:none;color:var(--muted2);font-weight:600">· paste a season for a whole squad</span></div>
+          <div id="fx-bulk"></div>
+        </div>
         <div class="panel" id="org-panel">
           <div class="panel-title">Organisation <span style="text-transform:none;color:var(--muted2);font-weight:600">· your gym, club or coaching business</span></div>
           <div id="org-body"></div>
@@ -599,6 +613,7 @@ async function loadAll(){
   renderPrograms();
   loadExerciseDemos();
   loadGroups();
+  renderFxBulk();
   if(selected){ const still=clients.find(c=>c.client_id===selected.client_id); if(still){ selected=still; renderDetail(); } }
 }
 
@@ -1922,6 +1937,156 @@ async function renderProgress(){
       }
     }
   });
+}
+
+// ── LOAD BOARD ──
+// Every signal the injury watch uses, side by side, for every athlete this coach
+// actively coaches. Deliberately no thresholds or colours of its own: the board
+// states facts, the assistant proposes, and the coach decides.
+let loadBoardCache = [];
+async function loadBoard(){
+  const box=$('load-board'); if(!box) return;
+  box.innerHTML='<div style="font-size:12px;color:var(--muted)">Reading…</div>';
+  const {data,error}=await sb.rpc('coach_load_board',{p_days:14});
+  if(error){ box.innerHTML='<div style="font-size:12px;color:var(--muted)">Could not read the board: '+esc(error.message)+'</div>'; return; }
+  loadBoardCache=data||[];
+  if(!loadBoardCache.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted)">No active athletes yet.</div>'; return; }
+  box.innerHTML=loadBoardCache.map(r=>{
+    const vt=Number(r.vol_this_week)||0, vp=Number(r.vol_prev_week)||0;
+    // The ratio is the story, but it is meaningless off a near-zero base, so a
+    // quiet previous week is shown as "—" rather than an invented spike.
+    const jump = vp>500 ? Math.round((vt/vp-1)*100) : null;
+    const bits=[];
+    bits.push(`${r.sessions_last_7} session${Number(r.sessions_last_7)===1?'':'s'}/7d`);
+    if(vt||vp) bits.push('vol '+Math.round(vt/1000)+'k vs '+Math.round(vp/1000)+'k'+(jump!==null?` (${jump>0?'+':''}${jump}%)`:''));
+    if(r.rpe_last_7!=null) bits.push('RPE '+(+r.rpe_last_7));
+    if(Number(r.games_last_7)) bits.push(r.games_last_7+' game'+(Number(r.games_last_7)===1?'':'s')+'/7d');
+    if(Number(r.minutes_last_14)) bits.push(r.minutes_last_14+' min/14d');
+    const chk=[]; if(r.energy!=null) chk.push('energy '+r.energy); if(r.sleep!=null) chk.push('sleep '+r.sleep); if(r.stress!=null) chk.push('stress '+r.stress);
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+        <div style="font-size:13px;font-weight:700">${esc(r.name||'Athlete')}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.next_date?'next '+esc(String(r.next_date))+(r.next_opponent?' · '+esc(r.next_opponent):'')+(r.next_importance==='key'?' · KEY':''):'no fixture'}</div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:2px">${esc(bits.join(' · ')||'nothing logged yet')}</div>
+      ${chk.length?`<div style="font-size:11px;color:var(--muted2);margin-top:1px">check-in: ${esc(chk.join(' · '))}</div>`:''}
+      ${Number(r.minutes_missing)?`<div style="font-size:11px;color:var(--warn,#c9a227);margin-top:2px"><i class="ti ti-alert-triangle"></i> ${r.minutes_missing} played game${Number(r.minutes_missing)===1?'':'s'} with no minutes logged — the picture is incomplete</div>`:''}
+    </div>`;
+  }).join('');
+  loadAdvice();
+}
+
+// Drafts the assistant has written. Nothing here has reached the athlete: the
+// coach approves (which sends it as their own message) or dismisses it.
+async function loadAdvice(){
+  const box=$('load-advice'); if(!box) return;
+  const {data}=await sb.from('load_advice').select('*').eq('status','pending').order('created_at',{ascending:false});
+  if(!data||!data.length){ box.innerHTML=''; return; }
+  const nameOf=id=>{ const c=loadBoardCache.find(x=>x.client_id===id); return c?c.name:'Athlete'; };
+  box.innerHTML=data.map(a=>`
+    <div style="background:var(--surface2);border:1px solid ${a.severity==='red'?'var(--danger,#c0392b)':'var(--border)'};border-radius:10px;padding:10px;margin-bottom:7px">
+      <div style="font-size:12.5px;font-weight:700">${esc(nameOf(a.client_id))} <span class="cc-tag">${esc(a.severity)}</span></div>
+      <div style="font-size:12.5px;margin-top:3px">${esc(a.headline)}</div>
+      ${a.detail?`<div style="font-size:11.5px;color:var(--muted);margin-top:3px">${esc(a.detail)}</div>`:''}
+      <div class="row-gap" style="margin-top:7px">
+        <button class="btn btn-primary" style="padding:7px 12px;font-size:12px" onclick="approveAdvice('${a.id}')">Send to athlete</button>
+        <button class="mini-btn" onclick="dismissAdvice('${a.id}')">Dismiss</button>
+      </div>
+    </div>`).join('');
+}
+async function approveAdvice(id){
+  const {data:row}=await sb.from('load_advice').select('headline,client_id').eq('id',id).single();
+  const msg=prompt('Message to the athlete — sent in your name, edit it as you like:', row?row.headline:'');
+  if(msg===null) return;
+  const {error}=await sb.rpc('load_advice_approve',{p_id:id,p_message:msg});
+  if(error){ toast('Error: '+error.message); return; }
+  if(row) notify({to:row.client_id, type:'message'});
+  toast('Sent'); loadAdvice(); if(selected) loadMessages();
+}
+async function dismissAdvice(id){
+  const {error}=await sb.from('load_advice').update({status:'dismissed'}).eq('id',id);
+  if(error){ toast('Error: '+error.message); return; }
+  loadAdvice();
+}
+async function askAssistantAboutLoad(){
+  if(!loadBoardCache.length) await loadBoard();
+  if(!loadBoardCache.length){ toast('No athletes to look at'); return; }
+  toast('Reading the board…');
+  const {data:{session}}=await sb.auth.getSession();
+  let out;
+  try{
+    const res=await fetch(SUPA_URL+'/functions/v1/ai',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+      body:JSON.stringify({action:'loadboard',board:loadBoardCache,today:new Date().toISOString().slice(0,10),lang:lang_})});
+    out=await res.json();
+  }catch(e){ toast('Could not reach the assistant'); return; }
+  if(out.error){ toast(out.error); return; }
+  const advice=((out.data||{}).advice)||[];
+  const real=advice.filter(a=>a.severity!=='ok'&&loadBoardCache.some(c=>c.client_id===a.client_id));
+  if(!real.length){ toast('Nothing the assistant would change right now'); loadAdvice(); return; }
+  // A re-run replaces the standing draft for an athlete rather than stacking up
+  // a pile — that is what the one-pending-per-athlete index is for.
+  for(const a of real){
+    await sb.from('load_advice').delete().eq('client_id',a.client_id).eq('status','pending');
+    await sb.from('load_advice').insert({coach_id:me_.id, client_id:a.client_id, severity:a.severity,
+      headline:a.headline, detail:a.detail, action_kind:a.action_kind, evidence:loadBoardCache.find(c=>c.client_id===a.client_id)});
+  }
+  toast(real.length+' suggestion'+(real.length===1?'':'s')+' to review');
+  loadAdvice();
+}
+
+// ── BULK MATCH SCHEDULE ──
+// A schedule arrives as a table for a whole squad, not one game at a time. Rows
+// are pasted, athletes are ticked, and one call writes them all; re-pasting a
+// schedule that has grown only adds what is new.
+function renderFxBulk(){
+  const box=$('fx-bulk'); if(!box) return;
+  box.innerHTML=`
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">One match per line: <code>date, opponent, home/away, key</code> — e.g. <code>2026-10-04, Valur, away, key</code>. Only the date is required.</div>
+    <textarea id="fx-paste" class="txta" rows="5" placeholder="2026-10-04, Valur, away, key&#10;2026-10-11, KR, home&#10;2026-10-18, Stjarnan, away"></textarea>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:10px 0 6px">Athletes</div>
+    <div id="fx-people" style="max-height:190px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:7px">
+      ${(clients||[]).filter(c=>c.status==='active').map(c=>`
+        <label style="display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12.5px">
+          <input type="checkbox" class="fx-who" value="${c.client_id}"> ${esc(c.profile&&c.profile.name||'Athlete')}
+        </label>`).join('')||'<div style="font-size:12px;color:var(--muted)">No active athletes.</div>'}
+    </div>
+    <div class="row-gap" style="margin-top:8px">
+      <button class="mini-btn" onclick="fxToggleAll(true)">Select all</button>
+      <button class="mini-btn" onclick="fxToggleAll(false)">None</button>
+    </div>
+    <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="fxBulkAdd()"><i class="ti ti-calendar-plus"></i> Add to selected athletes</button>`;
+}
+function fxToggleAll(on){ document.querySelectorAll('.fx-who').forEach(c=>c.checked=on); }
+// Tolerant on purpose: a pasted schedule is never perfectly formatted, and a
+// line the parser cannot read is better reported than silently dropped.
+function parseFixtureLines(text){
+  const rows=[], bad=[];
+  (text||'').split('\n').map(l=>l.trim()).filter(Boolean).forEach(line=>{
+    const parts=line.split(/[,;\t]/).map(s=>s.trim());
+    const d=(parts[0]||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(!d){ bad.push(line); return; }
+    const rest=parts.slice(1).map(s=>s.toLowerCase());
+    rows.push({
+      fixture_date: parts[0],
+      opponent: parts[1]&&!/^(home|away|neutral|key|normal|minor)$/i.test(parts[1]) ? parts[1] : null,
+      home_away: rest.find(s=>['home','away','neutral'].includes(s))||null,
+      importance: rest.find(s=>['key','normal','minor'].includes(s))||'normal'
+    });
+  });
+  return {rows, bad};
+}
+async function fxBulkAdd(){
+  const who=[...document.querySelectorAll('.fx-who:checked')].map(c=>c.value);
+  if(!who.length){ toast('Tick at least one athlete'); return; }
+  const {rows,bad}=parseFixtureLines(($('fx-paste')||{}).value);
+  if(!rows.length){ toast('No readable dates — use YYYY-MM-DD'); return; }
+  if(bad.length && !confirm(bad.length+' line'+(bad.length===1?'':'s')+" couldn't be read and will be skipped:\n\n"+bad.slice(0,5).join('\n')+'\n\nAdd the other '+rows.length+'?')) return;
+  const {data,error}=await sb.rpc('fixtures_bulk_add',{p_clients:who,p_rows:rows,p_team:null});
+  if(error){ toast('Error: '+error.message); return; }
+  const r=data||{};
+  toast(`${r.added||0} fixture${r.added===1?'':'s'} added`+((r.skipped)?` · ${r.skipped} already there`:'')+((r.blocked)?` · ${r.blocked} athlete(s) you don't coach`:''));
+  if($('fx-paste')) $('fx-paste').value='';
 }
 
 // ── MESSAGES (two-way coach ⇄ client) ──

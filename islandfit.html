@@ -364,6 +364,9 @@ body::before{
 .fx-key{font-size:10px;font-weight:800;letter-spacing:.06em;background:var(--lava-1,#ff5421);color:#1a0b04;border-radius:4px;padding:2px 5px;margin-left:5px;vertical-align:1px}
 .fx-minor{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--muted);margin-left:5px}
 .fx-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;padding:4px 6px;line-height:1}
+.fx-recent-h{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:14px 0 4px}
+.fx-min{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:100px;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.fx-min.done{border-color:var(--accent);color:var(--accent)}
 .fx-del:hover{color:var(--lava-1,#ff5421)}
 .match-badge{display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:10px;font-size:12.5px;color:var(--text-soft)}
 .match-badge b{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px}
@@ -2167,6 +2170,33 @@ function renderFixtures(){
     return `<div class="fx-row"><div><div class="fx-when">${f.fixture_date} · ${when}</div><div class="fx-opp">${escapeHtml(fxLabel(f))} ${imp}</div></div>
       <button class="fx-del" onclick="deleteFixture(decodeURIComponent('${encodeURIComponent(f.id)}'))" aria-label="Remove match"><i class="ti ti-trash"></i></button></div>`;
   }).join('') : '<div class="day-empty">No upcoming matches.</div>';
+
+  // Matches already played, so minutes can be recorded. A blank is "not logged
+  // yet", which is not the same as zero — the coach's load board shows the gap
+  // rather than treating an unlogged game as no load at all.
+  const past=fixtures.filter(f=>f.fixture_date<today)
+    .filter(f=>dayDiff(f.fixture_date,today)<=21)
+    .sort((a,b)=>b.fixture_date.localeCompare(a.fixture_date));
+  if(past.length){
+    box.innerHTML += `<div class="fx-recent-h">Recently played</div>` + past.map(f=>{
+      const logged = f.minutes!=null;
+      return `<div class="fx-row"><div><div class="fx-when">${f.fixture_date}</div>
+        <div class="fx-opp">${escapeHtml(fxLabel(f))}</div></div>
+        <button class="fx-min ${logged?'done':''}" onclick="logMinutes(decodeURIComponent('${encodeURIComponent(f.id)}'))">${logged?f.minutes+' min':'+ minutes'}</button></div>`;
+    }).join('');
+  }
+}
+async function logMinutes(id){
+  const f=fixtures.find(x=>x.id===id); if(!f) return;
+  const v=prompt('Minutes played'+(f.opponent?' vs '+f.opponent:'')+' — leave blank if you did not play:', f.minutes!=null?String(f.minutes):'');
+  if(v===null) return;
+  const n=v.trim()===''?0:parseInt(v,10);
+  if(isNaN(n)||n<0||n>240){ showToast('Enter a number between 0 and 240'); return; }
+  const part = n===0?'absent':(n>=70?'full':'part');
+  const {error}=await sb.rpc('fixture_log_minutes',{p_fixture:id,p_minutes:n,p_participation:part});
+  if(error){ showToast('Error: '+error.message); return; }
+  f.minutes=n; f.participation=part;
+  renderFixtures(); showToast(n?n+' minutes logged':'Logged as did not play');
 }
 async function addFixture(){
   const date=(document.getElementById('fx-date')||{}).value||'';

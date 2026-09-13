@@ -438,3 +438,64 @@ run it for.
 In the coach website this is the lower half of an expanded group: the athlete
 list with each one's program, add/remove, and *Assign to all* with a count of
 how many will actually be changed.
+
+---
+
+## 17. Fixture load, minutes, and the load board (migration 30)
+
+Migration 19 gave every athlete a fixture list, one row at a time. A coach does
+not plan one game at a time: a schedule arrives as a table for a whole squad,
+and the reason to hold it is to see load building up *before* it turns into an
+injury. Three things were missing.
+
+### 1. Minutes actually played
+A fixture on the calendar says nothing about what it cost the player — two
+athletes at the same game did 90 minutes and 0. `fixtures.minutes` and
+`participation` are per person, recorded after the fact by **either side**: the
+athlete knows what they played, the coach picked the team.
+
+> `minutes` is **nullable on purpose**. Null means "not logged yet", which is
+> not the same as `absent`. A zero would be a claim; a blank is a question. The
+> load board counts those blanks as `minutes_missing` and shows them, rather
+> than silently treating an unlogged game as no load.
+
+In the app, matches from the last 21 days appear under **Recently played** with
+a minutes button.
+
+### 2. A batch writer
+Twenty athletes × twelve games is 240 rows. `fixtures_bulk_add()` takes the
+rows as jsonb and a list of athletes, and returns `{added, skipped, blocked}`.
+
+* Access is re-checked **per athlete inside the loop**, not once at the top, so
+  a squad containing someone the coach does not actually coach reports them as
+  `blocked` instead of failing the whole batch.
+* `on conflict … do nothing` matches the unique index from migration 19, so
+  **re-pasting a schedule that has grown by two games adds the two and leaves
+  the rest alone** — verified: a re-paste of 3 rows over 2 existing gave
+  `added 1, skipped 2`.
+* The coach website parses pasted lines as `date, opponent, home/away, key`.
+  Only the date is required, and unreadable lines are reported before writing
+  rather than silently dropped.
+
+### 3. A read model
+The signals that say "this player is in the red" sat in five tables.
+`coach_load_board()` returns one row per actively-coached athlete with all of
+them side by side: games ahead/last 7/last 28, minutes, sessions, **volume this
+week and last week kept separate** (the ratio between them is the part that
+matters — a big week is normal, a big week on top of a quiet one is the spike),
+recent RPE, and the latest check-in.
+
+> It is deliberately **not a verdict**: no thresholds, no colours, no "at risk"
+> flag. What counts as too much depends on the sport and the athlete, and that
+> judgement belongs to the coach, not to a view.
+
+### The assistant proposes, the coach decides
+`load_advice` is a **draft queue**. The assistant (a new `loadboard` action in
+the `ai` edge function) reads the board and writes suggestions there; a partial
+unique index allows **one pending draft per athlete per coach**, so a re-run
+replaces the standing draft instead of stacking up a pile.
+
+Nothing in that table ever reaches the athlete. `load_advice_approve()` stamps
+it and sends the coach's own message through the existing thread — the athlete
+sees a message from their coach, not a queue of machine guesses about them. The
+coach can edit the wording before it goes.
