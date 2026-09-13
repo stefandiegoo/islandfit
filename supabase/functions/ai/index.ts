@@ -250,12 +250,14 @@ async function doLoadPlan(p: Record<string, unknown>) {
   try { return { data: JSON.parse(res.text || "{}") }; } catch { return { error: "Could not parse the AI response." }; }
 }
 
-// ── ACTION: read a coach's load board and draft advice ──
-// One suggestion per athlete at most, and "ok" is a perfectly good answer. The
-// output is a DRAFT: nothing here reaches the athlete until the coach approves
-// it, so the model is asked to write what a coach would be willing to send in
-// their own name, not a machine verdict.
-const LOADBOARD_SCHEMA = {
+// ── ACTION: draft load advice for the athletes the board already flagged ──
+// The coach website applies its own rules first and only sends the athletes it
+// has flagged; this rewrites each one as something a coach would be willing to
+// send in their own name. It must return EXACTLY one entry per athlete, in the
+// same order, because the caller pairs them positionally. If this action is
+// missing or fails, the site falls back to its own rule-written drafts, so the
+// queue is never empty for want of a model.
+const LOADREVIEW_SCHEMA = {
   type: "object", additionalProperties: false,
   properties: {
     advice: {
@@ -263,40 +265,38 @@ const LOADBOARD_SCHEMA = {
       items: {
         type: "object", additionalProperties: false,
         properties: {
-          client_id: { type: "string", description: "exact client_id from the board" },
-          severity: { type: "string", enum: ["red", "watch", "ok"] },
-          headline: { type: "string", description: "<=12 words, addressed to the athlete" },
-          detail: { type: "string", description: "one or two lines to the COACH, citing the numbers" },
+          headline: { type: "string", description: "<=14 words, addressed to the athlete, as a coach would say it" },
+          detail: { type: "string", description: "one or two lines to the COACH, citing the actual numbers" },
           action_kind: {
             type: "string",
             enum: ["deload", "shift_session", "extra_recovery", "cap_minutes", "no_change"],
           },
         },
-        required: ["client_id", "severity", "headline", "detail", "action_kind"],
+        required: ["headline", "detail", "action_kind"],
       },
     },
   },
   required: ["advice"],
 };
-async function doLoadBoard(p: Record<string, unknown>) {
+async function doLoadReview(p: Record<string, unknown>) {
+  const athletes = Array.isArray(p.athletes) ? (p.athletes as unknown[]) : [];
   const system =
-    "You are an experienced strength and conditioning coach reviewing a squad's load board. Each row is one " +
-    "athlete over the last fortnight: matches played and coming up, minutes on the pitch, gym sessions, training " +
-    "volume this week versus last week, recent RPE, and their latest self-reported energy, sleep and stress.\n" +
-    "Flag ONLY athletes where the numbers genuinely warrant it. What warrants it: a sharp jump in training volume " +
-    "week on week, high minutes stacked on top of a heavy gym week, two or more matches inside seven days with no " +
-    "let-up, sustained RPE at or above 8.5, or poor sleep/energy alongside a rising load. Say to ADD load as " +
-    "readily as to cut it — a long fixture-free window with low volume is a chance to build, not to coast.\n" +
-    "minutes_missing counts matches already played with no minutes recorded. That is a GAP IN THE DATA, not zero " +
-    "load: if it is high, say the picture is incomplete rather than drawing a conclusion from it.\n" +
-    "Return at most one entry per athlete and skip anyone who looks fine — an empty list is a good answer. Use the " +
-    "exact client_id given. The headline is what the ATHLETE may be told, so write it as a coach would say it; the " +
-    "detail is for the coach and should cite the actual numbers. " +
+    "You are an experienced strength and conditioning coach. You are given athletes a load review has ALREADY " +
+    "flagged, each with their last fortnight: games ahead and played, match minutes, gym sessions, the ratio of " +
+    "this week's training volume to last week's, recent RPE, self-reported energy/sleep/stress, days to their next " +
+    "game, and the reasons they were flagged.\n" +
+    "Write the advice for each one. Return EXACTLY " + athletes.length + " entries in the SAME ORDER as the input " +
+    "array \u2014 entry 1 is for athlete 1 \u2014 because they are paired by position. Never merge, reorder or skip.\n" +
+    "The headline is what the ATHLETE may be told, so write it the way a coach speaks to their athlete: concrete, " +
+    "no jargon, no hedging. The detail is for the COACH and should cite the actual numbers behind the flag. " +
+    "Say to ADD load as readily as to cut it where the numbers support it, and choose no_change if the flag does " +
+    "not really warrant altering the plan. " +
     langLine(String(p.lang || "en"));
   const user =
-    "Load board (JSON):\n" + JSON.stringify(p.board ?? [], null, 2) +
-    "\n\nToday is " + String(p.today || "") + ". Which of these athletes needs the plan changed, and how?";
-  const res = await callClaude(system, user, { maxTokens: 1500, schema: LOADBOARD_SCHEMA });
+    "Flagged athletes (JSON array, " + athletes.length + " of them):\n" +
+    JSON.stringify(athletes, null, 2) +
+    "\n\nWrite one piece of advice for each, in order.";
+  const res = await callClaude(system, user, { maxTokens: 1500, schema: LOADREVIEW_SCHEMA });
   if (res.error) return res;
   try { return { data: JSON.parse(res.text || "{}") }; } catch { return { error: "Could not parse the AI response." }; }
 }
@@ -365,7 +365,7 @@ Deno.serve(async (req: Request) => {
     if (action === "onboard") return json(await doOnboard(p));
     if (action === "actions") return json(await doActions(p));
     if (action === "loadplan") return json(await doLoadPlan(p));
-    if (action === "loadboard") return json(await doLoadBoard(p));
+    if (action === "load_review") return json(await doLoadReview(p));
     if (action === "program") return json(await doProgram(p));
     return json({ error: "Unknown action: " + action }, 400);
   } catch (e) {

@@ -490,10 +490,17 @@ recent RPE, and the latest check-in.
 > judgement belongs to the coach, not to a view.
 
 ### The assistant proposes, the coach decides
-`load_advice` is a **draft queue**. The assistant (a new `loadboard` action in
-the `ai` edge function) reads the board and writes suggestions there; a partial
-unique index allows **one pending draft per athlete per coach**, so a re-run
-replaces the standing draft instead of stacking up a pile.
+`load_advice` is a **draft queue**. The coach website applies its own rules to
+the board first, then asks the assistant (the `load_review` action in the `ai`
+edge function) to write each flagged athlete up properly; a partial unique
+index allows **one pending draft per athlete per coach**, so a re-run replaces
+the standing draft instead of stacking up a pile.
+
+> The model is an enhancement, not a dependency. `load_review` returns one
+> entry per flagged athlete **in input order** (the caller pairs them by
+> position), and if the action is missing or the call fails, the site falls
+> back to its own rule-written drafts. The queue is never empty for want of a
+> model.
 
 Nothing in that table ever reaches the athlete. `load_advice_approve()` stamps
 it and sends the coach's own message through the existing thread — the athlete

@@ -7,7 +7,7 @@
 <title>ÍslandFit · Coach Dashboard</title>
 <meta name="description" content="ÍslandFit coach dashboard — full overview of every client, connected live to the app.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -239,6 +239,32 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
 .req-banner{background:linear-gradient(135deg,rgba(25,240,168,.08),rgba(43,214,238,.05))}
 .pill-green{background:rgba(25,240,168,.14);color:var(--aurora-1)}
 .msg-me{background:linear-gradient(135deg,rgba(25,240,168,.18),rgba(43,214,238,.12));border:1px solid rgba(25,240,168,.25)}
+
+/* ── refresh layer restored (density & calm chrome from the Lava & Ash handoff) ── */
+.btn-primary:hover{box-shadow:0 8px 24px rgba(255,84,33,0.28)}
+.field input:focus{box-shadow:0 0 0 3px rgba(255,84,33,0.12)}
+body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,0.10),transparent 45%),radial-gradient(ellipse at 88% 5%,rgba(167,139,250,0.06),transparent 45%),radial-gradient(ellipse at 50% 30%,rgba(25,240,168,0.05),transparent 55%)}
+main{padding:20px 28px 40px}
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat{padding:15px 18px;border-radius:14px}
+.stat-num{font-size:32px;margin-bottom:2px}
+.alert-banner,.req-banner{margin-bottom:16px;padding:15px 18px}
+.ctabs{display:flex;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:4px;margin:0 0 18px}
+.ctab{flex:1;padding:9px 6px;border-radius:9px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);background:none;border:none;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,color .15s;white-space:nowrap}
+.ctab i{font-size:15px}
+.ctab-panel .section-lbl:first-child{margin-top:6px}
+.client-tools{display:flex;gap:8px;margin-bottom:12px}
+.client-search{flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:9px 12px;font-size:13px}
+.client-sort{background:var(--surface2);border:1px solid var(--border);color:var(--text-soft);border-radius:10px;padding:9px 10px;font-size:12px;font-weight:600}
+.client-sort:focus{outline:none;border-color:var(--accent)}
+#connect-chevron{transition:transform .2s;font-size:16px;margin-left:auto}
+.panel{padding:18px}
+.grid{gap:20px}
+.panel,.stat{border-color:rgba(255,255,255,.06)}
+.topbar{background:rgba(14,12,11,0.82);border-bottom-color:rgba(255,255,255,.06)}
+.pill-green{background:rgba(25,240,168,0.14);color:var(--aurora-1)}
+.msg-me{background:linear-gradient(135deg,rgba(25,240,168,0.16),rgba(43,214,238,0.10));border:1px solid rgba(25,240,168,0.22)}
+.req-banner{background:linear-gradient(135deg,rgba(25,240,168,0.07),rgba(43,214,238,0.04))}
 </style>
 </head>
 <body>
@@ -270,6 +296,8 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
       <div class="tb-logo"><span class="gradient">ÍSLAND</span>FIT <span style="color:var(--muted);font-size:14px;font-family:'Inter';font-weight:600;letter-spacing:0">Coach</span></div>
       <div class="tb-right">
         <span class="tb-name" id="tb-name"></span>
+        <button class="tb-btn" onclick="goClub()"><i class="ti ti-building"></i> Club</button>
+        <button class="tb-btn" onclick="goGames()"><i class="ti ti-calendar-event"></i> Games</button>
         <a href="islandfit.html?coach" class="tb-btn accent"><i class="ti ti-device-mobile"></i> Open App</a>
         <button class="tb-btn" onclick="doLogout()"><i class="ti ti-logout"></i> Sign out</button>
       </div>
@@ -278,6 +306,8 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
   <main>
     <!-- Attention needed (triage first) -->
     <div id="alerts"></div>
+    <!-- Load watch (fixtures + training, per athlete) -->
+    <div id="loadboard"></div>
     <!-- Pending requests -->
     <div id="requests"></div>
     <!-- Stats -->
@@ -335,42 +365,75 @@ body::before{background:radial-gradient(ellipse at 12% 0%,rgba(255,84,33,.10),tr
           <button class="btn btn-primary btn-block" onclick="saveExerciseDemo()"><i class="ti ti-plus"></i> Save demo</button>
           <div id="ed-list" style="margin-top:10px"></div>
         </div>
-        <div class="panel" id="load-panel">
-          <div class="panel-title">Load board <span style="text-transform:none;color:var(--muted2);font-weight:600">· the last fortnight, per athlete</span></div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Facts, not a verdict — what counts as too much depends on the sport and the athlete. Volume is split into this week and last week because the <em>jump</em> between them is the part that matters.</div>
-          <div class="row-gap" style="margin-bottom:10px">
-            <button class="btn btn-ghost" style="flex:1" onclick="loadBoard()"><i class="ti ti-refresh"></i> Refresh</button>
-            <button class="btn btn-primary" style="flex:1" onclick="askAssistantAboutLoad()"><i class="ti ti-sparkles"></i> Ask the assistant</button>
+        <div class="panel" style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:800">Club</div>
+            <div id="club-line" style="font-size:12px;color:var(--muted)">Teams, coaches and seats</div>
           </div>
-          <div id="load-advice" style="margin-bottom:12px"></div>
-          <div id="load-board"><div style="font-size:12px;color:var(--muted)">Press Refresh to read the board.</div></div>
-        </div>
-        <div class="panel" id="fixtures-panel">
-          <div class="panel-title">Match schedule <span style="text-transform:none;color:var(--muted2);font-weight:600">· paste a season for a whole squad</span></div>
-          <div id="fx-bulk"></div>
-        </div>
-        <div class="panel" id="org-panel">
-          <div class="panel-title">Organisation <span style="text-transform:none;color:var(--muted2);font-weight:600">· your gym, club or coaching business</span></div>
-          <div id="org-body"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-title">Colleagues <span style="text-transform:none;color:var(--muted2);font-weight:600">· coaches you work with</span></div>
-          <div class="row-gap" style="margin-bottom:10px">
-            <input id="peer-email" class="sel" style="flex:1" placeholder="coach@email.com">
-            <button class="btn btn-ghost" style="padding:12px 16px" onclick="invitePeerDash()">Connect</button>
-          </div>
-          <div id="peer-list-dash"></div>
-          <div style="font-size:11px;color:var(--muted);margin-top:8px">Coaches in the same organisation are colleagues automatically — you only need this for someone outside it.</div>
+          <button class="btn btn-ghost" style="padding:10px 14px;font-size:12px;white-space:nowrap" onclick="goClub()">Open <i class="ti ti-arrow-right"></i></button>
         </div>
         <div class="panel">
           <div class="panel-title">Groups <span style="text-transform:none;color:var(--muted2);font-weight:600">· bulk-assign, leaderboard, chat</span></div>
           <div class="row-gap" style="margin-bottom:10px"><input id="grp-name" class="sel" style="flex:1" placeholder="New group (e.g. Competition squad)"><button class="btn btn-primary" style="padding:12px 16px" onclick="createGroup()"><i class="ti ti-plus"></i></button></div>
           <div id="groups-list"></div>
         </div>
+        <div class="panel" style="display:flex;align-items:center;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:800">Match calendar</div>
+            <div style="font-size:12px;color:var(--muted)">One game or a whole season</div>
+          </div>
+          <button class="btn btn-ghost" style="padding:10px 14px;font-size:12px;white-space:nowrap" onclick="goGames()">Open <i class="ti ti-arrow-right"></i></button>
+        </div>
       </div>
       <!-- Right: client detail -->
       <div class="panel" id="detail">
         <div class="detail-empty"><i class="ti ti-arrow-left" style="font-size:28px;opacity:0.5"></i><div style="margin-top:10px">Select a client to see their full overview</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── MATCH CALENDAR — its own page: entering a season is a sitting-down job ── -->
+<div id="view-games" class="shell hidden">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="tb-logo"><span class="gradient">ÍSLAND</span>FIT <span style="color:var(--muted);font-size:14px;font-family:'Inter';font-weight:600;letter-spacing:0">Games</span></div>
+      <div class="tb-right">
+        <button class="tb-btn" onclick="goClients()"><i class="ti ti-arrow-left"></i> Clients</button>
+        <button class="tb-btn" onclick="doLogout()"><i class="ti ti-logout"></i> Sign out</button>
+      </div>
+    </div>
+  </div>
+  <main style="max-width:560px">
+    <div class="panel">
+      <div class="panel-title">Match calendar <span style="text-transform:none;color:var(--muted2);font-weight:600">· one game or a whole season</span></div>
+      <div id="fx-body"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ── CLUB (organisation, teams, coaches) — its own page, reached from the topbar ── -->
+<div id="view-club" class="shell hidden">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="tb-logo"><span class="gradient">ÍSLAND</span>FIT <span style="color:var(--muted);font-size:14px;font-family:'Inter';font-weight:600;letter-spacing:0">Club</span></div>
+      <div class="tb-right">
+        <button class="tb-btn" onclick="goClients()"><i class="ti ti-arrow-left"></i> Clients</button>
+        <button class="tb-btn" onclick="doLogout()"><i class="ti ti-logout"></i> Sign out</button>
+      </div>
+    </div>
+  </div>
+  <main style="max-width:860px">
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div id="org-body"></div>
+      <div class="panel">
+        <div class="panel-title">Colleagues <span style="text-transform:none;color:var(--muted2);font-weight:600">· coaches outside the club</span></div>
+        <div class="row-gap" style="margin-bottom:10px">
+          <input id="peer-email" class="sel" style="flex:1" placeholder="coach@email.com">
+          <button class="btn btn-ghost" style="padding:12px 16px" onclick="invitePeerDash()">Connect</button>
+        </div>
+        <div id="peer-list-dash"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">Coaches in the same organisation are colleagues automatically — you only need this for someone outside it.</div>
       </div>
     </div>
   </main>
@@ -513,7 +576,13 @@ let me_ = null, profile_ = null, clients = [], selected = null, lang_ = 'en';
 const $ = id => document.getElementById(id);
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600); }
-function show(view){ ['view-login','view-dash'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); }
+// The club console is a page of its own: managing seats, teams and coaches is
+// a different job from coaching, done on different days, and putting it beside
+// the client list made both longer than they needed to be.
+function show(view){ ['view-login','view-dash','view-club','view-games'].forEach(v=>$(v).classList.toggle('hidden', v!==view)); }
+function goClub(){ show('view-club'); location.hash='club'; window.scrollTo(0,0); loadOrgs(); loadPeersDash(); }
+function goGames(){ show('view-games'); location.hash='games'; window.scrollTo(0,0); renderFixturePanel(); }
+function goClients(){ show('view-dash'); location.hash=''; window.scrollTo(0,0); }
 
 async function aiCall(action, payload){
   let token = AI_APIKEY;
@@ -553,7 +622,7 @@ async function afterLogin(user){
     show('view-login');
     return;
   }
-  show('view-dash');
+  show(location.hash==='#club' ? 'view-club' : location.hash==='#games' ? 'view-games' : 'view-dash');
   $('tb-name').textContent = profile_.name ? 'Coach ' + profile_.name : 'Coach';
   await loadAll();
 }
@@ -613,7 +682,9 @@ async function loadAll(){
   renderPrograms();
   loadExerciseDemos();
   loadGroups();
-  renderFxBulk();
+  loadBoard();
+  loadAdvice();
+  renderFixturePanel();
   if(selected){ const still=clients.find(c=>c.client_id===selected.client_id); if(still){ selected=still; renderDetail(); } }
 }
 
@@ -699,97 +770,237 @@ async function loadOrgs(){
   const {data}=await sb.rpc('my_orgs');
   myOrgs=data||[];
   if(myOrgs.length && !myOrgs.some(o=>o.org_id===orgCur)) orgCur=myOrgs[0].org_id;
+  const line=$('club-line');
+  if(line){
+    const o=myOrgs.find(x=>x.org_id===orgCur);
+    line.textContent = o
+      ? o.name + ' · ' + (o.seats==null ? o.seats_used+' coaches' : o.seats_used+'/'+o.seats+' seats')
+      : 'Not in a club yet';
+  }
   await renderOrg();
 }
 function orgMine(){ return myOrgs.find(o=>o.org_id===orgCur)||null; }
 function orgIsAdmin(){ const o=orgMine(); return !!o && (o.role==='owner'||o.role==='admin'); }
 
+// ── CLUB CONSOLE ──
+// The architecture we settled on: one club, one chain — club → coaches →
+// groups → athletes, each on its own tab instead of four stacked lists. The
+// header carries the things that are true on every tab (who you are looking
+// at, how many seats are gone, the one code that lets a coach in).
+let orgTab='overview', orgTeamCoaches={}, orgClientsCache=[], orgCodeCache=[];
+function clubTab(t){ orgTab=t; renderOrg(); }
+function orgInitials(n){ return String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
+function orgRolePill(r){
+  const c = r==='owner' ? ['var(--lava-1)','rgba(255,84,33,.13)','#ffb38a']
+    : r==='admin' ? ['var(--aurora-1)','rgba(25,240,168,.11)','#33e7b0']
+    : ['var(--border-bright)','var(--surface2)','var(--muted)'];
+  return `display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border:1px solid ${c[0]};background:${c[1]};color:${c[2]}`;
+}
 async function renderOrg(){
   const box=$('org-body'); if(!box) return;
   if(!myOrgs.length){
-    box.innerHTML=`
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Create one for your gym or club, or join with a code from whoever runs it.</div>
+    box.innerHTML=`<div class="panel">
+      <div class="panel-title">No club yet</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Create one for your gym or club, or join with a code from whoever runs it.</div>
       <div class="row-gap" style="margin-bottom:8px">
         <input id="org-new-name" class="sel" style="flex:1" placeholder="Name (e.g. Kraftlyftingafélagið)">
         <input id="org-new-seats" class="sel" style="width:110px" placeholder="Seats" type="number" min="1">
       </div>
-      <button class="btn btn-primary btn-block" style="margin-bottom:14px" onclick="createOrg()"><i class="ti ti-building"></i> Create organisation</button>
+      <button class="btn btn-primary btn-block" style="margin-bottom:16px" onclick="createOrg()"><i class="ti ti-building"></i> Create club</button>
       <div class="row-gap">
         <input id="org-join-code" class="sel" style="flex:1" placeholder="TEAM-XXXXX">
         <button class="btn btn-ghost" style="padding:12px 16px" onclick="joinOrg()">Join</button>
-      </div>`;
+      </div></div>`;
     return;
   }
-  const o=orgMine();
-  const seats = o.seats==null ? `${o.seats_used} coaches` : `${o.seats_used} / ${o.seats} seats`;
-  const full = o.seats!=null && Number(o.seats_used)>=Number(o.seats);
-  const [{data:roster},{data:teams}]=await Promise.all([
-    sb.rpc('org_roster',{p_org:orgCur}), sb.rpc('org_team_list',{p_org:orgCur})
+  const o=orgMine(), admin=orgIsAdmin();
+  const [{data:roster},{data:teams},{data:cls}]=await Promise.all([
+    sb.rpc('org_roster',{p_org:orgCur}),
+    sb.rpc('org_team_list',{p_org:orgCur}),
+    sb.rpc('org_client_list',{p_org:orgCur})
   ]);
-  orgRosterCache=roster||[]; orgTeams=teams||[];
-  const switcher = myOrgs.length>1
-    ? `<select class="sel" style="width:100%;margin-bottom:10px" onchange="orgCur=this.value;renderOrg()">${myOrgs.map(x=>`<option value="${x.org_id}"${x.org_id===orgCur?' selected':''}>${esc(x.name)}</option>`).join('')}</select>` : '';
-  box.innerHTML = switcher + `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-      <div style="font-size:15px;font-weight:800">${esc(o.name)}</div>
-      <span class="cc-tag">${esc(o.role)}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:12px;color:${full?'var(--lava-1)':'var(--muted)'}">${seats}${full?' · full':''}</div>
-      <button class="mini-btn" style="font-size:11px;padding:3px 8px" onclick="leaveOrg()">Leave</button>
-    </div>
+  orgRosterCache=roster||[]; orgTeams=teams||[]; orgClientsCache=cls||[];
+  // Which groups each coach is in, and which one they run. The Coaches tab
+  // shows it because "who leads what" is the question an admin opens this for.
+  const tc=await Promise.all(orgTeams.map(t=>sb.rpc('team_coaches',{p_team:t.team_id})));
+  orgTeamCoaches={};
+  orgTeams.forEach((t,i)=>{ ((tc[i]||{}).data||[]).forEach(c=>{
+    (orgTeamCoaches[c.user_id]=orgTeamCoaches[c.user_id]||[]).push({team:t.name, lead:c.team_role==='lead'});
+  }); });
+  if(admin){ const {data}=await sb.from('org_invites').select('*').eq('org_id',orgCur).eq('active',true).order('created_at',{ascending:false}); orgCodeCache=data||[]; }
 
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Coaches</div>
-    <div style="margin-bottom:14px">${(orgRosterCache||[]).map(r=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
-        <div><div style="font-size:13px;font-weight:600">${esc(r.name||'Coach')} <span class="cc-tag">${esc(r.role)}</span></div>
-          <div style="font-size:11px;color:var(--muted)">${r.clients} client${Number(r.clients)===1?'':'s'}</div></div>
-        ${orgIsAdmin()&&r.user_id!==me_.id?`<button class="mini-btn" onclick="removeOrgMember('${r.user_id}','${esc((r.name||'this coach').replace(/'/g,""))}')"><i class="ti ti-x"></i></button>`:''}
-      </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">Just you.</div>'}</div>
+  const seatsTxt = o.seats==null ? `${o.seats_used} coaches` : `${o.seats_used} of ${o.seats} seats`;
+  const full = o.seats!=null && Number(o.seats_used)>=Number(o.seats);
+  const code = orgCodeCache[0];
+  const athleteCount = orgClientsCache.length;
+  const tabs=[['overview','Overview'],['coaches','Coaches'],['groups','Groups'],['athletes','Athletes'],['settings','Settings']];
 
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Teams</div>
-    <div style="margin-bottom:10px">${(orgTeams||[]).map(t=>`
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><div style="font-size:13px;font-weight:700">${esc(t.name)}</div>
-            <div style="font-size:11px;color:var(--muted)">${t.coaches} coach${Number(t.coaches)===1?'':'es'}${t.focus?' · '+esc(t.focus):''}${Number(t.athletes)?' · '+t.athletes+' athlete'+(Number(t.athletes)===1?'':'s'):''}${t.lead_name?' · led by '+esc(t.lead_name):''}</div></div>
-          <div style="display:flex;gap:5px">
-            ${orgIsAdmin()?`<button class="mini-btn" title="Rename" onclick="renameTeam('${t.team_id}','${esc((t.name||'').replace(/'/g,""))}')"><i class="ti ti-pencil"></i></button>
-            <button class="mini-btn" title="Delete team" onclick="deleteTeam('${t.team_id}','${esc((t.name||'this team').replace(/'/g,""))}')"><i class="ti ti-trash"></i></button>`:''}
-            <button class="mini-btn" onclick="toggleTeam('${t.team_id}')"><i class="ti ti-chevron-down"></i></button>
-          </div>
+  box.innerHTML=`
+  <div style="border:1px solid var(--border);border-radius:20px;overflow:hidden;background:var(--bg-deep)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:13px;min-width:0">
+        <span style="width:40px;height:40px;border-radius:11px;background:linear-gradient(140deg,var(--lava-2),var(--lava-1) 55%,var(--lava-deep));display:flex;align-items:center;justify-content:center;flex:0 0 auto"><i class="ti ti-flame" style="font-size:21px;color:#1c0a04"></i></span>
+        <div style="min-width:0">
+          <div style="font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.name)}</div>
+          <div style="font-size:12px;color:${full?'var(--lava-1)':'var(--muted)'};margin-top:2px">${seatsTxt}${full?' · full':''} · you are ${esc(o.role)}</div>
         </div>
-        <div id="team-${t.team_id}" class="hidden" style="margin-top:8px"></div>
-      </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No teams yet.</div>'}</div>
-    ${orgIsAdmin()?`<div class="row-gap" style="margin-bottom:14px">
-      <input id="team-new" class="sel" style="flex:1" placeholder="New team (e.g. Strength staff)">
-      <button class="btn btn-ghost" style="padding:12px 16px" onclick="createTeam()"><i class="ti ti-plus"></i></button></div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+        ${myOrgs.length>1?`<select class="sel" style="padding:9px 11px" onchange="orgCur=this.value;renderOrg()">${myOrgs.map(x=>`<option value="${x.org_id}"${x.org_id===orgCur?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`:''}
+        ${code?`<button class="mini-btn" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ffb38a" onclick="copyOrgCode('${esc(code.code)}')">${esc(code.code)} <i class="ti ti-copy"></i></button>`:''}
+        ${admin?`<button class="btn btn-primary" style="padding:9px 14px;font-size:12.5px" onclick="clubTab('coaches')"><i class="ti ti-user-plus"></i> Invite</button>`:''}
+      </div>
+    </div>
 
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Clients of the organisation</div>
-    <div id="org-clients" style="margin-bottom:14px"></div>
+    <div style="display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid var(--border);overflow-x:auto">
+      ${tabs.map(([id,label])=>`<button onclick="clubTab('${id}')" style="padding:10px 15px;border:0;border-bottom:2px solid ${orgTab===id?'var(--lava-1)':'transparent'};background:transparent;color:${orgTab===id?'var(--text)':'var(--muted)'};font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">${label}</button>`).join('')}
+    </div>
 
-    ${orgIsAdmin()?`<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Invite a coach</div>
+    <div style="padding:20px">${
+      orgTab==='overview' ? clubOverviewHtml(o, athleteCount, code)
+      : orgTab==='coaches' ? clubCoachesHtml(admin)
+      : orgTab==='groups' ? clubGroupsHtml(admin)
+      : orgTab==='athletes' ? clubAthletesHtml(admin)
+      : clubSettingsHtml(o, admin)
+    }</div>
+  </div>`;
+}
+
+function clubOverviewHtml(o, athletes, code){
+  const free = o.seats==null ? '—' : Math.max(0, Number(o.seats)-Number(o.seats_used));
+  const stats=[
+    ['ti ti-user-star', orgRosterCache.length, 'coaches'],
+    ['ti ti-users-group', orgTeams.length, 'groups'],
+    ['ti ti-barbell', athletes, 'athletes'],
+    ['ti ti-license', free, 'seats free']
+  ];
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;margin-bottom:18px">
+    ${stats.map(s=>`<div style="padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:14px">
+      <i class="${s[0]}" style="font-size:19px;color:var(--lava-2)"></i>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:40px;line-height:1;margin:10px 0 3px">${s[1]}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--muted2)">${s[2]}</div>
+    </div>`).join('')}
+  </div>
+  <div style="padding:18px 20px;background:linear-gradient(135deg,rgba(255,84,33,.10),var(--surface) 68%);border:1px solid rgba(255,106,43,.26);border-radius:14px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:6px">One code gets everyone in</div>
+    <div style="font-size:13.5px;line-height:1.6;color:var(--text-soft);max-width:620px">A coach enters ${code?`<span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#ffb38a">${esc(code.code)}</span>`:'the club code'} and is immediately a colleague of everyone else — no one-to-one invites, no approval step. Admins choose whether a code creates a coach or an admin.</div>
+  </div>`;
+}
+
+function clubCoachesHtml(admin){
+  const head=`<div style="display:grid;grid-template-columns:2fr 1.1fr 1.2fr auto;gap:12px;padding:0 12px 10px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2)">
+    <span>Coach</span><span>Role</span><span>Groups</span><span style="text-align:right">Athletes</span></div>`;
+  const rows=orgRosterCache.map(r=>{
+    const gs=(orgTeamCoaches[r.user_id]||[]);
+    const groups = gs.length ? gs.map(g=>esc(g.team)+(g.lead?' <span style="color:var(--lava-2)">(main)</span>':'')).join(', ') : '<span style="color:var(--muted2)">—</span>';
+    return `<div style="display:grid;grid-template-columns:2fr 1.1fr 1.2fr auto;gap:12px;align-items:center;padding:13px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">
+        <span class="avatar" style="flex:0 0 auto">${esc(orgInitials(r.name))}</span>
+        <span style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name||'Coach')}${r.user_id===me_.id?' <span style="color:var(--muted2);font-weight:500">(you)</span>':''}</span>
+      </div>
+      <span><span style="${orgRolePill(r.role)}">${esc(r.role)}</span></span>
+      <span style="font-size:12.5px;color:var(--text-soft)">${groups}</span>
+      <span style="display:flex;align-items:center;gap:8px;justify-content:flex-end"><b style="font-size:14px">${r.clients}</b>
+        ${admin&&r.user_id!==me_.id?`<button class="mini-btn" onclick="removeOrgMember('${r.user_id}','${esc((r.name||'this coach').replace(/'/g,''))}')"><i class="ti ti-x"></i></button>`:''}</span>
+    </div>`;
+  }).join('');
+  const invite = admin ? `
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Invite a coach</div>
       <div class="row-gap" style="margin-bottom:8px">
-        <select id="org-inv-role" class="sel" style="flex:1"><option value="coach">Coach</option><option value="admin">Admin</option></select>
-        <button class="btn btn-primary" style="padding:12px 16px" onclick="newOrgInvite()">Create code</button>
-      </div><div id="org-invites"></div>`:''}`;
-  if(orgIsAdmin()) loadOrgInvites();
-  loadOrgClients();
+        <select id="org-inv-role" class="sel" style="flex:1"><option value="coach">Joins as coach</option><option value="admin">Joins as admin</option></select>
+        <button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="newOrgInvite()">Create code</button>
+      </div>
+      ${orgCodeCache.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ffb38a">${esc(c.code)}</span>
+        <span style="font-size:11px;color:var(--muted)">${esc(c.role||'coach')}</span>
+        <button class="mini-btn" onclick="killOrgInvite('${c.id}')"><i class="ti ti-x"></i></button>
+      </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No live codes.</div>'}
+    </div>` : '';
+  return head + (rows||'<div style="font-size:13px;color:var(--muted)">Just you.</div>')
+    + `<div style="font-size:12px;color:var(--muted2);margin-top:12px">Admins change roles, promote other admins and remove coaches. A coach who leaves loses the club's athletes but keeps the ones they brought in themselves.</div>`
+    + invite;
+}
+
+// A group card opens in place: coaches and the main-coach picker, then the
+// squad of athletes and the one-click program assignment. Same functions as
+// before — toggleTeam() and renderSquad() write into the container below.
+function clubGroupsHtml(admin){
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:13px">
+    ${orgTeams.map(t=>`<div style="padding:18px;background:var(--surface);border:1px solid var(--border);border-radius:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:1.05;text-transform:uppercase">${esc(t.name)}</span>
+        <div style="display:flex;gap:5px;flex:0 0 auto">
+          ${admin?`<button class="mini-btn" title="Rename" onclick="renameTeam('${t.team_id}','${esc((t.name||'').replace(/'/g,''))}')"><i class="ti ti-pencil"></i></button>
+          <button class="mini-btn" title="Delete" onclick="deleteTeam('${t.team_id}','${esc((t.name||'this group').replace(/'/g,''))}')"><i class="ti ti-trash"></i></button>`:''}
+          <button class="mini-btn" onclick="toggleTeam('${t.team_id}')"><i class="ti ti-chevron-down"></i></button>
+        </div>
+      </div>
+      ${t.focus?`<div style="font-size:12.5px;color:var(--lava-2);margin-top:5px">${esc(t.focus)}</div>`:''}
+      ${t.lead_name?`<div style="font-size:12px;color:var(--muted);margin-top:5px">Main coach: ${esc(t.lead_name)}</div>`:''}
+      <div style="display:flex;gap:18px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div><div style="font-size:19px;font-weight:700">${t.coaches}</div><div style="font-size:11.5px;color:var(--muted2);margin-top:3px">coaches</div></div>
+        <div><div style="font-size:19px;font-weight:700">${t.athletes||0}</div><div style="font-size:11.5px;color:var(--muted2);margin-top:3px">athletes</div></div>
+      </div>
+      <div id="team-${t.team_id}" class="hidden" style="margin-top:10px"></div>
+    </div>`).join('')}
+    ${admin?`<div style="padding:18px;background:var(--bg-deep);border:1px dashed var(--border-bright);border-radius:14px;display:flex;flex-direction:column;justify-content:center;gap:9px;min-height:148px">
+      <input id="team-new" class="sel" placeholder="Group name (e.g. U18)">
+      <button class="btn btn-ghost btn-block" onclick="createTeam()"><i class="ti ti-plus"></i> New group</button>
+    </div>`:''}
+  </div>${orgTeams.length?'':'<div style="font-size:13px;color:var(--muted);margin-top:12px">No groups yet.</div>'}`;
+}
+
+function clubAthletesHtml(admin){
+  // Which group an athlete sits in comes from the squad lists, which are
+  // loaded per group on demand — so this column says what the roster knows.
+  const head=`<div style="display:grid;grid-template-columns:2fr 1.2fr auto;gap:12px;padding:0 12px 10px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2)">
+    <span>Athlete</span><span>Sport</span><span style="text-align:right">Coaches here</span></div>`;
+  const rows=orgClientsCache.map(c=>`
+    <div style="display:grid;grid-template-columns:2fr 1.2fr auto;gap:12px;align-items:center;padding:13px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">
+        <span class="avatar" style="flex:0 0 auto">${esc(orgInitials(c.name))}</span>
+        <span style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name||'Athlete')}</span>
+      </div>
+      <span style="font-size:12.5px;color:var(--text-soft)">${esc(c.sport||'—')}</span>
+      <span style="display:flex;align-items:center;gap:8px;justify-content:flex-end"><b style="font-size:14px">${c.coaches}</b>
+        ${admin?`<button class="mini-btn" onclick="removeOrgClient('${c.client_id}','${esc((c.name||'this athlete').replace(/'/g,''))}')"><i class="ti ti-x"></i></button>`:''}</span>
+    </div>`).join('');
+  return head + (rows||'<div style="font-size:13px;color:var(--muted)">No athletes on the roster yet — share one with a group, or add them from their page.</div>')
+    + `<div style="font-size:12px;color:var(--muted2);margin-top:12px">Removing an athlete withdraws access from the club's coaches — but not from whoever brought them in.</div>`;
+}
+
+function clubSettingsHtml(o, admin){
+  const used=Number(o.seats_used), cap=o.seats==null?null:Number(o.seats);
+  const pct=cap?Math.min(100,Math.round(used/cap*100)):100;
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:13px">
+    <div style="padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--lava-2);margin-bottom:14px">Identity</div>
+      <div style="font-size:12px;color:var(--muted2);margin-bottom:6px">Club name</div>
+      <div style="padding:11px 13px;background:var(--bg-deep);border:1px solid var(--border);border-radius:9px;font-size:14px;font-weight:600">${esc(o.name)}</div>
+      <div style="font-size:12px;color:var(--muted2);margin:14px 0 6px">Your role</div>
+      <span style="${orgRolePill(o.role)}">${esc(o.role)}</span>
+    </div>
+    <div style="padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--aurora-1);margin-bottom:14px">Seats</div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1">${used}</span>
+        <span style="font-size:15px;font-weight:600;color:var(--muted)">${cap?'of '+cap+' seats in use':'coaches, no cap set'}</span>
+      </div>
+      <div style="height:7px;background:var(--bg-deep);border-radius:4px;overflow:hidden;margin:12px 0 14px"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--lava-2),var(--lava-1));border-radius:4px"></div></div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.5">${cap?(used>=cap?'Every seat is taken — free one up before inviting another coach.':(cap-used)+' seat'+(cap-used===1?'':'s')+' free.'):'No seat cap, so no limit on coaches joining with the code.'}</div>
+      <button class="mini-btn" style="margin-top:16px" onclick="leaveOrg()">Leave this club</button>
+    </div>
+  </div>`;
+}
+function copyOrgCode(code){
+  try{ navigator.clipboard.writeText(code); toast('Code copied'); }catch(e){ toast(code); }
 }
 
 // The gym's client roster. Removing one here withdraws every DELEGATED link
 // held by a coach of this organisation; the coach who brought the client in
 // keeps them, because that relationship is with the athlete, not the gym.
-async function loadOrgClients(){
-  const box=$('org-clients'); if(!box) return;
-  const {data}=await sb.rpc('org_client_list',{p_org:orgCur});
-  box.innerHTML=(data||[]).map(c=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
-      <div><div style="font-size:13px;font-weight:600">${esc(c.name||'Client')}</div>
-        <div style="font-size:11px;color:var(--muted)">${esc(c.sport||'—')} · ${c.coaches} coach${Number(c.coaches)===1?'':'es'} here</div></div>
-      ${orgIsAdmin()?`<button class="mini-btn" onclick="removeOrgClient('${c.client_id}','${esc((c.name||'this client').replace(/'/g,""))}')"><i class="ti ti-x"></i></button>`:''}
-    </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No clients on the roster yet — share one with a team, or add them from their page.</div>';
-}
+async function loadOrgClients(){ return renderOrg(); }
 async function removeOrgClient(cid,name){
   if(!confirm(`Remove ${name} from the organisation?\n\nEvery coach here who was GIVEN this client loses them. Whoever brought them in keeps them — that relationship is with the athlete, not the gym.`)) return;
   const {data,error}=await sb.rpc('org_remove_client',{p_org:orgCur,p_client:cid});
@@ -819,18 +1030,7 @@ async function joinOrg(){
   if(error){ toast('Error: '+error.message); return; }
   toast('Joined '+(data||'the organisation')); loadOrgs();
 }
-async function loadOrgInvites(){
-  const box=$('org-invites'); if(!box) return;
-  const {data}=await sb.from('org_invites').select('*').eq('org_id',orgCur).eq('active',true).order('created_at',{ascending:false});
-  box.innerHTML=(data||[]).map(r=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
-      <div><div style="font-family:ui-monospace,monospace;font-size:14px;font-weight:700;color:var(--accent)">${esc(r.code)}</div>
-        <div style="font-size:11px;color:var(--muted)">${esc(r.role)} · used ${r.used_count}</div></div>
-      <div class="row-gap">
-        <button class="mini-btn" onclick="navigator.clipboard.writeText('${esc(r.code)}').then(()=>toast('Copied'))"><i class="ti ti-copy"></i></button>
-        <button class="mini-btn" onclick="killOrgInvite('${r.id}')"><i class="ti ti-x"></i></button></div>
-    </div>`).join('')||'<div style="font-size:12px;color:var(--muted)">No active codes.</div>';
-}
+async function loadOrgInvites(){ return renderOrg(); }
 async function newOrgInvite(){
   const role=($('org-inv-role')||{}).value||'coach';
   const {data,error}=await sb.rpc('org_create_invite',{p_org:orgCur,p_role:role});
@@ -907,26 +1107,21 @@ async function renderSquad(tid){
   const avail=(roster||[]).filter(c=>!inSquad.has(c.client_id));
   const editable=(squad||[]).filter(a=>a.can_edit).length;
   box.innerHTML=`
-    <div class="section-lbl" style="margin-top:0">Athletes</div>
-    ${(squad||[]).length?`<div class="pr-table">${(squad||[]).map(a=>`
-      <div class="pr-row">
-        <div style="min-width:0">
-          <div style="font-weight:600">${esc(a.name||'Athlete')}${a.can_edit?'':' <span class="cc-tag read">read-only</span>'}</div>
-          <div class="client-meta">${esc(a.sport||'—')} · ${a.program_name?esc(a.program_name):'no program'}</div>
-        </div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Athletes</div>
+    ${(squad||[]).map(a=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0">
+        <div style="min-width:0"><div style="font-size:12.5px;font-weight:600">${esc(a.name||'Athlete')}${a.can_edit?'':' <span class="cc-tag">read-only</span>'}</div>
+          <div style="font-size:11px;color:var(--muted)">${esc(a.sport||'—')} · ${a.program_name?esc(a.program_name):'no program'}</div></div>
         ${orgIsAdmin()?`<button class="mini-btn" onclick="removeSquadAthlete('${tid}','${a.client_id}')"><i class="ti ti-x"></i></button>`:''}
-      </div>`).join('')}</div>`
-      :'<div style="font-size:12px;color:var(--muted)">No athletes in this group yet.</div>'}
-    ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:10px">
+      </div>`).join('')||'<div style="font-size:11.5px;color:var(--muted)">No athletes in this group yet.</div>'}
+    ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:8px">
       <select id="squad-add-${tid}" class="sel" style="flex:1">${avail.map(c=>`<option value="${c.client_id}">${esc(c.name||'Athlete')}</option>`).join('')}</select>
-      <button class="btn btn-ghost" style="padding:12px 16px" onclick="addSquadAthlete('${tid}')">Add</button></div>`
-      :(orgIsAdmin()?'<div style="font-size:11px;color:var(--muted);margin-top:8px">Everyone on the club roster is already in this group.</div>':'')}
-    ${(squad||[]).length?`<div class="section-lbl">Assign a program</div>
-      <div class="row-gap">
-        <select id="squad-prog-${tid}" class="sel" style="flex:1"><option value="">— Select a program —</option>${(progs||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.is_custom?' (custom)':''}</option>`).join('')}</select>
-        <button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="assignProgramToSquad('${tid}')">Assign to all</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px">Replaces the current program for ${editable} of ${(squad||[]).length} athlete${(squad||[]).length===1?'':'s'}${editable<(squad||[]).length?' — read-only ones are skipped':''}.</div>`:''}`;
+      <button class="btn btn-ghost" style="padding:10px 14px" onclick="addSquadAthlete('${tid}')">Add</button></div>`
+      :(orgIsAdmin()?'<div style="font-size:11px;color:var(--muted);margin-top:6px">Everyone on the club roster is already in this group. Add more from a client\'s page.</div>':'')}
+    ${(squad||[]).length?`<div class="row-gap" style="margin-top:10px">
+      <select id="squad-prog-${tid}" class="sel" style="flex:1"><option value="">— Assign a program to this group —</option>${(progs||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.is_custom?' (custom)':''}</option>`).join('')}</select>
+      <button class="btn btn-primary" style="padding:10px 14px;white-space:nowrap" onclick="assignProgramToSquad('${tid}')">Assign to all</button></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">Overwrites the current program for ${editable} of ${(squad||[]).length} athlete${(squad||[]).length===1?'':'s'}${editable<(squad||[]).length?' — the read-only ones are skipped':''}.</div>`:''}`;
 }
 async function addSquadAthlete(tid){
   const sel=$('squad-add-'+tid); if(!sel||!sel.value) return;
@@ -1269,6 +1464,420 @@ function renderRoster(){
   </div>`;
 }
 
+// ── MATCH CALENDAR (fixtures: one game, a pasted season, a whole squad) ──
+// Two doors, one surface: typed rows and a pasted schedule both land in the
+// same editable table, so whatever is about to be written to twenty athletes
+// is on screen before it is written. The athlete tick-list starts fully ticked
+// and is unticked down — a squad list that starts empty invites a coach to
+// enter a season for nobody.
+let fxState={scope:'client', entity:'', rows:[], people:[], picked:new Set(), mode:'rows'};
+function fxPad(n){ return String(n).padStart(2,'0'); }
+function fxISO(s){
+  s=String(s||'').trim(); let m;
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return m[1]+'-'+fxPad(m[2])+'-'+fxPad(m[3]);
+  // Day first — an Icelandic coach writes 20.09.2026, never 09/20.
+  if((m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/))){
+    let y=m[3]; if(y.length===2) y='20'+y;
+    return y+'-'+fxPad(m[2])+'-'+fxPad(m[1]);
+  }
+  if((m=s.match(/^(\d{1,2})[.\/](\d{1,2})\.?$/))) return new Date().getFullYear()+'-'+fxPad(m[2])+'-'+fxPad(m[1]);
+  return null;
+}
+function fxBlank(){ return {fixture_date:'',kickoff:'',opponent:'',competition:'',home_away:'',importance:'normal',notes:''}; }
+function fxDayName(iso){
+  if(!iso) return '';
+  const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return '';
+  return d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+}
+
+async function renderFixturePanel(){
+  const box=$('fx-body'); if(!box) return;
+  const active=clients.filter(c=>c.status==='active');
+  if(!fxState.rows.length) fxState.rows=[fxBlank()];
+  const scopes=[['client','One athlete'],['group','Group'],['squad','Squad']];
+  const ents = fxState.scope==='group' ? groupsCache.map(g=>[g.id,g.name])
+    : fxState.scope==='squad' ? (orgTeams||[]).map(t=>[t.team_id,t.name])
+    : active.map(c=>[c.client_id,c.profile.name||'—']);
+  if(!ents.find(e=>e[0]===fxState.entity)) fxState.entity = ents.length?ents[0][0]:'';
+  box.innerHTML=`
+    <div class="row-gap" style="margin-bottom:8px">
+      <select class="sel" id="fx-scope" onchange="fxScope(this.value)" style="flex:0 0 128px">${scopes.map(s=>`<option value="${s[0]}"${s[0]===fxState.scope?' selected':''}>${s[1]}</option>`).join('')}</select>
+      <select class="sel" id="fx-entity" onchange="fxEntity(this.value)" style="flex:1">${ents.map(e=>`<option value="${e[0]}"${e[0]===fxState.entity?' selected':''}>${esc(e[1])}</option>`).join('')||'<option value="">— none —</option>'}</select>
+    </div>
+    <div id="fx-people" style="margin-bottom:10px"></div>
+    <div id="fx-rows"></div>
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+      <button class="mini-btn" onclick="fxAddRow()"><i class="ti ti-plus"></i> Game</button>
+      <button class="mini-btn" onclick="fxMode('${fxState.mode==='paste'?'rows':'paste'}')"><i class="ti ti-clipboard-text"></i> ${fxState.mode==='paste'?'Hide paste box':'Paste a whole season'}</button>
+      <button class="mini-btn" onclick="$('fx-xls').click()"><i class="ti ti-file-spreadsheet"></i> Excel file</button>
+      <input type="file" id="fx-xls" accept=".xlsx,.xls,.csv" style="display:none" onchange="fxFile(this)">
+    </div>
+    ${fxState.mode==='paste'?`
+      <textarea class="txta" id="fx-paste" rows="4" style="margin-top:8px" placeholder="20.09.2026&#9;KR&#9;heima
+27.09.2026&#9;Valur&#9;úti"></textarea>
+      <div style="font-size:11px;color:var(--muted);margin:6px 0 8px">One game per line, date first. Straight out of a spreadsheet works.</div>
+      <button class="btn btn-ghost btn-block" onclick="fxParse()"><i class="ti ti-arrow-down"></i> Read into the list</button>`:''}
+    <div id="fx-foot" style="margin-top:12px"></div>`;
+  renderFxRows();
+  await fxLoadPeople();
+}
+function fxScope(v){ fxState.scope=v; fxState.entity=''; fxState.picked=new Set(); renderFixturePanel(); }
+function fxEntity(v){ fxState.entity=v; fxState.picked=new Set(); fxLoadPeople(); }
+function fxMode(m){ fxState.mode=m; renderFixturePanel(); }
+async function fxLoadPeople(){
+  const box=$('fx-people'); if(!box) return;
+  const active=clients.filter(c=>c.status==='active');
+  let people=[];
+  if(fxState.scope==='client'){
+    const c=active.find(x=>x.client_id===fxState.entity);
+    people=c?[{client_id:c.client_id,name:c.profile.name||'—'}]:[];
+  }else if(fxState.scope==='group'){
+    const {data}=await sb.from('group_members').select('client_id').eq('group_id',fxState.entity);
+    people=(data||[]).map(m=>({client_id:m.client_id, name:(active.find(c=>c.client_id===m.client_id)||{profile:{}}).profile.name||'—'}));
+  }else{
+    const {data}=await sb.rpc('org_team_athlete_list',{p_team:fxState.entity});
+    people=(data||[]).map(a=>({client_id:a.client_id, name:a.name||'—'}));
+  }
+  fxState.people=people;
+  if(!fxState.picked.size) people.forEach(p=>fxState.picked.add(p.client_id));
+  box.innerHTML = people.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${people.map(p=>{
+        const on=fxState.picked.has(p.client_id);
+        return `<button class="mini-btn" onclick="fxPick('${p.client_id}')" style="font-size:11.5px;${on?'border-color:var(--accent);color:var(--accent)':'opacity:.55'}">${on?'<i class="ti ti-check"></i> ':''}${esc(p.name)}</button>`;
+      }).join('')}</div>`
+    : '<div style="font-size:11.5px;color:var(--muted)">Nobody in here yet.</div>';
+  renderFxFoot();
+}
+function fxPick(id){
+  if(fxState.picked.has(id)) fxState.picked.delete(id); else fxState.picked.add(id);
+  fxLoadPeople();
+}
+// One line per game: a date and who you are playing. Home/away and "key" are
+// real fields but they are not why a coach opens this panel, so they sit behind
+// one chevron per row instead of on screen twenty times.
+function renderFxRows(){
+  const box=$('fx-rows'); if(!box) return;
+  const ha=[['','—'],['home','Home'],['away','Away'],['neutral','Neutral']];
+  box.innerHTML=fxState.rows.map((r,i)=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:7px 8px;margin-bottom:5px">
+      <div class="row-gap" style="flex-wrap:wrap">
+        <input class="sel" type="date" style="flex:1 1 130px;min-width:0" value="${r.fixture_date}" onchange="fxSet(${i},'fixture_date',this.value)">
+        <button class="mini-btn" onclick="fxMore(${i})" title="Kick-off, home/away, competition"><i class="ti ti-chevron-${r._open?'up':'down'}"></i></button>
+        ${fxState.rows.length>1?`<button class="mini-btn" onclick="fxDelRow(${i})"><i class="ti ti-x"></i></button>`:''}
+        <input class="sel" style="flex:1 1 100%;min-width:0" placeholder="Opponent" value="${esc(r.opponent)}" oninput="fxSet(${i},'opponent',this.value)">
+      </div>
+      ${r._open?`<div class="row-gap" style="margin-top:5px;flex-wrap:wrap">
+        <input class="sel" type="time" style="flex:1 1 100px;min-width:0" value="${r.kickoff}" onchange="fxSet(${i},'kickoff',this.value)">
+        <select class="sel" style="flex:1 1 96px;min-width:0" onchange="fxSet(${i},'home_away',this.value)">${ha.map(o=>`<option value="${o[0]}"${o[0]===r.home_away?' selected':''}>${o[1]}</option>`).join('')}</select>
+        <select class="sel" style="flex:1 1 100px;min-width:0" onchange="fxSet(${i},'importance',this.value)">${[['normal','Normal'],['key','Key'],['minor','Minor']].map(o=>`<option value="${o[0]}"${o[0]===r.importance?' selected':''}>${o[1]}</option>`).join('')}</select>
+        <input class="sel" style="flex:1 1 100%;min-width:0" placeholder="Competition" value="${esc(r.competition)}" oninput="fxSet(${i},'competition',this.value)">
+      </div>`:''}
+    </div>`).join('');
+  renderFxFoot();
+}
+function fxMore(i){ fxState.rows[i]._open=!fxState.rows[i]._open; renderFxRows(); }
+function fxSet(i,k,v){ fxState.rows[i][k]=v; renderFxFoot(); }
+function fxAddRow(){
+  // Next row a week on from the last dated one: a league fixture list is mostly
+  // the same weekday, so the common case is one keystroke, not seven.
+  const last=[...fxState.rows].reverse().find(r=>r.fixture_date);
+  const next=fxBlank();
+  if(last){ const d=new Date(last.fixture_date+'T00:00:00'); d.setDate(d.getDate()+7); next.fixture_date=d.toISOString().slice(0,10); next.kickoff=last.kickoff; next.competition=last.competition; }
+  fxState.rows.push(next); renderFxRows();
+}
+function fxDelRow(i){ fxState.rows.splice(i,1); if(!fxState.rows.length) fxState.rows=[fxBlank()]; renderFxRows(); }
+function fxParse(){
+  const txt=($('fx-paste')||{}).value||'';
+  fxTakeLines(txt.split(/\n+/));
+}
+// One parser for both doors — a pasted block and a spreadsheet's rows arrive as
+// the same thing: lines of cells, date first.
+function fxTakeLines(lines){
+  const rows=[]; let bad=0;
+  lines.forEach(line=>{
+    const raw=String(line||'').trim(); if(!raw) return;
+    const parts=raw.split(/\t|;|,|\s{2,}/).map(s=>s.trim()).filter(Boolean);
+    let date=null,time='',ha='',imp='normal'; const rest=[];
+    parts.forEach(p=>{
+      const iso=fxISO(p);
+      if(iso&&!date){ date=iso; return; }
+      if(!time&&/^\d{1,2}[:.]\d{2}$/.test(p)){ time=p.replace('.',':'); return; }
+      const l=p.toLowerCase();
+      if(!ha&&/^(home|heima|h)$/.test(l)){ ha='home'; return; }
+      if(!ha&&/^(away|[u\u00fa]ti|a)$/.test(l)){ ha='away'; return; }
+      if(!ha&&/^(neutral|hlutlaus|n)$/.test(l)){ ha='neutral'; return; }
+      if(/^(key|mikilv|st[o\u00f3]r)/.test(l)){ imp='key'; return; }
+      rest.push(p);
+    });
+    if(!date){ bad++; return; }
+    rows.push({fixture_date:date, kickoff:time, opponent:rest[0]||'', competition:rest[1]||'', home_away:ha, importance:imp, notes:''});
+  });
+  if(!rows.length){ toast('No dates found in that'); return; }
+  fxState.rows=rows; fxState.mode='rows'; renderFixturePanel();
+  toast(rows.length+' game'+(rows.length===1?'':'s')+' read'+(bad?' · '+bad+' line'+(bad===1?'':'s')+' skipped':''));
+}
+// Excel / CSV. The reader is fetched only when a file is actually picked, so
+// the dashboard does not carry a spreadsheet parser it almost never uses.
+let xlsxLoading=null;
+function loadXlsx(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(!xlsxLoading) xlsxLoading=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=()=>res(window.XLSX); s.onerror=()=>{ xlsxLoading=null; rej(new Error('load failed')); };
+    document.head.appendChild(s);
+  });
+  return xlsxLoading;
+}
+async function fxFile(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  input.value='';
+  toast('Reading '+f.name+'…');
+  let X; try{ X=await loadXlsx(); }catch(e){ toast('Could not load the spreadsheet reader — paste the rows instead'); return; }
+  try{
+    const wb=X.read(await f.arrayBuffer(),{cellDates:true});
+    const sheet=wb.Sheets[wb.SheetNames[0]];
+    const grid=X.utils.sheet_to_json(sheet,{header:1,blankrows:false,raw:true});
+    // Whatever the columns are called, the date is what identifies a fixture
+    // row — so a header row simply fails to parse and is reported as skipped.
+    const lines=grid.map(r=>(r||[]).map(c=>
+      c instanceof Date ? c.toISOString().slice(0,10) : String(c==null?'':c).trim()
+    ).filter(Boolean).join('\t'));
+    fxTakeLines(lines);
+  }catch(e){ toast('Could not read that file'); }
+}
+function renderFxFoot(){
+  const box=$('fx-foot'); if(!box) return;
+  const games=fxState.rows.filter(r=>r.fixture_date).length;
+  const people=fxState.picked.size;
+  const total=games*people;
+  box.innerHTML=`
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${games} game${games===1?'':'s'} × ${people} athlete${people===1?'':'s'} = <b style="color:var(--text-soft)">${total} entr${total===1?'y':'ies'}</b>${people?'':' · tick at least one athlete'}</div>
+    <button class="btn btn-primary btn-block" ${total?'':'disabled style="opacity:.45"'} onclick="fxSubmit()"><i class="ti ti-calendar-plus"></i> Add to ${people===1?'the calendar':people+' calendars'}</button>`;
+}
+async function fxSubmit(){
+  const rows=fxState.rows.filter(r=>r.fixture_date);
+  const clientIds=[...fxState.picked];
+  if(!rows.length||!clientIds.length) return;
+  const {data,error}=await sb.rpc('fixtures_bulk_add',{
+    p_clients:clientIds, p_rows:rows,
+    p_team: fxState.scope==='squad'?fxState.entity:null
+  });
+  if(error){ toast('Error: '+error.message); return; }
+  const r=data||{};
+  toast(`${r.added||0} added`+(r.skipped?` · ${r.skipped} already there`:'')+(r.blocked?` · ${r.blocked} not yours to edit`:''));
+  fxState.rows=[fxBlank()]; renderFixturePanel();
+  loadBoard();
+  if(selected && fxState.picked.has(selected.client_id)) renderFixtures();
+}
+
+// ── LOAD WATCH ──
+// The board reports; the verdict is a separate, readable step. Thresholds live
+// here in the open rather than inside a model, so a coach who disagrees with
+// one can see exactly what tripped it.
+let loadRows=[], loadDrafts=[];
+function fxVerdict(r){
+  const reasons=[]; let score=0;
+  const vol=+r.vol_this_week||0, prev=+r.vol_prev_week||0;
+  const ratio = prev>0 ? vol/prev : null;
+  const dtn = r.next_date ? Math.round((new Date(r.next_date+'T00:00:00')-new Date(new Date().toDateString()))/864e5) : null;
+  if(r.games_ahead>=3){ score+=2; reasons.push(r.games_ahead+' games in 14 days'); }
+  else if(r.games_ahead===2){ score+=1; reasons.push('2 games in 14 days'); }
+  if(r.games_last_7>=2){ score+=2; reasons.push(r.games_last_7+' games in the last week'); }
+  if(r.sessions_last_7>=5){ score+=1; reasons.push(r.sessions_last_7+' gym sessions this week'); }
+  if(ratio!=null && ratio>=1.5 && vol>0){ score+=2; reasons.push('training volume up '+Math.round((ratio-1)*100)+'% on last week'); }
+  if(r.rpe_last_7!=null && +r.rpe_last_7>=8.5){ score+=1; reasons.push('avg RPE '+(+r.rpe_last_7).toFixed(1)); }
+  if(r.minutes_last_14>=150){ score+=1; reasons.push(r.minutes_last_14+' match minutes in 14 days'); }
+  if(r.energy!=null && r.energy<=2){ score+=2; reasons.push('energy '+r.energy+'/5'); }
+  if(r.sleep!=null && r.sleep<=2){ score+=1; reasons.push('sleep '+r.sleep+'/5'); }
+  if(r.stress!=null && r.stress>=4){ score+=1; reasons.push('stress '+r.stress+'/5'); }
+  if(dtn!=null && dtn<=3 && score>=2) reasons.push('next game '+(dtn<=0?'today':'in '+dtn+' day'+(dtn===1?'':'s')));
+  return {level: score>=5?'red':score>=3?'watch':'ok', score, reasons, ratio, dtn};
+}
+function fxDraftFor(r){
+  const who=r.name||'this athlete';
+  if(r.games_ahead>=3 && r.sessions_last_7>=4) return {action_kind:'deload',
+    headline:who+': drop to two gym sessions this week', detail:'Three or more games inside a fortnight — the fixtures are already the training. Keep the lifts short and heavy-ish, cut the volume.'};
+  if(r.ratio!=null && r.ratio>=1.5) return {action_kind:'deload',
+    headline:who+': training volume jumped '+Math.round((r.ratio-1)*100)+'% in a week', detail:'Hold this week at last week\u2019s tonnage rather than climbing again, especially with a game coming.'};
+  if(r.dtn!=null && r.dtn<=2 && r.sessions_last_7>=3) return {action_kind:'shift_session',
+    headline:who+': move the heavy session off the day before the game', detail:'Game '+(r.dtn<=0?'today':'in '+r.dtn+' day'+(r.dtn===1?'':'s')+'')+'. Push the heavy lower-body work earlier in the week and keep the day before light.'};
+  if((r.energy!=null&&r.energy<=2)||(r.sleep!=null&&r.sleep<=2)) return {action_kind:'extra_recovery',
+    headline:who+': recovery is the limit right now, not fitness', detail:'Self-report is low on energy or sleep while the load is up. A day off, or a mobility-only session, before adding anything.'};
+  if(r.games_last_7>=2) return {action_kind:'cap_minutes',
+    headline:who+': consider capping minutes in the next game', detail:r.games_last_7+' games in seven days. If the game allows it, a shorter shift now protects the weeks after.'};
+  return {action_kind:'no_change', headline:who+': load is high but coherent', detail:'Nothing to change yet — worth a look again after the next game.'};
+}
+async function loadBoard(){
+  const box=$('loadboard'); if(!box) return;
+  const {data,error}=await sb.rpc('coach_load_board',{p_days:14});
+  if(error||!data){ box.innerHTML=''; return; }
+  loadRows=data.map(r=>Object.assign({},r,fxVerdict(r)));
+  const shown=loadRows.filter(r=>r.level!=='ok' || r.games_ahead>0);
+  if(!shown.length){ box.innerHTML=''; renderDrafts(); return; }
+  const flagged=loadRows.filter(r=>r.level!=='ok').length;
+  const dot=l=>l==='red'?'var(--lava-1)':l==='watch'?'var(--amber)':'var(--muted2)';
+  const ratioTxt=r=>r.ratio==null?'—':(r.ratio>=1.5?'<span style="color:var(--lava-1);font-weight:700">':r.ratio>=1.2?'<span style="color:var(--amber);font-weight:700">':'<span>')+'×'+r.ratio.toFixed(2)+'</span>';
+  box.innerHTML=`<div class="panel" style="margin-bottom:24px">
+    <div class="panel-title">
+      <span><i class="ti ti-activity-heartbeat"></i> Load watch · next 14 days ${flagged?`<span style="color:var(--lava-1)">· ${flagged} flagged</span>`:''}</span>
+      <button class="mini-btn" onclick="reviewLoad()"><i class="ti ti-sparkles"></i> Ask the assistant</button>
+    </div>
+    <div id="load-drafts"></div>
+    <div style="overflow-x:auto">
+    <table class="roster-tbl">
+      <thead><tr><th>Athlete</th><th>Games ahead</th><th>Next</th><th>Match min · 14d</th><th>Gym · 7d</th><th>Volume vs last wk</th><th>RPE</th><th>Self-report</th></tr></thead>
+      <tbody>${shown.map(r=>`<tr onclick="selectClient('${r.client_id}');ctab('games')">
+        <td style="font-weight:600"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dot(r.level)};margin-right:7px"></span>${esc(r.name||'—')}</td>
+        <td>${r.games_ahead||0}</td>
+        <td style="color:var(--text-soft)">${r.next_date?esc(fxDayName(r.next_date))+(r.next_opponent?' · '+esc(r.next_opponent):''):'—'}</td>
+        <td>${r.minutes_last_14||0}${r.minutes_missing?`<span style="color:var(--muted)" title="games played with no minutes recorded"> · ${r.minutes_missing} blank</span>`:''}</td>
+        <td>${r.sessions_last_7||0}</td>
+        <td>${ratioTxt(r)}</td>
+        <td>${r.rpe_last_7!=null?(+r.rpe_last_7).toFixed(1):'—'}</td>
+        <td style="color:var(--muted)">${r.energy!=null?`E${r.energy} S${r.sleep} St${r.stress}`:'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div style="font-size:11px;color:var(--muted2);margin-top:8px">Blank match minutes are games nobody logged — the watch counts them as unknown, not as zero.</div>
+  </div>`;
+  renderDrafts();
+}
+async function loadAdvice(){
+  const {data}=await sb.from('load_advice').select('*').eq('coach_id',me_.id).eq('status','pending').order('created_at',{ascending:false});
+  loadDrafts=data||[]; renderDrafts();
+}
+// Suggestions are drafts addressed to the COACH. Nothing here reaches the
+// athlete until the coach presses Send, and the message that goes out is
+// whatever the coach left in the box — editable, in their name.
+function renderDrafts(){
+  const box=$('load-drafts'); if(!box) return;
+  if(!loadDrafts.length){ box.innerHTML=''; return; }
+  const col=s=>s==='red'?'var(--lava-1)':'var(--amber)';
+  box.innerHTML=loadDrafts.map(d=>`
+    <div style="background:var(--surface2);border:1px solid ${col(d.severity)};border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:flex-start;gap:9px;margin-bottom:6px">
+        <i class="ti ti-sparkles" style="color:${col(d.severity)};font-size:15px;margin-top:2px"></i>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13.5px">${esc(d.headline)}</div>
+          ${d.detail?`<div style="font-size:12.5px;color:var(--text-soft);margin-top:3px;line-height:1.5">${esc(d.detail)}</div>`:''}
+          ${(d.evidence&&d.evidence.reasons&&d.evidence.reasons.length)?`<div style="font-size:11px;color:var(--muted);margin-top:5px">Because: ${esc(d.evidence.reasons.join(' · '))}</div>`:''}
+        </div>
+      </div>
+      <textarea class="txta" id="adv-${d.id}" rows="2" style="margin-bottom:6px">${esc(d.detail||d.headline)}</textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-primary" style="padding:9px 14px;font-size:12px" onclick="approveAdvice('${d.id}')"><i class="ti ti-send"></i> Send to athlete</button>
+        <button class="mini-btn" onclick="dismissAdvice('${d.id}')">Dismiss</button>
+        <button class="mini-btn" onclick="selectClient('${d.client_id}');ctab('games')">Open athlete</button>
+      </div>
+    </div>`).join('');
+}
+async function reviewLoad(){
+  const flagged=loadRows.filter(r=>r.level!=='ok');
+  if(!flagged.length){ toast('Nothing in the red this fortnight'); return; }
+  let drafts=null;
+  // The assistant writes it if the edge function knows how; the rules above
+  // write it if not. Either way the coach sees the same draft queue.
+  try{
+    const res=await aiCall('load_review',{athletes:flagged.map(r=>({
+      name:r.name, sport:r.sport, games_ahead:r.games_ahead, games_last_7:r.games_last_7,
+      minutes_last_14:r.minutes_last_14, sessions_last_7:r.sessions_last_7,
+      volume_ratio:r.ratio, rpe:r.rpe_last_7, energy:r.energy, sleep:r.sleep, stress:r.stress,
+      days_to_next_game:r.dtn, reasons:r.reasons
+    }))});
+    const adv=res&&res.data&&res.data.advice;
+    if(Array.isArray(adv)&&adv.length) drafts=flagged.map((r,i)=>{
+      const a=adv[i]||{};
+      return {r, headline:a.headline||fxDraftFor(r).headline, detail:a.detail||fxDraftFor(r).detail, action_kind:a.action_kind||fxDraftFor(r).action_kind};
+    });
+  }catch(e){}
+  if(!drafts) drafts=flagged.map(r=>Object.assign({r}, fxDraftFor(r)));
+  await sb.from('load_advice').delete().eq('coach_id',me_.id).eq('status','pending');
+  const {error}=await sb.from('load_advice').insert(drafts.map(d=>({
+    coach_id:me_.id, client_id:d.r.client_id, severity:d.r.level,
+    headline:d.headline, detail:d.detail, action_kind:d.action_kind,
+    evidence:{reasons:d.r.reasons, games_ahead:d.r.games_ahead, minutes_last_14:d.r.minutes_last_14, volume_ratio:d.r.ratio}
+  })));
+  if(error){ toast('Error: '+error.message); return; }
+  await loadAdvice();
+  toast(drafts.length+' suggestion'+(drafts.length===1?'':'s')+' · yours to send or bin');
+}
+async function approveAdvice(id){
+  const msg=($('adv-'+id)||{}).value||'';
+  const {error}=await sb.rpc('load_advice_approve',{p_id:id,p_message:msg});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Sent to the athlete'); loadAdvice();
+}
+async function dismissAdvice(id){
+  await sb.from('load_advice').update({status:'dismissed'}).eq('id',id);
+  loadAdvice();
+}
+
+// ── ONE ATHLETE'S FIXTURES (inside the client panel) ──
+async function renderFixtures(){
+  const c=selected; if(!c) return;
+  const box=$('fx-client'); if(!box) return;
+  const {data:fx}=await sb.from('fixtures').select('*').eq('client_id',c.client_id).order('fixture_date',{ascending:true});
+  const all=fx||[];
+  const today=new Date(new Date().toDateString());
+  const iso=d=>d.toISOString().slice(0,10);
+  const upcoming=all.filter(f=>f.fixture_date>=iso(today));
+  const past=all.filter(f=>f.fixture_date<iso(today)).slice(-10).reverse();
+  const row=(f,editable)=>{
+    const ha=f.home_away==='home'?'H':f.home_away==='away'?'A':f.home_away==='neutral'?'N':'';
+    return `<div style="background:var(--surface2);border:1px solid ${f.importance==='key'?'rgba(255,84,33,.45)':'var(--border)'};border-radius:11px;padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${esc(fxDayName(f.fixture_date))}${f.kickoff?` <span style="color:var(--muted);font-weight:600">${String(f.kickoff).slice(0,5)}</span>`:''}</div>
+          <div style="font-size:12px;color:var(--muted)">${esc(f.opponent||'—')}${ha?` · ${ha}`:''}${f.competition?` · ${esc(f.competition)}`:''}${f.importance==='key'?' · <span style="color:var(--lava-2);font-weight:700">key</span>':''}</div>
+        </div>
+        <button class="mini-btn" onclick="delFixture('${f.id}')"><i class="ti ti-trash"></i></button>
+      </div>
+      ${editable?`<div class="row-gap" style="margin-top:8px">
+        <input class="sel" type="number" min="0" max="240" style="flex:0 0 86px" id="fmin-${f.id}" placeholder="min" value="${f.minutes!=null?f.minutes:''}">
+        <select class="sel" id="fpart-${f.id}" style="flex:1">${[['','— played? —'],['full','Full game'],['part','Part of it'],['bench','Bench'],['absent','Absent']].map(o=>`<option value="${o[0]}"${o[0]===(f.participation||'')?' selected':''}>${o[1]}</option>`).join('')}</select>
+        <button class="mini-btn" onclick="saveMinutes('${f.id}')">Save</button>
+      </div>`:''}
+    </div>`;
+  };
+  // 28-day strip: games and logged sessions on the same line, because the
+  // question is never "how many games" but "what sits next to them".
+  const days=[]; const wset=new Set(c.workouts.map(w=>new Date(w.completed_at).toISOString().slice(0,10)));
+  const gmap={}; all.forEach(f=>{ gmap[f.fixture_date]=f; });
+  for(let i=-7;i<21;i++){ const d=new Date(today); d.setDate(d.getDate()+i); days.push(iso(d)); }
+  const strip=`<div style="display:flex;gap:3px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px">${days.map(d=>{
+    const g=gmap[d], w=wset.has(d), isToday=d===iso(today);
+    const bg=g?(g.importance==='key'?'var(--lava-1)':'var(--lava-2)'):w?'rgba(25,240,168,.35)':'var(--surface2)';
+    return `<div title="${d}${g?' · '+(g.opponent||'game'):''}${w?' · session logged':''}" style="flex:0 0 22px;text-align:center">
+      <div style="font-size:9px;color:${isToday?'var(--accent)':'var(--muted2)'};font-weight:${isToday?'800':'600'}">${d.slice(8)}</div>
+      <div style="height:22px;border-radius:5px;background:${bg};border:1px solid ${isToday?'var(--accent)':'var(--border)'}"></div>
+    </div>`;
+  }).join('')}</div>`;
+  const v=loadRows.find(r=>r.client_id===c.client_id);
+  box.innerHTML=`
+    ${v?`<div style="background:var(--surface2);border:1px solid ${v.level==='red'?'var(--lava-1)':v.level==='watch'?'var(--amber)':'var(--border)'};border-radius:12px;padding:11px 13px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px">${v.level==='red'?'Load is high':v.level==='watch'?'Worth watching':'Load looks fine'}</div>
+      <div style="font-size:12px;color:var(--text-soft)">${v.reasons.length?esc(v.reasons.join(' · ')):'Nothing standing out this fortnight.'}</div>
+    </div>`:''}
+    ${strip}
+    <div style="font-size:11px;color:var(--muted2);margin-bottom:12px"><span style="display:inline-block;width:9px;height:9px;background:var(--lava-2);border-radius:3px"></span> game &nbsp; <span style="display:inline-block;width:9px;height:9px;background:rgba(25,240,168,.35);border-radius:3px"></span> session logged</div>
+    <div class="section-lbl" style="margin-top:0">Coming up ${upcoming.length?`<span style="text-transform:none;color:var(--muted2);font-weight:600">· ${upcoming.length}</span>`:''}</div>
+    ${upcoming.length?upcoming.slice(0,12).map(f=>row(f,false)).join(''):'<div style="color:var(--muted);font-size:13px">No games on the calendar. Add them on the Games page.</div>'}
+    <div class="section-lbl">Played <span style="text-transform:none;color:var(--muted2);font-weight:600">· log the minutes</span></div>
+    ${past.length?past.map(f=>row(f,true)).join(''):'<div style="color:var(--muted);font-size:13px">Nothing played yet.</div>'}`;
+}
+async function saveMinutes(id){
+  const mins=($('fmin-'+id)||{}).value, part=($('fpart-'+id)||{}).value||null;
+  const {error}=await sb.rpc('fixture_log_minutes',{p_fixture:id, p_minutes:mins===''?null:parseInt(mins), p_participation:part});
+  if(error){ toast('Error: '+error.message); return; }
+  toast('Logged'); renderFixtures(); loadBoard();
+}
+async function delFixture(id){
+  if(!confirm('Remove this game from the calendar?')) return;
+  const {error}=await sb.from('fixtures').delete().eq('id',id);
+  if(error){ toast('Error: '+error.message); return; }
+  renderFixtures(); loadBoard();
+}
+
 // ── RENDER: STATS ──
 function renderStats(){
   const active = clients.filter(c=>c.status==='active');
@@ -1409,6 +2018,7 @@ async function renderDetail(){
     <div class="ctabs">
       <button class="ctab" data-ctab="overview" onclick="ctab('overview')">Overview</button>
       <button class="ctab" data-ctab="training" onclick="ctab('training')">Training</button>
+      <button class="ctab" data-ctab="games" onclick="ctab('games')">Games</button>
       <button class="ctab" data-ctab="progress" onclick="ctab('progress')">Progress</button>
       <button class="ctab" data-ctab="messages" onclick="ctab('messages')">Messages</button>
     </div>
@@ -1463,6 +2073,11 @@ async function renderDetail(){
     <div id="lifestyle-wrap"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
     </div>
 
+    <div class="ctab-panel" data-ctabpanel="games">
+    <div class="section-lbl" style="margin-top:0">Fixtures &amp; load <span style="text-transform:none;color:var(--muted2);font-weight:600">· games either side of the training</span></div>
+    <div id="fx-client"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+    </div>
+
     <div class="ctab-panel" data-ctabpanel="messages">
     <div class="section-lbl" style="margin-top:0">Messages <span style="text-transform:none;color:var(--muted2);font-weight:600">· two-way chat with ${esc(p.name||'client')}</span></div>
     <div id="msg-thread" class="msg-thread"><div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">Loading...</div></div>
@@ -1474,6 +2089,7 @@ async function renderDetail(){
   `;
   ctab(ctabCur);
   loadMessages();
+  renderFixtures();
   renderProgress();
   renderFormChecks();
   renderCheckins();
@@ -1942,168 +2558,6 @@ async function renderProgress(){
       }
     }
   });
-}
-
-// ── LOAD BOARD ──
-// Every signal the injury watch uses, side by side, for every athlete this coach
-// actively coaches. Deliberately no thresholds or colours of its own: the board
-// states facts, the assistant proposes, and the coach decides.
-let loadBoardCache = [];
-async function loadBoard(){
-  const box=$('load-board'); if(!box) return;
-  box.innerHTML='<div style="font-size:12px;color:var(--muted)">Reading…</div>';
-  const {data,error}=await sb.rpc('coach_load_board',{p_days:14});
-  if(error){ box.innerHTML='<div style="font-size:12px;color:var(--muted)">Could not read the board: '+esc(error.message)+'</div>'; return; }
-  loadBoardCache=data||[];
-  if(!loadBoardCache.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted)">No active athletes yet.</div>'; return; }
-  box.innerHTML=loadBoardCache.map(r=>{
-    const vt=Number(r.vol_this_week)||0, vp=Number(r.vol_prev_week)||0;
-    // The ratio is the story, but it is meaningless off a near-zero base, so a
-    // quiet previous week is shown as "-" rather than an invented spike.
-    const jump = vp>500 ? Math.round((vt/vp-1)*100) : null;
-    const bits=[];
-    bits.push(`${r.sessions_last_7} session${Number(r.sessions_last_7)===1?'':'s'}/7d`);
-    if(vt||vp) bits.push('vol '+Math.round(vt/1000)+'k vs '+Math.round(vp/1000)+'k');
-    if(r.rpe_last_7!=null) bits.push('RPE '+(+r.rpe_last_7));
-    if(Number(r.games_last_7)) bits.push(r.games_last_7+' game'+(Number(r.games_last_7)===1?'':'s')+'/7d');
-    if(Number(r.minutes_last_14)) bits.push(r.minutes_last_14+' min/14d');
-    const chk=[]; if(r.energy!=null) chk.push('energy '+r.energy); if(r.sleep!=null) chk.push('sleep '+r.sleep); if(r.stress!=null) chk.push('stress '+r.stress);
-    const jumpPill = jump===null ? '' :
-      `<span class="pill ${jump>=25?'pill-red':(jump>=10?'pill-amber':'pill-green')}">${jump>0?'+':''}${jump}% vol</span>`;
-    return `<div class="wk">
-      <div class="wk-top">
-        <div style="min-width:0">
-          <div class="wk-name">${esc(r.name||'Athlete')}</div>
-          <div class="wk-meta">${esc(bits.join(' · ')||'nothing logged yet')}</div>
-        </div>
-        ${jumpPill}
-      </div>
-      ${chk.length?`<div class="wk-meta">check-in · ${esc(chk.join(' · '))}</div>`:''}
-      <div class="wk-meta">${r.next_date?'Next · '+esc(String(r.next_date))+(r.next_opponent?' vs '+esc(r.next_opponent):'')+(r.next_importance==='key'?' <span class="cc-tag">key</span>':''):'No fixture scheduled'}</div>
-      ${Number(r.minutes_missing)?`<div class="note-display">${r.minutes_missing} played game${Number(r.minutes_missing)===1?'':'s'} with no minutes logged — the picture is incomplete.</div>`:''}
-    </div>`;
-  }).join('');
-  loadAdvice();
-}
-
-// Drafts the assistant has written. Nothing here has reached the athlete: the
-// coach approves (which sends it as their own message) or dismisses it.
-async function loadAdvice(){
-  const box=$('load-advice'); if(!box) return;
-  const {data}=await sb.from('load_advice').select('*').eq('status','pending').order('created_at',{ascending:false});
-  if(!data||!data.length){ box.innerHTML=''; return; }
-  const nameOf=id=>{ const c=loadBoardCache.find(x=>x.client_id===id); return c?c.name:'Athlete'; };
-  box.innerHTML='<div class="section-lbl" style="margin-top:0">Suggestions to review</div>'+data.map(a=>`
-    <div class="wk">
-      <div class="wk-top">
-        <div class="wk-name">${esc(nameOf(a.client_id))}</div>
-        <span class="pill ${a.severity==='red'?'pill-red':(a.severity==='watch'?'pill-amber':'pill-green')}">${esc(a.severity)}</span>
-      </div>
-      <div style="font-size:13px;margin-top:6px">${esc(a.headline)}</div>
-      ${a.detail?`<div class="note-display">${esc(a.detail)}</div>`:''}
-      <div class="row-gap" style="margin-top:10px">
-        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="approveAdvice('${a.id}')">Send to athlete</button>
-        <button class="mini-btn" onclick="dismissAdvice('${a.id}')">Dismiss</button>
-      </div>
-    </div>`).join('');
-}
-async function approveAdvice(id){
-  const {data:row}=await sb.from('load_advice').select('headline,client_id').eq('id',id).single();
-  const msg=prompt('Message to the athlete — sent in your name, edit it as you like:', row?row.headline:'');
-  if(msg===null) return;
-  const {error}=await sb.rpc('load_advice_approve',{p_id:id,p_message:msg});
-  if(error){ toast('Error: '+error.message); return; }
-  if(row) notify({to:row.client_id, type:'message'});
-  toast('Sent'); loadAdvice(); if(selected) loadMessages();
-}
-async function dismissAdvice(id){
-  const {error}=await sb.from('load_advice').update({status:'dismissed'}).eq('id',id);
-  if(error){ toast('Error: '+error.message); return; }
-  loadAdvice();
-}
-async function askAssistantAboutLoad(){
-  if(!loadBoardCache.length) await loadBoard();
-  if(!loadBoardCache.length){ toast('No athletes to look at'); return; }
-  toast('Reading the board…');
-  const {data:{session}}=await sb.auth.getSession();
-  let out;
-  try{
-    const res=await fetch(SUPA_URL+'/functions/v1/ai',{method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
-      body:JSON.stringify({action:'loadboard',board:loadBoardCache,today:new Date().toISOString().slice(0,10),lang:lang_})});
-    out=await res.json();
-  }catch(e){ toast('Could not reach the assistant'); return; }
-  if(out.error){ toast(out.error); return; }
-  const advice=((out.data||{}).advice)||[];
-  const real=advice.filter(a=>a.severity!=='ok'&&loadBoardCache.some(c=>c.client_id===a.client_id));
-  if(!real.length){ toast('Nothing the assistant would change right now'); loadAdvice(); return; }
-  // A re-run replaces the standing draft for an athlete rather than stacking up
-  // a pile — that is what the one-pending-per-athlete index is for.
-  for(const a of real){
-    await sb.from('load_advice').delete().eq('client_id',a.client_id).eq('status','pending');
-    await sb.from('load_advice').insert({coach_id:me_.id, client_id:a.client_id, severity:a.severity,
-      headline:a.headline, detail:a.detail, action_kind:a.action_kind, evidence:loadBoardCache.find(c=>c.client_id===a.client_id)});
-  }
-  toast(real.length+' suggestion'+(real.length===1?'':'s')+' to review');
-  loadAdvice();
-}
-
-// ── BULK MATCH SCHEDULE ──
-// A schedule arrives as a table for a whole squad, not one game at a time. Rows
-// are pasted, athletes are ticked, and one call writes them all; re-pasting a
-// schedule that has grown only adds what is new.
-function renderFxBulk(){
-  const box=$('fx-bulk'); if(!box) return;
-  box.innerHTML=`
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">One match per line: <b>date, opponent, home/away, key</b> — e.g. 2026-10-04, Valur, away, key. Only the date is required.</div>
-    <textarea id="fx-paste" class="txta" rows="5" placeholder="2026-10-04, Valur, away, key&#10;2026-10-11, KR, home&#10;2026-10-18, Stjarnan, away"></textarea>
-    <div class="section-lbl">Athletes</div>
-    <div class="pr-table" id="fx-people" style="max-height:200px;overflow:auto">
-      ${(clients||[]).filter(c=>c.status==='active').map(c=>`
-        <label class="pr-row" style="cursor:pointer;gap:10px">
-          <span style="display:flex;align-items:center;gap:10px;min-width:0">
-            <input type="checkbox" class="fx-who" value="${c.client_id}">
-            <span style="font-weight:600">${esc(c.profile&&c.profile.name||'Athlete')}</span>
-          </span>
-          <span class="cc-tag">${esc((c.profile&&c.profile.sport)||'—')}</span>
-        </label>`).join('')||'<div class="pr-row" style="color:var(--muted)">No active athletes.</div>'}
-    </div>
-    <div class="row-gap" style="margin-top:8px">
-      <button class="mini-btn" onclick="fxToggleAll(true)">Select all</button>
-      <button class="mini-btn" onclick="fxToggleAll(false)">None</button>
-    </div>
-    <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="fxBulkAdd()"><i class="ti ti-calendar-plus"></i> Add to selected athletes</button>`;
-}
-function fxToggleAll(on){ document.querySelectorAll('.fx-who').forEach(c=>c.checked=on); }
-// Tolerant on purpose: a pasted schedule is never perfectly formatted, and a
-// line the parser cannot read is better reported than silently dropped.
-function parseFixtureLines(text){
-  const rows=[], bad=[];
-  (text||'').split('\n').map(l=>l.trim()).filter(Boolean).forEach(line=>{
-    const parts=line.split(/[,;\t]/).map(s=>s.trim());
-    const d=(parts[0]||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if(!d){ bad.push(line); return; }
-    const rest=parts.slice(1).map(s=>s.toLowerCase());
-    rows.push({
-      fixture_date: parts[0],
-      opponent: parts[1]&&!/^(home|away|neutral|key|normal|minor)$/i.test(parts[1]) ? parts[1] : null,
-      home_away: rest.find(s=>['home','away','neutral'].includes(s))||null,
-      importance: rest.find(s=>['key','normal','minor'].includes(s))||'normal'
-    });
-  });
-  return {rows, bad};
-}
-async function fxBulkAdd(){
-  const who=[...document.querySelectorAll('.fx-who:checked')].map(c=>c.value);
-  if(!who.length){ toast('Tick at least one athlete'); return; }
-  const {rows,bad}=parseFixtureLines(($('fx-paste')||{}).value);
-  if(!rows.length){ toast('No readable dates — use YYYY-MM-DD'); return; }
-  if(bad.length && !confirm(bad.length+' line'+(bad.length===1?'':'s')+" couldn't be read and will be skipped:\n\n"+bad.slice(0,5).join('\n')+'\n\nAdd the other '+rows.length+'?')) return;
-  const {data,error}=await sb.rpc('fixtures_bulk_add',{p_clients:who,p_rows:rows,p_team:null});
-  if(error){ toast('Error: '+error.message); return; }
-  const r=data||{};
-  toast(`${r.added||0} fixture${r.added===1?'':'s'} added`+((r.skipped)?` · ${r.skipped} already there`:'')+((r.blocked)?` · ${r.blocked} athlete(s) you don't coach`:''));
-  if($('fx-paste')) $('fx-paste').value='';
 }
 
 // ── MESSAGES (two-way coach ⇄ client) ──
