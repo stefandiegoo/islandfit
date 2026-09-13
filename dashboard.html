@@ -907,21 +907,26 @@ async function renderSquad(tid){
   const avail=(roster||[]).filter(c=>!inSquad.has(c.client_id));
   const editable=(squad||[]).filter(a=>a.can_edit).length;
   box.innerHTML=`
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:6px">Athletes</div>
-    ${(squad||[]).map(a=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0">
-        <div style="min-width:0"><div style="font-size:12.5px;font-weight:600">${esc(a.name||'Athlete')}${a.can_edit?'':' <span class="cc-tag">read-only</span>'}</div>
-          <div style="font-size:11px;color:var(--muted)">${esc(a.sport||'—')} · ${a.program_name?esc(a.program_name):'no program'}</div></div>
+    <div class="section-lbl" style="margin-top:0">Athletes</div>
+    ${(squad||[]).length?`<div class="pr-table">${(squad||[]).map(a=>`
+      <div class="pr-row">
+        <div style="min-width:0">
+          <div style="font-weight:600">${esc(a.name||'Athlete')}${a.can_edit?'':' <span class="cc-tag read">read-only</span>'}</div>
+          <div class="client-meta">${esc(a.sport||'—')} · ${a.program_name?esc(a.program_name):'no program'}</div>
+        </div>
         ${orgIsAdmin()?`<button class="mini-btn" onclick="removeSquadAthlete('${tid}','${a.client_id}')"><i class="ti ti-x"></i></button>`:''}
-      </div>`).join('')||'<div style="font-size:11.5px;color:var(--muted)">No athletes in this group yet.</div>'}
-    ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:8px">
+      </div>`).join('')}</div>`
+      :'<div style="font-size:12px;color:var(--muted)">No athletes in this group yet.</div>'}
+    ${orgIsAdmin()&&avail.length?`<div class="row-gap" style="margin-top:10px">
       <select id="squad-add-${tid}" class="sel" style="flex:1">${avail.map(c=>`<option value="${c.client_id}">${esc(c.name||'Athlete')}</option>`).join('')}</select>
-      <button class="btn btn-ghost" style="padding:10px 14px" onclick="addSquadAthlete('${tid}')">Add</button></div>`
-      :(orgIsAdmin()?'<div style="font-size:11px;color:var(--muted);margin-top:6px">Everyone on the club roster is already in this group. Add more from a client\'s page.</div>':'')}
-    ${(squad||[]).length?`<div class="row-gap" style="margin-top:10px">
-      <select id="squad-prog-${tid}" class="sel" style="flex:1"><option value="">— Assign a program to this group —</option>${(progs||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.is_custom?' (custom)':''}</option>`).join('')}</select>
-      <button class="btn btn-primary" style="padding:10px 14px;white-space:nowrap" onclick="assignProgramToSquad('${tid}')">Assign to all</button></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:5px">Overwrites the current program for ${editable} of ${(squad||[]).length} athlete${(squad||[]).length===1?'':'s'}${editable<(squad||[]).length?' — the read-only ones are skipped':''}.</div>`:''}`;
+      <button class="btn btn-ghost" style="padding:12px 16px" onclick="addSquadAthlete('${tid}')">Add</button></div>`
+      :(orgIsAdmin()?'<div style="font-size:11px;color:var(--muted);margin-top:8px">Everyone on the club roster is already in this group.</div>':'')}
+    ${(squad||[]).length?`<div class="section-lbl">Assign a program</div>
+      <div class="row-gap">
+        <select id="squad-prog-${tid}" class="sel" style="flex:1"><option value="">— Select a program —</option>${(progs||[]).map(p=>`<option value="${p.id}">${esc(p.name)}${p.is_custom?' (custom)':''}</option>`).join('')}</select>
+        <button class="btn btn-primary" style="padding:12px 16px;white-space:nowrap" onclick="assignProgramToSquad('${tid}')">Assign to all</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Replaces the current program for ${editable} of ${(squad||[]).length} athlete${(squad||[]).length===1?'':'s'}${editable<(squad||[]).length?' — read-only ones are skipped':''}.</div>`:''}`;
 }
 async function addSquadAthlete(tid){
   const sel=$('squad-add-'+tid); if(!sel||!sel.value) return;
@@ -1954,23 +1959,28 @@ async function loadBoard(){
   box.innerHTML=loadBoardCache.map(r=>{
     const vt=Number(r.vol_this_week)||0, vp=Number(r.vol_prev_week)||0;
     // The ratio is the story, but it is meaningless off a near-zero base, so a
-    // quiet previous week is shown as "—" rather than an invented spike.
+    // quiet previous week is shown as "-" rather than an invented spike.
     const jump = vp>500 ? Math.round((vt/vp-1)*100) : null;
     const bits=[];
     bits.push(`${r.sessions_last_7} session${Number(r.sessions_last_7)===1?'':'s'}/7d`);
-    if(vt||vp) bits.push('vol '+Math.round(vt/1000)+'k vs '+Math.round(vp/1000)+'k'+(jump!==null?` (${jump>0?'+':''}${jump}%)`:''));
+    if(vt||vp) bits.push('vol '+Math.round(vt/1000)+'k vs '+Math.round(vp/1000)+'k');
     if(r.rpe_last_7!=null) bits.push('RPE '+(+r.rpe_last_7));
     if(Number(r.games_last_7)) bits.push(r.games_last_7+' game'+(Number(r.games_last_7)===1?'':'s')+'/7d');
     if(Number(r.minutes_last_14)) bits.push(r.minutes_last_14+' min/14d');
     const chk=[]; if(r.energy!=null) chk.push('energy '+r.energy); if(r.sleep!=null) chk.push('sleep '+r.sleep); if(r.stress!=null) chk.push('stress '+r.stress);
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
-        <div style="font-size:13px;font-weight:700">${esc(r.name||'Athlete')}</div>
-        <div style="font-size:11px;color:var(--muted)">${r.next_date?'next '+esc(String(r.next_date))+(r.next_opponent?' · '+esc(r.next_opponent):'')+(r.next_importance==='key'?' · KEY':''):'no fixture'}</div>
+    const jumpPill = jump===null ? '' :
+      `<span class="pill ${jump>=25?'pill-red':(jump>=10?'pill-amber':'pill-green')}">${jump>0?'+':''}${jump}% vol</span>`;
+    return `<div class="wk">
+      <div class="wk-top">
+        <div style="min-width:0">
+          <div class="wk-name">${esc(r.name||'Athlete')}</div>
+          <div class="wk-meta">${esc(bits.join(' · ')||'nothing logged yet')}</div>
+        </div>
+        ${jumpPill}
       </div>
-      <div style="font-size:11.5px;color:var(--muted);margin-top:2px">${esc(bits.join(' · ')||'nothing logged yet')}</div>
-      ${chk.length?`<div style="font-size:11px;color:var(--muted2);margin-top:1px">check-in: ${esc(chk.join(' · '))}</div>`:''}
-      ${Number(r.minutes_missing)?`<div style="font-size:11px;color:var(--warn,#c9a227);margin-top:2px"><i class="ti ti-alert-triangle"></i> ${r.minutes_missing} played game${Number(r.minutes_missing)===1?'':'s'} with no minutes logged — the picture is incomplete</div>`:''}
+      ${chk.length?`<div class="wk-meta">check-in · ${esc(chk.join(' · '))}</div>`:''}
+      <div class="wk-meta">${r.next_date?'Next · '+esc(String(r.next_date))+(r.next_opponent?' vs '+esc(r.next_opponent):'')+(r.next_importance==='key'?' <span class="cc-tag">key</span>':''):'No fixture scheduled'}</div>
+      ${Number(r.minutes_missing)?`<div class="note-display">${r.minutes_missing} played game${Number(r.minutes_missing)===1?'':'s'} with no minutes logged — the picture is incomplete.</div>`:''}
     </div>`;
   }).join('');
   loadAdvice();
@@ -1983,13 +1993,16 @@ async function loadAdvice(){
   const {data}=await sb.from('load_advice').select('*').eq('status','pending').order('created_at',{ascending:false});
   if(!data||!data.length){ box.innerHTML=''; return; }
   const nameOf=id=>{ const c=loadBoardCache.find(x=>x.client_id===id); return c?c.name:'Athlete'; };
-  box.innerHTML=data.map(a=>`
-    <div style="background:var(--surface2);border:1px solid ${a.severity==='red'?'var(--danger,#c0392b)':'var(--border)'};border-radius:10px;padding:10px;margin-bottom:7px">
-      <div style="font-size:12.5px;font-weight:700">${esc(nameOf(a.client_id))} <span class="cc-tag">${esc(a.severity)}</span></div>
-      <div style="font-size:12.5px;margin-top:3px">${esc(a.headline)}</div>
-      ${a.detail?`<div style="font-size:11.5px;color:var(--muted);margin-top:3px">${esc(a.detail)}</div>`:''}
-      <div class="row-gap" style="margin-top:7px">
-        <button class="btn btn-primary" style="padding:7px 12px;font-size:12px" onclick="approveAdvice('${a.id}')">Send to athlete</button>
+  box.innerHTML='<div class="section-lbl" style="margin-top:0">Suggestions to review</div>'+data.map(a=>`
+    <div class="wk">
+      <div class="wk-top">
+        <div class="wk-name">${esc(nameOf(a.client_id))}</div>
+        <span class="pill ${a.severity==='red'?'pill-red':(a.severity==='watch'?'pill-amber':'pill-green')}">${esc(a.severity)}</span>
+      </div>
+      <div style="font-size:13px;margin-top:6px">${esc(a.headline)}</div>
+      ${a.detail?`<div class="note-display">${esc(a.detail)}</div>`:''}
+      <div class="row-gap" style="margin-top:10px">
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="approveAdvice('${a.id}')">Send to athlete</button>
         <button class="mini-btn" onclick="dismissAdvice('${a.id}')">Dismiss</button>
       </div>
     </div>`).join('');
@@ -2042,20 +2055,24 @@ async function askAssistantAboutLoad(){
 function renderFxBulk(){
   const box=$('fx-bulk'); if(!box) return;
   box.innerHTML=`
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">One match per line: <code>date, opponent, home/away, key</code> — e.g. <code>2026-10-04, Valur, away, key</code>. Only the date is required.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">One match per line: <b>date, opponent, home/away, key</b> — e.g. 2026-10-04, Valur, away, key. Only the date is required.</div>
     <textarea id="fx-paste" class="txta" rows="5" placeholder="2026-10-04, Valur, away, key&#10;2026-10-11, KR, home&#10;2026-10-18, Stjarnan, away"></textarea>
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:10px 0 6px">Athletes</div>
-    <div id="fx-people" style="max-height:190px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:7px">
+    <div class="section-lbl">Athletes</div>
+    <div class="pr-table" id="fx-people" style="max-height:200px;overflow:auto">
       ${(clients||[]).filter(c=>c.status==='active').map(c=>`
-        <label style="display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12.5px">
-          <input type="checkbox" class="fx-who" value="${c.client_id}"> ${esc(c.profile&&c.profile.name||'Athlete')}
-        </label>`).join('')||'<div style="font-size:12px;color:var(--muted)">No active athletes.</div>'}
+        <label class="pr-row" style="cursor:pointer;gap:10px">
+          <span style="display:flex;align-items:center;gap:10px;min-width:0">
+            <input type="checkbox" class="fx-who" value="${c.client_id}">
+            <span style="font-weight:600">${esc(c.profile&&c.profile.name||'Athlete')}</span>
+          </span>
+          <span class="cc-tag">${esc((c.profile&&c.profile.sport)||'—')}</span>
+        </label>`).join('')||'<div class="pr-row" style="color:var(--muted)">No active athletes.</div>'}
     </div>
     <div class="row-gap" style="margin-top:8px">
       <button class="mini-btn" onclick="fxToggleAll(true)">Select all</button>
       <button class="mini-btn" onclick="fxToggleAll(false)">None</button>
     </div>
-    <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="fxBulkAdd()"><i class="ti ti-calendar-plus"></i> Add to selected athletes</button>`;
+    <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="fxBulkAdd()"><i class="ti ti-calendar-plus"></i> Add to selected athletes</button>`;
 }
 function fxToggleAll(on){ document.querySelectorAll('.fx-who').forEach(c=>c.checked=on); }
 // Tolerant on purpose: a pasted schedule is never perfectly formatted, and a
