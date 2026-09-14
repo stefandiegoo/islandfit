@@ -506,3 +506,30 @@ Nothing in that table ever reaches the athlete. `load_advice_approve()` stamps
 it and sends the coach's own message through the existing thread — the athlete
 sees a message from their coach, not a queue of machine guesses about them. The
 coach can edit the wording before it goes.
+
+---
+
+## 18. A blank kick-off time (migration 31)
+
+`fixtures_bulk_add()` declared its jsonb columns with their final SQL types:
+
+```sql
+jsonb_to_recordset(p_rows) as x(fixture_date date, kickoff time, ...)
+```
+
+The coach website sends **every** field, using an empty string for the ones the
+coach left blank. Casting `""` to `time` raises `22007 invalid input syntax for
+type time: ""`, and because the cast happens while the set is expanded it takes
+the **whole call** with it — a pasted season of twenty games rejected because
+nobody typed a kick-off time, which most schedules do not carry.
+
+> Found only by driving the real page. Every earlier test called the RPC
+> directly and omitted `kickoff`, so it arrived as NULL and cast cleanly. **An
+> absent key and an empty string are not the same thing**, and the browser sends
+> the second one. Worth remembering for any other `jsonb_to_recordset` here.
+
+Every field is now taken as `text` and converted inside the function, where a
+blank becomes NULL first. A row whose date or time is unusable is counted in a
+new `bad` key and skipped, for the same reason the batch already skips athletes
+you do not coach: one bad line out of twenty should cost that line, not the
+paste.
