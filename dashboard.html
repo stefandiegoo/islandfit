@@ -485,6 +485,18 @@ main{padding:20px 28px 40px}
   </div>
 </div>
 
+<!-- Load review — the assistant's drafts, read one at a time -->
+<div id="adv-modal-bg" class="modal-bg hidden" onclick="if(event.target===this)closeAdvModal()">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-head">
+      <div class="modal-title"><i class="ti ti-sparkles" style="color:var(--accent)"></i> Load review <span id="adv-count" style="font-size:13px;font-weight:600;color:var(--muted)"></span></div>
+      <button class="mini-btn" onclick="closeAdvModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Drafts for you, not for the athlete. Nothing is sent until you press Send, and what goes out is whatever is left in the box — in your name.</div>
+    <div id="adv-modal-body"></div>
+  </div>
+</div>
+
 <!-- Exercise Picker (library search) -->
 <div id="expick-bg" class="modal-bg hidden" onclick="if(event.target===this)closeExPick()">
   <div class="modal" style="max-width:620px">
@@ -1751,23 +1763,49 @@ async function loadAdvice(){
 // whatever the coach left in the box — editable, in their name.
 function renderDrafts(){
   const box=$('load-drafts'); if(!box) return;
-  if(!loadDrafts.length){ box.innerHTML=''; return; }
+  if(!loadDrafts.length){ box.innerHTML=''; if(!$('adv-modal-bg').classList.contains('hidden')) closeAdvModal(); return; }
+  // In the panel this is only a doorway. The drafts themselves are read in
+  // their own window, because deciding what to tell an athlete deserves more
+  // room than a strip wedged above a table.
+  const red=loadDrafts.filter(d=>d.severity==='red').length;
+  box.innerHTML=`<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid ${red?'var(--lava-1)':'var(--amber)'};border-radius:12px;padding:11px 14px;margin-bottom:12px">
+    <i class="ti ti-sparkles" style="color:${red?'var(--lava-1)':'var(--amber)'};font-size:17px"></i>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:700;font-size:13.5px">${loadDrafts.length} suggestion${loadDrafts.length===1?'':'s'} waiting for you</div>
+      <div style="font-size:12px;color:var(--muted)">${esc(loadDrafts.map(d=>d.headline.split(':')[0]).join(' · '))}</div>
+    </div>
+    <button class="btn btn-primary" style="padding:9px 15px;font-size:12.5px;white-space:nowrap" onclick="openAdvModal()">Review</button>
+  </div>`;
+  if(!$('adv-modal-bg').classList.contains('hidden')) renderAdvModal();
+}
+function openAdvModal(){
+  if(!loadDrafts.length){ toast('Nothing to review'); return; }
+  renderAdvModal();
+  $('adv-modal-bg').classList.remove('hidden');
+}
+function closeAdvModal(){ $('adv-modal-bg').classList.add('hidden'); }
+function renderAdvModal(){
+  const box=$('adv-modal-body'); if(!box) return;
+  const c=$('adv-count'); if(c) c.textContent = loadDrafts.length ? '· '+loadDrafts.length+' to go' : '';
+  if(!loadDrafts.length){
+    box.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:26px 0">All reviewed.</div>';
+    return;
+  }
   const col=s=>s==='red'?'var(--lava-1)':'var(--amber)';
   box.innerHTML=loadDrafts.map(d=>`
-    <div style="background:var(--surface2);border:1px solid ${col(d.severity)};border-radius:12px;padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:flex-start;gap:9px;margin-bottom:6px">
-        <i class="ti ti-sparkles" style="color:${col(d.severity)};font-size:15px;margin-top:2px"></i>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:13.5px">${esc(d.headline)}</div>
-          ${d.detail?`<div style="font-size:12.5px;color:var(--text-soft);margin-top:3px;line-height:1.5">${esc(d.detail)}</div>`:''}
-          ${(d.evidence&&d.evidence.reasons&&d.evidence.reasons.length)?`<div style="font-size:11px;color:var(--muted);margin-top:5px">Because: ${esc(d.evidence.reasons.join(' · '))}</div>`:''}
-        </div>
+    <div style="background:var(--surface2);border:1px solid ${col(d.severity)};border-radius:14px;padding:15px 16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div style="font-weight:800;font-size:14px">${esc(d.headline)}</div>
+        <span class="pill ${d.severity==='red'?'pill-red':'pill-amber'}">${esc(d.severity)}</span>
       </div>
-      <textarea class="txta" id="adv-${d.id}" rows="2" style="margin-bottom:6px">${esc(d.detail||d.headline)}</textarea>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-primary" style="padding:9px 14px;font-size:12px" onclick="approveAdvice('${d.id}')"><i class="ti ti-send"></i> Send to athlete</button>
+      ${d.detail?`<div style="font-size:13px;color:var(--text-soft);line-height:1.55;margin-bottom:8px">${esc(d.detail)}</div>`:''}
+      ${(d.evidence&&d.evidence.reasons&&d.evidence.reasons.length)?`<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px"><b>Because:</b> ${esc(d.evidence.reasons.join(' · '))}</div>`:''}
+      <div class="section-lbl" style="margin:0 0 6px">Message to the athlete</div>
+      <textarea class="txta" id="adv-${d.id}" rows="3" style="margin-bottom:9px">${esc(d.detail||d.headline)}</textarea>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn btn-primary" style="padding:10px 15px;font-size:12.5px" onclick="approveAdvice('${d.id}')"><i class="ti ti-send"></i> Send to athlete</button>
         <button class="mini-btn" onclick="dismissAdvice('${d.id}')">Dismiss</button>
-        <button class="mini-btn" onclick="selectClient('${d.client_id}');ctab('games')">Open athlete</button>
+        <button class="mini-btn" onclick="closeAdvModal();selectClient('${d.client_id}');ctab('games')">Open athlete</button>
       </div>
     </div>`).join('');
 }
@@ -1800,12 +1838,17 @@ async function reviewLoad(){
   if(error){ toast('Error: '+error.message); return; }
   await loadAdvice();
   toast(drafts.length+' suggestion'+(drafts.length===1?'':'s')+' · yours to send or bin');
+  openAdvModal();
 }
 async function approveAdvice(id){
   const msg=($('adv-'+id)||{}).value||'';
+  const d=loadDrafts.find(x=>x.id===id);
   const {error}=await sb.rpc('load_advice_approve',{p_id:id,p_message:msg});
   if(error){ toast('Error: '+error.message); return; }
+  // It lands in the normal thread, so it gets the normal notification too.
+  if(d) notify({to:d.client_id, type:'message'});
   toast('Sent to the athlete'); loadAdvice();
+  if(selected && d && selected.client_id===d.client_id) loadMessages();
 }
 async function dismissAdvice(id){
   await sb.from('load_advice').update({status:'dismissed'}).eq('id',id);
