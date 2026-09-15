@@ -559,7 +559,7 @@ body::before{
 .cc-them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
 .cc-me{align-self:flex-end;background:linear-gradient(135deg,rgba(0,255,163,0.18),rgba(34,211,238,0.12));border:1px solid rgba(0,255,163,0.25);border-bottom-right-radius:4px}
 .cc-time{font-size:10px;color:var(--muted);margin-top:3px;opacity:0.8}
-.cc-ref{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.75;margin-bottom:4px}
+.cc-ref{display:flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;opacity:.75;margin-bottom:5px}
 /* weekly check-in */
 .ci-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
 .ci-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -1359,6 +1359,14 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,0.10),t
     <div class="field"><label>Email</label><input type="email" id="set-email" disabled></div>
     <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:8px">Save Changes</button>
   </div>
+  <div class="settings-section" id="set-mycoach-section">
+    <h3>My Coach</h3>
+    <div id="set-coach-requests"></div>
+    <div id="set-active-coaches"></div>
+    <div id="set-groups"></div>
+    <div class="field" style="margin-top:10px"><label>Enter coach invite code</label><input type="text" id="set-invite-code" placeholder="ISLAND-XXXXX" style="text-transform:uppercase;letter-spacing:2px"></div>
+    <button class="btn btn-primary" onclick="redeemInviteCode()" style="margin-top:6px">Connect to Coach</button>
+  </div>
   <div class="settings-section">
     <h3>Competition</h3>
     <div class="field"><label>Peak date</label><input type="date" id="set-peak" oninput="setPeakDate(this.value)"></div>
@@ -1401,14 +1409,6 @@ body::before{background:radial-gradient(ellipse at 18% 0%,rgba(255,84,33,0.10),t
     <h3>Password</h3>
     <div class="field"><label>New Password</label><input type="password" id="set-pw" placeholder="Min 6 characters"></div>
     <button class="btn btn-ghost" onclick="changePassword()">Update Password</button>
-  </div>
-  <div class="settings-section" id="set-mycoach-section">
-    <h3>My Coach</h3>
-    <div id="set-coach-requests"></div>
-    <div id="set-active-coaches"></div>
-    <div id="set-groups"></div>
-    <div class="field" style="margin-top:10px"><label>Enter coach invite code</label><input type="text" id="set-invite-code" placeholder="ISLAND-XXXXX" style="text-transform:uppercase;letter-spacing:2px"></div>
-    <button class="btn btn-primary" onclick="redeemInviteCode()" style="margin-top:6px">Connect to Coach</button>
   </div>
   <div class="settings-section">
     <h3>Tilkynningar</h3>
@@ -5326,7 +5326,7 @@ async function loadMyCoachSection(){
     actEl.innerHTML = '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:8px">Connected Coaches</div>' + active.map(a=>{ const c=(coaches2||[]).find(x=>x.id===a.coach_id)||{}; return `<div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div><div style="font-size:14px;font-weight:700">${escapeHtml(c.name||'Coach')}</div><div style="font-size:11px;color:var(--muted)">Since ${new Date(a.created_at).toLocaleDateString()}</div></div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button onclick="toggleCoachChat('${a.coach_id}')" id="chat-toggle-${a.coach_id}" style="font-size:11px;color:var(--accent);padding:6px 10px;border:1px solid var(--accent);border-radius:8px"><i class="ti ti-message"></i> Message</button>
           <button onclick="toggleFormCheck('${a.coach_id}')" id="fc-toggle-${a.coach_id}" style="font-size:11px;color:var(--aurora-3);padding:6px 10px;border:1px solid var(--aurora-3);border-radius:8px"><i class="ti ti-video"></i> Form check</button>
           <button onclick="toggleCheckin('${a.coach_id}')" style="font-size:11px;color:var(--lava-2);padding:6px 10px;border:1px solid var(--lava-2);border-radius:8px"><i class="ti ti-clipboard-check"></i> Check-in</button>
