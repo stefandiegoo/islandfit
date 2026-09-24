@@ -5,6 +5,5 @@ node_modules/
 .env
 .env.*
 
-# local test harness output
-serve.log
-relay.log
+# local test harness output — any log the harness drops in the repo root
+*.log
