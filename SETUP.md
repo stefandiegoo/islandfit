@@ -533,3 +533,33 @@ blank becomes NULL first. A row whose date or time is unusable is counted in a
 new `bad` key and skipped, for the same reason the batch already skips athletes
 you do not coach: one bad line out of twenty should cost that line, not the
 paste.
+
+---
+
+## 19. Account deletion, broken by a platform change (migration 32)
+
+`delete_my_account()` ended with a direct delete from `storage.objects` to clear
+the user's form-check videos and progress photos. Supabase now refuses DML on
+the storage schema:
+
+```
+403  Direct deletion from storage tables is not allowed. Use the Storage API instead.
+```
+
+Because that statement sat **inside** the function, the refusal aborted the
+whole call and **nothing** was deleted — not the account, not the training
+history, not the messages. The *Eyða reikningi og öllum gögnum* button in
+Settings had been dead since the platform changed.
+
+> This is the GDPR right-to-erasure path, and `privacy.html` promises it. It
+> also fails in the quietest possible way: the person deleting their account
+> sees an error once and leaves; nobody deletes their own account twice.
+
+The fix removes the statement. The app **already** does this correctly: see
+`deleteMyAccount()` in `islandfit.html`, which lists and removes both buckets
+through the Storage API *before* calling the RPC. The SQL copy was
+belt-and-braces that the platform turned into a blocker.
+
+**Watch for this elsewhere:** any function here that touches `storage.*`
+directly will fail the same way. As of this migration, `delete_my_account()`
+was the only one.
